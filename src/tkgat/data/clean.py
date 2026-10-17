@@ -16,7 +16,7 @@ def merge_duplicate_titles(inter: pd.DataFrame, items: pd.DataFrame) -> tuple[pd
     pair and is removed by ``split.dedupe_pairs``.
     """
     canon = items.groupby("title")["item"].transform("min")
-    remap = dict(zip(items["item"], canon))
+    remap = dict(zip(items["item"], canon, strict=True))
     dup_items = items.loc[items["item"] != canon, ["item", "title"]]
     out = inter.copy()
     out["item"] = out["item"].map(remap).astype("int64")

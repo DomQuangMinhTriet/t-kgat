@@ -13,7 +13,7 @@ from tkgat.data.split import TemporalSplit
 
 
 def _pairs(df: pd.DataFrame) -> set[tuple[int, int]]:
-    return set(zip(df["user"].to_numpy().tolist(), df["item"].to_numpy().tolist()))
+    return set(zip(df["user"].to_numpy().tolist(), df["item"].to_numpy().tolist(), strict=True))
 
 
 def check_split(s: TemporalSplit) -> list[str]:
