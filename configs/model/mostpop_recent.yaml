@@ -1,0 +1,6 @@
+# Popularity over the last N days before t1; N is chosen on validation.
+name: mostpop
+grid:
+  - {window_days: 7}
+  - {window_days: 14}
+  - {window_days: 30}

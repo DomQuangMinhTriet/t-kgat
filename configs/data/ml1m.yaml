@@ -1,0 +1,10 @@
+# MovieLens-1M, same protocol as ml100k.yaml (scale-up check).
+name: ml-1m
+raw_dir: data/raw/ml-1m
+processed_dir: data/processed/ml-1m
+clean: false         # no untitled or duplicate-title items in ML-1M
+split:
+  q_val: 0.8
+  q_test: 0.9
+  min_rating: 4
+  kcore: 5

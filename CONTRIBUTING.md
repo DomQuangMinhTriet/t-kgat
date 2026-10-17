@@ -1,0 +1,33 @@
+# Contributing
+
+## Ground rules
+1. **No leakage.** Model selection (epochs, hyper-parameters, variants) uses the validation set only.
+   The test set is scored once per selected configuration, by `scripts/run.py`.
+2. **No hand-copied numbers.** Every number in a report or notebook comes from `results/registry.csv`
+   or from files written by the scripts.
+3. **Data stays out of git.** Download it with the instructions in `data/README.md`; verify with
+   `python scripts/01_verify_data.py`.
+
+## Workflow
+- One GitHub issue per task (templates in `.github/ISSUE_TEMPLATE/`), labelled `data`, `kg`, `model`,
+  `eval`, `docs` or `theory`, and attached to the milestone of its phase.
+- One branch per issue: `feat/12-temporal-split`, `fix/15-mask-bug`, `exp/20-bprmf-ml1m`.
+- Open a pull request; the other person reviews it. `main` is protected: CI must pass and one approval
+  is required.
+- Commit messages: `feat:`, `fix:`, `docs:`, `exp:`, `test:`, `chore:` followed by a short sentence.
+
+## Language
+Code, comments, commit messages and README files are written in English.
+The data report, theory notes and the presentation notebook are written in Vietnamese.
+
+## Setup
+```bash
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+pre-commit install
+pytest
+```
+
+## Decisions
+Every decision that changes the protocol gets a short file in `docs/decisions/` (context, decision,
+consequences). Never edit an accepted decision; supersede it with a new one.

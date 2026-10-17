@@ -1,0 +1,101 @@
+"""Train, select on validation, then score the selected configuration on test once.
+
+Usage:
+    python scripts/run.py --data configs/data/ml100k.yaml --model configs/model/bprmf.yaml
+
+Protocol
+--------
+1. Every grid point is trained (or fitted) with every seed and scored on val.
+2. The grid point with the best *mean* validation Recall@20 is selected.
+3. Only the selected grid point is scored on test.  Test numbers of the other
+   grid points are never computed.
+4. Every val and test score is appended to ``results/registry.csv``; per-user
+   test metrics are saved under ``results/runs/`` for significance tests.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import numpy as np
+import yaml
+
+from tkgat import registry
+from tkgat.data.encode import encode
+from tkgat.eval.metrics import evaluate
+from tkgat.models.baselines import MostPop
+from tkgat.pipeline.build import load_config, load_saved
+from tkgat.train.bpr import BPRConfig, fit_bpr
+
+METRICS = ("recall@10", "recall@20", "ndcg@10", "ndcg@20")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", required=True)
+    ap.add_argument("--model", required=True)
+    ap.add_argument("--registry", default="results/registry.csv")
+    ap.add_argument("--runs-dir", default="results/runs")
+    args = ap.parse_args()
+
+    dcfg = load_config(args.data)
+    mcfg = yaml.safe_load(Path(args.model).read_text(encoding="utf-8"))
+    split, meta = load_saved(dcfg)
+    data = encode(split)
+    split_sha = registry.sha256_file(Path(dcfg["processed_dir"]) / "meta.json")
+    seeds = mcfg.get("seeds", [0])
+    tag = Path(args.model).stem
+    base = {"dataset": dcfg["name"], "split_sha256": split_sha[:12], "model": tag}
+
+    fitted: dict[int, dict[int, object]] = {}
+    val_means = []
+    for g, point in enumerate(mcfg["grid"]):
+        fitted[g] = {}
+        scores = []
+        for seed in seeds:
+            if mcfg["name"] == "mostpop":
+                model, epoch, secs = MostPop(data, **point), 0, 0.0
+                res = evaluate(model.score, data.val, data.mask_val)
+                val = {k: res[k] for k in METRICS}
+                n_val = res["n_users"]
+            elif mcfg["name"] == "bprmf":
+                fit = fit_bpr(data, BPRConfig(**point, **mcfg.get("fixed", {})), seed)
+                model, epoch, secs, val = fit.model, fit.best_epoch, fit.seconds, fit.best_val
+                n_val = len(data.val)
+            else:
+                raise ValueError(mcfg["name"])
+            fitted[g][seed] = model
+            scores.append(val["recall@20"])
+            registry.append(args.registry, {
+                **base, "config": point, "seed": seed, "phase": "val", "best_epoch": epoch,
+                **val, "n_users": n_val, "seconds": round(secs, 1),
+            })
+            print(f"[val] grid={point} seed={seed} " + " ".join(f"{k}={val[k]:.4f}" for k in METRICS))
+        val_means.append(float(np.mean(scores)))
+
+    best = int(np.argmax(val_means))
+    print(f"selected grid point {mcfg['grid'][best]} (mean val recall@20 = {val_means[best]:.4f})")
+
+    out_dir = Path(args.runs_dir) / dcfg["name"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary = []
+    for seed, model in fitted[best].items():
+        res = evaluate(model.score, data.test, data.mask_test)
+        test = {k: res[k] for k in METRICS}
+        registry.append(args.registry, {
+            **base, "config": mcfg["grid"][best], "seed": seed, "phase": "test",
+            **test, "n_users": res["n_users"],
+        })
+        np.savez(out_dir / f"{tag}_seed{seed}.npz", users=res["users"], **{k: v for k, v in res["per_user"].items()})
+        summary.append(test)
+        print(f"[test] seed={seed} " + " ".join(f"{k}={test[k]:.4f}" for k in METRICS))
+    agg = {k: (float(np.mean([s[k] for s in summary])), float(np.std([s[k] for s in summary]))) for k in METRICS}
+    (out_dir / f"{tag}_summary.json").write_text(json.dumps(
+        {"selected": mcfg["grid"][best], "val_means_recall@20": val_means, "test_mean_std": agg}, indent=2))
+    print("test mean ± std: " + " ".join(f"{k}={m:.4f}±{s:.4f}" for k, (m, s) in agg.items()))
+
+
+if __name__ == "__main__":
+    main()

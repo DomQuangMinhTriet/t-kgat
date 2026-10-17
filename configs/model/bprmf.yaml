@@ -1,0 +1,9 @@
+# BPR-MF. Every grid point is trained with every seed; the point with the best
+# mean validation Recall@20 is selected, and only that point is scored on test.
+name: bprmf
+seeds: [2019, 2020, 2021, 2022, 2023]
+grid:
+  - {dim: 64, lr: 0.001, l2: 0.0001}
+  - {dim: 64, lr: 0.001, l2: 0.001}
+  - {dim: 32, lr: 0.001, l2: 0.0001}
+fixed: {batch_size: 2048, max_epochs: 300, eval_every: 5, patience: 5, select_metric: recall@20}

@@ -1,0 +1,10 @@
+# MovieLens-100K, leakage-safe temporal split (decision 0002).
+name: ml-100k
+raw_dir: data/raw/ml-100k
+processed_dir: data/processed/ml-100k
+clean: true          # drop the untitled item, merge duplicate titles
+split:
+  q_val: 0.8         # t1 = 80th percentile of all timestamps
+  q_test: 0.9        # t2 = 90th percentile
+  min_rating: 4      # rating >= 4 is a positive interaction
+  kcore: 5           # iterative 5-core, computed on train positives only
