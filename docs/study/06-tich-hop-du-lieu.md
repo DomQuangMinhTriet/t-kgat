@@ -66,8 +66,8 @@ Khái niệm từ data warehouse và feature store: **khi tái tạo trạng th�
 **Lưu ý quan trọng:** Wikidata là ảnh chụp **hôm nay** (2026). Thứ ta lọc được là *ngày sự kiện xảy ra*, không phải *ngày sự kiện được ghi vào KG*. Đó là giới hạn cần nói rõ trong báo cáo.
 
 ## 6. Dòng dõi dữ liệu (data lineage) và tái lập
-- `data/checksums.json`: MD5 của mọi file thô.
-- `data/raw/kb4rec/SOURCE_COMMIT`: commit của KB4Rec đã dùng.
+- `data/checksums.json`: SHA-256 của mọi file thô (kiểm tra bằng `scripts/01_verify_data.py`).
+- `data/raw/kb4rec/SOURCE_COMMIT.txt`: commit của KB4Rec đã dùng.
 - `data/raw/wikidata/`: `facts.tsv` kèm ngày tải và checksum.
 - `results/registry.csv`: mỗi kết quả gắn với commit, config, seed.
 - Dữ liệu thô **không đưa lên GitHub** vì giấy phép MovieLens và KB4Rec không cho phân phối lại; ai clone repo thì chạy `scripts/01_verify_data.py` để kiểm tra bản của mình.
