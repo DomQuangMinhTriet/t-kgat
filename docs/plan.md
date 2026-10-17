@@ -269,7 +269,7 @@ Tuần này dày việc. Nó khả thi vì code nháp đã có sẵn: phần l�
 | 13 | Review chéo code: Triết đọc `eval/`, `models/`, `train/`; Phôn đọc `data/`, `kg/`; mỗi câu hỏi hoặc đề xuất sửa là một Issue | Cả hai | Oct 25, 2026 | Danh sách Issue | Chưa làm |
 | 14 | Notebook EDA cho 100K và 1M: rating theo tháng, hành vi nhập rating theo phiên, phân bố rating, năm phát hành so với lúc rating, các cặp T1/T2 | Triết | Oct 26, 2026 | `notebooks/01_eda.ipynb` | Chưa làm |
 | 15 | Kiểm tra tay 50 liên kết ngẫu nhiên MovieLens ↔ Freebase/Wikidata, ước lượng tỷ lệ lỗi | Phôn | Oct 26, 2026 | `notebooks/02_entity_linking.ipynb` | Chưa làm |
-| 16 | Viết `scripts/05_build_kg.py` theo quyết định 0004 (KG tại T1 và T2) + test "không fact nào sau mốc" | Triết | Oct 27, 2026 | Script + test xanh | Chưa làm |
+| 16 | Viết `scripts/06_build_kg.py` theo quyết định 0004 (KG tại T1 và T2) + test "không fact nào sau mốc" | Triết | Oct 27, 2026 | Script + test xanh | Chưa làm |
 | 17 | Chạy chính thức MostPop, MostPop gần đây và BPR-MF (Phôn chạy 100K, Triết chạy 1M) (5 seed, chọn theo val, chấm test một lần) | Phôn + Triết | Oct 27, 2026 | Dòng mới trong `results/registry.csv` | Chưa làm |
 | 18 | Notebook KG theo thời gian: fact theo quan hệ, tỷ lệ có ngày, fact "tương lai" bị loại tại T1/T2, ví dụ Titanic và Toy Story 2 | Triết | Oct 28, 2026 | `notebooks/03_kg_temporal.ipynb` | Chưa làm |
 | 19 | Kiểm định Wilcoxon giữa các baseline; phân tích độ nhạy với 2–3 cặp T1/T2 khác và với 10-core như paper (\`configs/data/ml100k\_k10.yaml\`, chỉ xem val); vẽ learning curve (loss và val Recall@20 theo epoch) của BPR-MF, kèm bảng batch size, số epoch, learning rate (góp ý 03/07) | Phôn | Oct 28, 2026 | Bảng kết quả + bảng phụ | Chưa làm |

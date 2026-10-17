@@ -75,7 +75,7 @@ CKE là baseline chính khi so với KGAT (paper KGAT có so). Hiểu CKE trư�
 | Kiểm tra liên kết (tên + năm) | `src/tkgat/kg/linking.py` |
 | 18 quan hệ lấy từ Wikidata | `scripts/04_fetch_wikidata.py` → `RELATIONS` |
 | Ngày của fact | cột `point_in_time`, `start_time`, `tail_publication`, `tail_inception`, `tail_birth` trong `facts.tsv` |
-| Quyết định "KG theo mốc" | `docs/decisions/0004-*.md` |
+| Quyết định "KG theo mốc" | `docs/decisions/0004-kg-temporal-rules.md` |
 
 ## 7. Tự kiểm tra
 1. Viết 3 triple về một bộ phim bạn thích. Relation nào là 1-N?

@@ -30,7 +30,7 @@ scripts/      numbered pipeline steps + run.py
 tests/        leakage, split, metric and linking tests
 notebooks/    01_eda, 02_entity_linking, 00_present_<date>
 results/      registry.csv (every val/test score) and per-user run files
-docs/         decisions/, data-report.md, data-dictionary.md, meetings/, theory/
+docs/         decisions/, data-report.md (week 2), data-dictionary.md, meetings/, theory/
 ```
 
 ## Protocol in one paragraph
