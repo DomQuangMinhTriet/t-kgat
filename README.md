@@ -40,6 +40,6 @@ in train; items a user rated before a cut-off are masked from the ranking. Selec
 Recall@20 averaged over seeds; only the selected configuration is scored on test.
 See `docs/decisions/0002-data-split.md`.
 
-# Planning
+## Planning
 - `docs/plan.md` — the 13-week plan exported from the team doc (Vietnamese).
 - `docs/study/` — study guides for the 7 theory topics (Vietnamese).

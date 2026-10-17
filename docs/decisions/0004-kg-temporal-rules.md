@@ -1,4 +1,4 @@
-# 0004 — Time-consistent knowledge graph (proposed)
+# 0004 — Time-consistent knowledge graph
 
 - Status: accepted (2026-10-17), including the default rule for undated facts
 - Rule: a KG used with cut-off `t` keeps a fact only if it was true before `t`.
