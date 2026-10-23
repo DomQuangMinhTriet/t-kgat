@@ -71,12 +71,24 @@ def main() -> None:
             fitted[g][seed] = model
             devices[g][seed] = dev
             scores.append(val["recall@20"])
-            registry.append(args.registry, {
-                **base, "config": point, "seed": seed, "phase": "val", "best_epoch": epoch,
-                **val, "n_users": n_val, "seconds": round(secs, 1), "device": dev,
-            })
-            print(f"[val] grid={point} seed={seed} device={dev} epoch={epoch} {secs:.0f}s "
-                  + " ".join(f"{k}={val[k]:.4f}" for k in METRICS))
+            registry.append(
+                args.registry,
+                {
+                    **base,
+                    "config": point,
+                    "seed": seed,
+                    "phase": "val",
+                    "best_epoch": epoch,
+                    **val,
+                    "n_users": n_val,
+                    "seconds": round(secs, 1),
+                    "device": dev,
+                },
+            )
+            print(
+                f"[val] grid={point} seed={seed} device={dev} epoch={epoch} {secs:.0f}s "
+                + " ".join(f"{k}={val[k]:.4f}" for k in METRICS)
+            )
         val_means.append(float(np.mean(scores)))
 
     best = int(np.argmax(val_means))
@@ -89,16 +101,25 @@ def main() -> None:
         dev = devices[best][seed]
         res = evaluate(model.score, data.test, data.mask_test)
         test = {k: res[k] for k in METRICS}
-        registry.append(args.registry, {
-            **base, "config": mcfg["grid"][best], "seed": seed, "phase": "test",
-            **test, "n_users": res["n_users"], "device": dev,
-        })
+        registry.append(
+            args.registry,
+            {
+                **base,
+                "config": mcfg["grid"][best],
+                "seed": seed,
+                "phase": "test",
+                **test,
+                "n_users": res["n_users"],
+                "device": dev,
+            },
+        )
         np.savez(out_dir / f"{tag}_seed{seed}.npz", users=res["users"], **{k: v for k, v in res["per_user"].items()})
         summary.append(test)
         print(f"[test] seed={seed} " + " ".join(f"{k}={test[k]:.4f}" for k in METRICS))
     agg = {k: (float(np.mean([s[k] for s in summary])), float(np.std([s[k] for s in summary]))) for k in METRICS}
-    (out_dir / f"{tag}_summary.json").write_text(json.dumps(
-        {"selected": mcfg["grid"][best], "val_means_recall@20": val_means, "test_mean_std": agg}, indent=2))
+    (out_dir / f"{tag}_summary.json").write_text(
+        json.dumps({"selected": mcfg["grid"][best], "val_means_recall@20": val_means, "test_mean_std": agg}, indent=2)
+    )
     print("test mean ± std: " + " ".join(f"{k}={m:.4f}±{s:.4f}" for k, (m, s) in agg.items()))
 
 
