@@ -11,11 +11,15 @@ Protocol
    grid points are never computed.
 4. Every val and test score is appended to ``results/registry.csv``; per-user
    test metrics are saved under ``results/runs/`` for significance tests.
+5. Every trained run (grid point x seed) also writes its per-epoch history
+   (loss, and val metrics on evaluated epochs) with its config to
+   ``results/runs/<dataset>/<tag>_<grid index>_seed<seed>_history.csv``.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 from pathlib import Path
 
@@ -32,14 +36,14 @@ from tkgat.train.bpr import BPRConfig, fit_bpr
 METRICS = ("recall@10", "recall@20", "ndcg@10", "ndcg@20")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
     ap.add_argument("--model", required=True)
     ap.add_argument("--registry", default="results/registry.csv")
     ap.add_argument("--runs-dir", default="results/runs")
     ap.add_argument("--device", default="auto", help='"auto" (CUDA if available), "cuda", "cuda:1" or "cpu"')
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     dcfg = load_config(args.data)
     mcfg = yaml.safe_load(Path(args.model).read_text(encoding="utf-8"))
@@ -49,6 +53,8 @@ def main() -> None:
     seeds = mcfg.get("seeds", [0])
     tag = Path(args.model).stem
     base = {"dataset": dcfg["name"], "split_sha256": split_sha[:12], "model": tag}
+    out_dir = Path(args.runs_dir) / dcfg["name"]
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     fitted: dict[int, dict[int, object]] = {}
     devices: dict[int, dict[int, str]] = {}
@@ -63,9 +69,23 @@ def main() -> None:
                 val = {k: res[k] for k in METRICS}
                 n_val = res["n_users"]
             elif mcfg["name"] == "bprmf":
-                fit = fit_bpr(data, BPRConfig(**point, **mcfg.get("fixed", {}), device=args.device), seed)
+                cfg = BPRConfig(**point, **mcfg.get("fixed", {}), device=args.device)
+                fit = fit_bpr(data, cfg, seed)
                 model, epoch, secs, val, dev = fit.model, fit.best_epoch, fit.seconds, fit.best_val, fit.device
                 n_val = len(data.val)
+                registry.save_history(
+                    out_dir / f"{tag}_{g}_seed{seed}_history.csv",
+                    fit.history,
+                    {
+                        **base,
+                        "grid_index": g,
+                        "seed": seed,
+                        "config": dataclasses.asdict(cfg),
+                        "device": dev,
+                        "best_epoch": epoch,
+                        "git_commit": registry.git_commit(),
+                    },
+                )
             else:
                 raise ValueError(mcfg["name"])
             fitted[g][seed] = model
@@ -94,8 +114,6 @@ def main() -> None:
     best = int(np.argmax(val_means))
     print(f"selected grid point {mcfg['grid'][best]} (mean val recall@20 = {val_means[best]:.4f})")
 
-    out_dir = Path(args.runs_dir) / dcfg["name"]
-    out_dir.mkdir(parents=True, exist_ok=True)
     summary = []
     for seed, model in fitted[best].items():
         dev = devices[best][seed]

@@ -52,6 +52,32 @@ def sha256_file(path: str | Path) -> str:
     return h.hexdigest()
 
 
+HISTORY_FIELDS = ["epoch", "loss", "recall@10", "recall@20", "ndcg@10", "ndcg@20"]
+
+
+def save_history(path: str | Path, history: list[dict], meta: dict) -> Path:
+    """Write one training run's per-epoch history as CSV, one row per epoch.
+
+    ``history`` is ``FitResult.history``: ``epoch`` and ``loss`` for every epoch, validation metrics
+    only on the epochs where validation ran (empty elsewhere). ``meta`` (dataset, model, grid index,
+    seed, config, device, ...) is repeated on every row so each file stands alone. Test scores must
+    never be written here.
+    """
+    keys = {k for row in history for k in row} | set(meta)
+    if any("test" in k for k in keys):
+        raise ValueError("a training history must not contain test scores")
+    extra = sorted({k for row in history for k in row} - set(HISTORY_FIELDS))
+    meta = {k: json.dumps(v, sort_keys=True) if isinstance(v, dict) else v for k, v in meta.items()}
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=[*HISTORY_FIELDS, *extra, *meta])
+        w.writeheader()
+        for row in history:
+            w.writerow({**row, **meta})
+    return path
+
+
 def append(path: str | Path, row: dict) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
