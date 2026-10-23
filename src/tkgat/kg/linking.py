@@ -98,11 +98,18 @@ def match_ml100k_to_ml1m(items100k: pd.DataFrame, items1m: pd.DataFrame) -> pd.D
 def load_kb4rec(kb4rec_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     d = Path(kb4rec_dir)
     fb = pd.read_csv(
-        d / "ml2fb.txt", sep="\t", names=["ml20m_id", "freebase_id"], dtype={"ml20m_id": int, "freebase_id": str},
+        d / "ml2fb.txt",
+        sep="\t",
+        names=["ml20m_id", "freebase_id"],
+        dtype={"ml20m_id": int, "freebase_id": str},
     )
     yago = pd.read_csv(
-        d / "ml2yago.txt", sep="\t", names=["ml20m_id", "yago_id"], dtype={"ml20m_id": int, "yago_id": str},
-        quoting=3, encoding="utf-8",
+        d / "ml2yago.txt",
+        sep="\t",
+        names=["ml20m_id", "yago_id"],
+        dtype={"ml20m_id": int, "yago_id": str},
+        quoting=3,
+        encoding="utf-8",
     )
     return fb, yago
 

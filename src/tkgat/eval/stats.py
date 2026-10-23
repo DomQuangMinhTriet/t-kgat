@@ -35,8 +35,7 @@ def paired_ttest(a: np.ndarray, b: np.ndarray) -> dict:
     return {"n": int(len(a)), "mean_diff": float(diff.mean()), "p_value": float(res.pvalue)}
 
 
-def bootstrap_ci(a: np.ndarray, b: np.ndarray, n_boot: int = 10_000, alpha: float = 0.05,
-                 seed: int = 0) -> dict:
+def bootstrap_ci(a: np.ndarray, b: np.ndarray, n_boot: int = 10_000, alpha: float = 0.05, seed: int = 0) -> dict:
     """Percentile bootstrap confidence interval for the mean per-user difference a - b."""
     a, b = _paired(a, b)
     diff = a - b

@@ -22,8 +22,10 @@ def resolve_device(name: str | torch.device = "auto") -> torch.device:
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dev = torch.device(name)
     if dev.type == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("CUDA was requested but torch.cuda.is_available() is False; "
-                           "install a CUDA build of torch or pass --device cpu")
+        raise RuntimeError(
+            "CUDA was requested but torch.cuda.is_available() is False; "
+            "install a CUDA build of torch or pass --device cpu"
+        )
     return dev
 
 

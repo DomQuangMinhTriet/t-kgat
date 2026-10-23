@@ -75,4 +75,3 @@ def test_cuda_request_without_gpu_fails_loudly(monkeypatch):
     assert resolve_device("auto").type == "cpu"
     with pytest.raises(RuntimeError):
         resolve_device("cuda")
-
