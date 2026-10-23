@@ -1,0 +1,2 @@
+* text=auto
+results/registry.csv merge=union
