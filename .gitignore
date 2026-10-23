@@ -3,7 +3,6 @@ data/raw/
 data/processed/
 !data/README.md
 !data/checksums.json
-results/runs/
 __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
