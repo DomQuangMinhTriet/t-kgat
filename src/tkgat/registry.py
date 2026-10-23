@@ -12,6 +12,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pandas as pd
+
 FIELDS = [
     "run_at",
     "git_commit",
@@ -35,9 +37,12 @@ FIELDS = [
 def git_commit() -> str:
     try:
         out = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True)
-        # tracked files only: the registry itself and other run outputs are untracked and must not count
+        # tracked files only, and nothing under results/: run outputs (registry.csv, histories) are
+        # committed, so every run after the first would otherwise mark its own commit dirty
         dirty = subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True
+            ["git", "status", "--porcelain", "--untracked-files=no", "--", ":(top,exclude)results"],
+            capture_output=True,
+            text=True,
         ).stdout.strip()
         return out.stdout.strip() + ("-dirty" if dirty else "")
     except Exception:  # noqa: BLE001 - outside a git checkout
@@ -101,3 +106,26 @@ def append(path: str | Path, row: dict) -> None:
         if new:
             w.writeheader()
         w.writerow(row)
+
+
+RUN_KEY = ["dataset", "model", "config", "seed", "phase"]
+
+
+def load(path: str | Path = "results/registry.csv", latest: bool = True) -> pd.DataFrame:
+    """Read the registry; with ``latest``, keep only the newest run of each (dataset, model, config, seed, phase).
+
+    The file itself is append-only: a re-run adds rows and never edits old ones, so readers decide which run
+    counts. "Newest" is the largest ``run_at`` (ties: the later line), not the line order, because a union
+    merge of two branches may interleave their rows.
+    """
+    df = pd.read_csv(path, dtype={"git_commit": str, "config": str, "device": str})
+    if latest:
+        df = (
+            df.reset_index(names="_line")
+            .sort_values(["run_at", "_line"], kind="stable")
+            .drop_duplicates(RUN_KEY, keep="last")
+            .sort_values("_line")
+            .drop(columns="_line")
+            .reset_index(drop=True)
+        )
+    return df

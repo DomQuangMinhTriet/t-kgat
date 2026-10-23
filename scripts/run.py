@@ -36,6 +36,11 @@ from tkgat.train.bpr import BPRConfig, fit_bpr
 METRICS = ("recall@10", "recall@20", "ndcg@10", "ndcg@20")
 
 
+def seed_std(values: list[float]) -> float | None:
+    """Sample standard deviation over seeds (ddof=1); undefined (None) for a single seed."""
+    return float(np.std(values, ddof=1)) if len(values) > 1 else None
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
@@ -134,11 +139,14 @@ def main(argv: list[str] | None = None) -> None:
         np.savez(out_dir / f"{tag}_seed{seed}.npz", users=res["users"], **{k: v for k, v in res["per_user"].items()})
         summary.append(test)
         print(f"[test] seed={seed} " + " ".join(f"{k}={test[k]:.4f}" for k in METRICS))
-    agg = {k: (float(np.mean([s[k] for s in summary])), float(np.std([s[k] for s in summary]))) for k in METRICS}
+    agg = {k: (float(np.mean([s[k] for s in summary])), seed_std([s[k] for s in summary])) for k in METRICS}
     (out_dir / f"{tag}_summary.json").write_text(
         json.dumps({"selected": mcfg["grid"][best], "val_means_recall@20": val_means, "test_mean_std": agg}, indent=2)
     )
-    print("test mean ± std: " + " ".join(f"{k}={m:.4f}±{s:.4f}" for k, (m, s) in agg.items()))
+    print(
+        "test mean ± sample std over seeds: "
+        + " ".join(f"{k}={m:.4f}±{'n/a' if s is None else f'{s:.4f}'}" for k, (m, s) in agg.items())
+    )
 
 
 if __name__ == "__main__":

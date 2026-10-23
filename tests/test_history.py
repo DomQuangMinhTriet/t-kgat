@@ -70,6 +70,19 @@ def test_run_writes_one_history_per_grid_point_and_seed(synthetic, tmp_path):
             assert best == int(row["best_epoch"].iloc[0])
             assert h.loc[h["epoch"] == best, "recall@20"].iloc[0] == pytest.approx(row["recall@20"].iloc[0])
 
+    # the summary reports the sample std over seeds (ddof=1), the same as pandas on the registry rows
+    summary = json.loads((out / "bprmf_summary.json").read_text())
+    test_rows = reg[reg["phase"] == "test"]
+    mean, std = summary["test_mean_std"]["recall@20"]
+    assert mean == pytest.approx(test_rows["recall@20"].mean())
+    assert std == pytest.approx(test_rows["recall@20"].std())
+
+
+def test_seed_std_is_sample_std():
+    seed_std = load_run_script().seed_std
+    assert seed_std([1.0, 2.0, 3.0]) == pytest.approx(1.0)  # ddof=0 would give 0.816
+    assert seed_std([0.5]) is None
+
 
 def test_save_history_refuses_test_scores(tmp_path):
     with pytest.raises(ValueError, match="test"):
