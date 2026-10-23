@@ -21,9 +21,25 @@ from pathlib import Path
 import pandas as pd
 
 ML100K_GENRES = [
-    "unknown", "Action", "Adventure", "Animation", "Children's", "Comedy",
-    "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir", "Horror",
-    "Musical", "Mystery", "Romance", "Sci-Fi", "Thriller", "War", "Western",
+    "unknown",
+    "Action",
+    "Adventure",
+    "Animation",
+    "Children's",
+    "Comedy",
+    "Crime",
+    "Documentary",
+    "Drama",
+    "Fantasy",
+    "Film-Noir",
+    "Horror",
+    "Musical",
+    "Mystery",
+    "Romance",
+    "Sci-Fi",
+    "Thriller",
+    "War",
+    "Western",
 ]
 
 _YEAR_RE = re.compile(r"\((\d{4})\)\s*$")
@@ -37,15 +53,15 @@ def _year_from_title(title: str) -> float:
 def load_ml100k(raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     raw_dir = Path(raw_dir)
     inter = pd.read_csv(
-        raw_dir / "u.data", sep="\t", names=["user", "item", "rating", "ts"],
+        raw_dir / "u.data",
+        sep="\t",
+        names=["user", "item", "rating", "ts"],
         dtype={"user": "int64", "item": "int64", "rating": "int64", "ts": "int64"},
     )
     cols = ["item", "title", "release_date", "video_release_date", "imdb_url", *ML100K_GENRES]
     items = pd.read_csv(raw_dir / "u.item", sep="|", names=cols, encoding="latin-1")
     items["release_date"] = pd.to_datetime(items["release_date"], format="%d-%b-%Y", errors="coerce")
-    items["genres"] = items[ML100K_GENRES].apply(
-        lambda r: "|".join(g for g in ML100K_GENRES if r[g] == 1), axis=1
-    )
+    items["genres"] = items[ML100K_GENRES].apply(lambda r: "|".join(g for g in ML100K_GENRES if r[g] == 1), axis=1)
     items["year"] = items["title"].map(_year_from_title)
     items.loc[items["year"].isna(), "year"] = items["release_date"].dt.year
     return inter, items[["item", "title", "year", "release_date", "genres", "imdb_url"]]
@@ -54,12 +70,17 @@ def load_ml100k(raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 def load_ml1m(raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     raw_dir = Path(raw_dir)
     inter = pd.read_csv(
-        raw_dir / "ratings.dat", sep="::", engine="python",
+        raw_dir / "ratings.dat",
+        sep="::",
+        engine="python",
         names=["user", "item", "rating", "ts"],
     ).astype("int64")
     items = pd.read_csv(
-        raw_dir / "movies.dat", sep="::", engine="python",
-        names=["item", "title", "genres"], encoding="latin-1",
+        raw_dir / "movies.dat",
+        sep="::",
+        engine="python",
+        names=["item", "title", "genres"],
+        encoding="latin-1",
     )
     items["year"] = items["title"].map(_year_from_title)
     items["release_date"] = pd.NaT

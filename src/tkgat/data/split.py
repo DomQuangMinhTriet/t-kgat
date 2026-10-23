@@ -124,7 +124,9 @@ def temporal_split(interactions: pd.DataFrame, cfg: SplitConfig) -> TemporalSpli
         "n_raw": int(len(interactions)),
         "n_duplicate_pairs_removed": int(n_dupes),
         "period_sizes": {
-            "train": int(len(period_train)), "val": int(len(period_val)), "test": int(len(period_test)),
+            "train": int(len(period_train)),
+            "val": int(len(period_val)),
+            "test": int(len(period_test)),
         },
         "train_pos_before_kcore": int(len(pos(period_train))),
         "train_pos": int(len(train)),

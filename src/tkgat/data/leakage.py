@@ -60,4 +60,3 @@ def check_split(s: TemporalSplit) -> list[str]:
     if p_te & _pairs(s.seen_before_test):
         v.append("test ground truth overlaps seen_before_test")
     return v
-

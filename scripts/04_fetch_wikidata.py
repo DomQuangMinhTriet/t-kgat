@@ -29,11 +29,24 @@ USER_AGENT = "t-kgat-thesis/0.1 (HCMUS graduation thesis; contact: repository ow
 
 # relation id -> short name used in the KG
 RELATIONS = {
-    "P57": "director", "P58": "screenwriter", "P161": "cast_member", "P162": "producer",
-    "P86": "composer", "P344": "director_of_photography", "P136": "genre", "P495": "country_of_origin",
-    "P364": "original_language", "P272": "production_company", "P750": "distributed_by",
-    "P144": "based_on", "P155": "follows", "P156": "followed_by", "P166": "award_received",
-    "P1411": "nominated_for", "P840": "narrative_location", "P921": "main_subject",
+    "P57": "director",
+    "P58": "screenwriter",
+    "P161": "cast_member",
+    "P162": "producer",
+    "P86": "composer",
+    "P344": "director_of_photography",
+    "P136": "genre",
+    "P495": "country_of_origin",
+    "P364": "original_language",
+    "P272": "production_company",
+    "P750": "distributed_by",
+    "P144": "based_on",
+    "P155": "follows",
+    "P156": "followed_by",
+    "P166": "award_received",
+    "P1411": "nominated_for",
+    "P840": "narrative_location",
+    "P921": "main_subject",
 }
 
 QUERY = """
@@ -57,8 +70,19 @@ WHERE {
 GROUP BY ?fb ?pid ?val ?valLabel
 """
 
-FIELDS = ["freebase_id", "relation", "tail", "tail_label", "point_in_time", "point_in_time_precision", "start_time",
-          "tail_publication", "tail_inception", "tail_birth", "film_publication"]
+FIELDS = [
+    "freebase_id",
+    "relation",
+    "tail",
+    "tail_label",
+    "point_in_time",
+    "point_in_time_precision",
+    "start_time",
+    "tail_publication",
+    "tail_inception",
+    "tail_birth",
+    "film_publication",
+]
 
 
 def to_wd_freebase(mid: str) -> str:
@@ -75,8 +99,9 @@ def build_query(mids: list[str]) -> str:
 def run_query(q: str, retries: int = 4) -> list[dict]:
     data = urllib.parse.urlencode({"query": q, "format": "json"}).encode()
     for attempt in range(retries):
-        req = urllib.request.Request(ENDPOINT, data=data, headers={
-            "User-Agent": USER_AGENT, "Accept": "application/sparql-results+json"})
+        req = urllib.request.Request(
+            ENDPOINT, data=data, headers={"User-Agent": USER_AGENT, "Accept": "application/sparql-results+json"}
+        )
         try:
             with urllib.request.urlopen(req, timeout=120) as r:
                 return json.load(r)["results"]["bindings"]
@@ -91,27 +116,30 @@ def rows_from(bindings: list[dict]) -> list[dict]:
     g = lambda b, k: b.get(k, {}).get("value", "")  # noqa: E731
     out = []
     for b in bindings:
-        out.append({
-            "freebase_id": g(b, "fb").lstrip("/").replace("/", ".", 1),
-            "relation": RELATIONS[g(b, "pid")],
-            "tail": g(b, "val").rsplit("/", 1)[-1],
-            "tail_label": g(b, "valLabel"),
-            "point_in_time": g(b, "point_in_time")[:10],
-            # Wikidata precision: 9 = year, 10 = month, 11 = day
-            "point_in_time_precision": g(b, "point_in_time_precision"),
-            "start_time": g(b, "start_time")[:10],
-            "tail_publication": g(b, "val_publication")[:10],
-            "tail_inception": g(b, "val_inception")[:10],
-            "tail_birth": g(b, "val_birth")[:10],
-            "film_publication": g(b, "film_publication")[:10],
-        })
+        out.append(
+            {
+                "freebase_id": g(b, "fb").lstrip("/").replace("/", ".", 1),
+                "relation": RELATIONS[g(b, "pid")],
+                "tail": g(b, "val").rsplit("/", 1)[-1],
+                "tail_label": g(b, "valLabel"),
+                "point_in_time": g(b, "point_in_time")[:10],
+                # Wikidata precision: 9 = year, 10 = month, 11 = day
+                "point_in_time_precision": g(b, "point_in_time_precision"),
+                "start_time": g(b, "start_time")[:10],
+                "tail_publication": g(b, "val_publication")[:10],
+                "tail_inception": g(b, "val_inception")[:10],
+                "tail_birth": g(b, "val_birth")[:10],
+                "film_publication": g(b, "film_publication")[:10],
+            }
+        )
     return out
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--links", nargs="+", default=["data/processed/links/ml100k_links.csv",
-                                                   "data/processed/links/ml1m_links.csv"])
+    ap.add_argument(
+        "--links", nargs="+", default=["data/processed/links/ml100k_links.csv", "data/processed/links/ml1m_links.csv"]
+    )
     ap.add_argument("--out", default="data/raw/wikidata")
     ap.add_argument("--batch", type=int, default=50)
     ap.add_argument("--limit", type=int, default=0)

@@ -48,9 +48,14 @@ def build_report(facts: pd.DataFrame, requested: set[str]) -> dict:
     films = set(facts["freebase_id"])
     per_rel = (
         facts.groupby("relation")
-        .agg(facts=("tail", "size"), films=("freebase_id", "nunique"), tails=("tail", "nunique"),
-             statement_dated=("statement_dated", "mean"), tail_dated=("tail_dated", "mean"),
-             any_date=("dated", "mean"))
+        .agg(
+            facts=("tail", "size"),
+            films=("freebase_id", "nunique"),
+            tails=("tail", "nunique"),
+            statement_dated=("statement_dated", "mean"),
+            tail_dated=("tail_dated", "mean"),
+            any_date=("dated", "mean"),
+        )
         .sort_values("facts", ascending=False)
     )
     per_rel["film_coverage"] = per_rel["films"] / max(len(films), 1)
@@ -63,8 +68,9 @@ def build_report(facts: pd.DataFrame, requested: set[str]) -> dict:
         "n_films_without_facts": len(requested - films) if requested else None,
         "dated_share_overall": round(float(facts["dated"].mean()), 4),
         "statement_dated_share": round(float(facts["statement_dated"].mean()), 4),
-        "film_publication_known_share": round(float(facts.groupby("freebase_id")["film_publication"]
-                                                   .first().ne("").mean()), 4),
+        "film_publication_known_share": round(
+            float(facts.groupby("freebase_id")["film_publication"].first().ne("").mean()), 4
+        ),
         "point_in_time_precision": {PRECISION.get(k, k): int(v) for k, v in prec.value_counts().items()},
         "per_relation": per_rel.round(4).reset_index().to_dict(orient="records"),
     }
@@ -73,8 +79,9 @@ def build_report(facts: pd.DataFrame, requested: set[str]) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--facts", default="data/raw/wikidata/facts.tsv")
-    ap.add_argument("--links", nargs="+", default=["data/processed/links/ml100k_links.csv",
-                                                   "data/processed/links/ml1m_links.csv"])
+    ap.add_argument(
+        "--links", nargs="+", default=["data/processed/links/ml100k_links.csv", "data/processed/links/ml1m_links.csv"]
+    )
     ap.add_argument("--out", default="data/processed/wikidata_report.json")
     args = ap.parse_args()
 
@@ -84,8 +91,7 @@ def main() -> None:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2, ensure_ascii=False))
-    print(json.dumps({k: v for k, v in report.items() if k not in ("per_relation", "films_without_facts")},
-                     indent=2))
+    print(json.dumps({k: v for k, v in report.items() if k not in ("per_relation", "films_without_facts")}, indent=2))
     print(pd.DataFrame(report["per_relation"]).to_string(index=False))
 
 

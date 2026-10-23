@@ -47,16 +47,20 @@ def encode(s: TemporalSplit) -> EncodedSplit:
 
     def mask(df: pd.DataFrame) -> sp.csr_matrix:
         p = pairs(df)
-        m = sp.csr_matrix(
-            (np.ones(len(p), dtype=np.float32), (p[:, 0], p[:, 1])), shape=(len(user_ids), len(item_ids))
-        )
+        m = sp.csr_matrix((np.ones(len(p), dtype=np.float32), (p[:, 0], p[:, 1])), shape=(len(user_ids), len(item_ids)))
         m.data[:] = 1.0
         return m
 
     tr = s.train.sort_values(["user", "ts"])
     return EncodedSplit(
-        n_users=len(user_ids), n_items=len(item_ids), user_ids=user_ids, item_ids=item_ids,
-        train=pairs(tr), train_ts=tr["ts"].to_numpy(),
-        val=grouped(s.val), test=grouped(s.test),
-        mask_val=mask(s.seen_before_val), mask_test=mask(s.seen_before_test),
+        n_users=len(user_ids),
+        n_items=len(item_ids),
+        user_ids=user_ids,
+        item_ids=item_ids,
+        train=pairs(tr),
+        train_ts=tr["ts"].to_numpy(),
+        val=grouped(s.val),
+        test=grouped(s.test),
+        mask_val=mask(s.seen_before_val),
+        mask_test=mask(s.seen_before_test),
     )
