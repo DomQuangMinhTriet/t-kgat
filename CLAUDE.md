@@ -49,18 +49,19 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
 |---|---|
 | `src/tkgat/data/` | `loaders`, `clean` (duplicate titles, item 267), `split` (temporal split, k-core), `leakage` (`check_split`), `encode` |
 | `src/tkgat/kg/linking.py` | ML-100K → ML-1M → ML-20M → Freebase/YAGO links, name + year checks |
+| `src/tkgat/kg/temporal.py` | time-consistent KG: date parsing (decision 0006), `build_kg` (variants `default`, `drop_undated`, `static`), `check_kg`, shared entity ids |
 | `src/tkgat/models/baselines.py` | `MostPop` (optionally recent window), `BPRMF` |
 | `src/tkgat/device.py` | `resolve_device("auto"/"cuda"/"cpu")`, `seed_all` (deterministic kernels), device label for the registry |
 | `src/tkgat/train/bpr.py` | BPR training on any device; negatives sampled on the device from train positives only; early stop on val |
 | `src/tkgat/eval/` | full-ranking Recall/NDCG@K per user; paired Wilcoxon, paired t, bootstrap CI, Holm |
 | `src/tkgat/registry.py` | appends every val/test score with git commit, config, seed |
-| `scripts/01…05` | verify data → build splits → link entities → fetch Wikidata → Wikidata coverage report |
+| `scripts/01…06` | verify data → build splits → link entities → fetch Wikidata → Wikidata coverage report → build KG at t1/t2 |
 | `scripts/run.py` | train every grid point × seed, select on val, score test once |
 | `configs/data/` | `ml100k.yaml` (5-core, main), `ml100k_k10.yaml` (10-core sensitivity), `ml1m.yaml` |
 | `configs/model/` | `mostpop.yaml`, `mostpop_recent.yaml`, `bprmf.yaml` |
 | `docs/` | `plan.md`, `decisions/`, `data-dictionary.md`, `meetings/`, `study/` (guides), `theory/` (team notes) |
 
-Planned (not written yet): `scripts/06_build_kg.py`, `src/tkgat/models/kgat.py` (+ T-KGAT),
+Planned (not written yet): `src/tkgat/models/kgat.py` (+ T-KGAT),
 `notebooks/01_eda.ipynb`, `02_entity_linking.ipynb`, `03_kg_temporal.ipynb`,
 `00_present_2026-10-31.ipynb`, `docs/data-report.md`.
 
@@ -74,6 +75,7 @@ python scripts/01_verify_data.py
 python scripts/02_build_splits.py --data configs/data/ml100k.yaml   # also ml100k_k10, ml1m
 python scripts/03_link_entities.py
 python scripts/05_wikidata_report.py
+python scripts/06_build_kg.py --data configs/data/ml100k.yaml      # also ml1m; all 3 KG variants
 python scripts/run.py --data configs/data/ml1m.yaml --model configs/model/bprmf.yaml   # --device auto|cuda|cpu
 ruff check .; pytest                # both must pass before every commit (CI runs them)
 ```
@@ -93,6 +95,12 @@ ruff check .; pytest                # both must pass before every commit (CI run
 - Wikidata: 119,748 facts, 18 relations, 3,725 of 3,811 linked films. Statement dates exist almost
   only for `award_received` (80%) and `nominated_for` (97%). Titanic's Oscars (1998-03-23) fall between
   t1 and t2 of ML-100K.
+- KG triples at t1 (verified 2026-10-23, `kg_meta.json`): ML-100K default 36,560 / drop_undated 29,840 /
+  static 37,103; ML-1M default 103,443 / drop_undated 84,522 / static 104,782.
+  ML-1M has the same KG at t1 and t2 (no dated fact between 2000-12-02 and 2000-12-29).
+- The time filter drops only ~1.5% of facts (ML-100K: 543 of 37,103 at t1), but they fall on popular
+  films: the 10% most-rated train items hold 16% of all facts yet 46% of the future award/nomination facts
+  removed at t1 (ML-1M: 15% vs 37%). Titanic alone loses 28 facts at t1.
 
 ## GPU rules
 - Every model, trainer and script takes a `device` (default `"auto"`) and keeps tensors on it: no
