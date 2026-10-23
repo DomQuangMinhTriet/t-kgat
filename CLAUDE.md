@@ -30,7 +30,10 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
    at t2. Wikidata is a 2026 snapshot: say so whenever KG results are reported.
 4. **No hand-copied numbers.** Every number in a notebook or report is read from `results/registry.csv`
    or from files written by the scripts. 5 seeds (2019–2023), report mean ± std, paired Wilcoxon per user
-   with Holm correction (`src/tkgat/eval/stats.py`).
+   with Holm correction (`src/tkgat/eval/stats.py`). "std" is always the **sample** standard deviation
+   over seeds (`ddof=1`; numpy's default `ddof=0` is wrong here, pandas' `.std()` is right). Read the
+   registry through `tkgat.registry.load()` (newest run per dataset/model/config/seed/phase); the file is
+   append-only, so never edit or delete old rows.
 5. **Data never enters git.** `data/raw/` and `data/processed/` are ignored (MovieLens/KB4Rec licences).
    Do not print large data dumps into the chat either.
 6. **Protocol changes need a decision record.** New file in `docs/decisions/NNNN-*.md` (context,
