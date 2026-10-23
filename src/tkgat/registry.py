@@ -21,7 +21,9 @@ FIELDS = [
 def git_commit() -> str:
     try:
         out = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True)
-        dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
+        # tracked files only: the registry itself and other run outputs are untracked and must not count
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"],
+                               capture_output=True, text=True).stdout.strip()
         return out.stdout.strip() + ("-dirty" if dirty else "")
     except Exception:  # noqa: BLE001 - outside a git checkout
         return "no-git"
