@@ -3,6 +3,10 @@
 Every item in the train vocabulary is a candidate; items the user already
 interacted with before the cut-off are masked out.  Metrics are returned per
 user so that paired significance tests can be run on them.
+
+``score_fn`` may return a NumPy array or a torch tensor.  Masking and the top-K
+selection run on the tensor's device (so on the GPU for GPU models), in float64
+so that tiny deterministic tie-breaks (MostPop) survive.
 """
 
 from __future__ import annotations
@@ -11,8 +15,15 @@ from collections.abc import Callable
 
 import numpy as np
 import scipy.sparse as sp
+import torch
 
-ScoreFn = Callable[[np.ndarray], np.ndarray]  # user indices -> (B, n_items) scores
+ScoreFn = Callable[[np.ndarray], "np.ndarray | torch.Tensor"]  # user indices -> (B, n_items) scores
+
+
+def _as_scores(raw: np.ndarray | torch.Tensor) -> torch.Tensor:
+    if isinstance(raw, torch.Tensor):
+        return raw.detach().to(torch.float64).clone()
+    return torch.from_numpy(np.array(raw, dtype=np.float64))  # copy: score_fn may return a read-only view
 
 
 def recall_ndcg_at_k(ranked: np.ndarray, truth: np.ndarray, k: int) -> tuple[float, float]:
@@ -40,12 +51,10 @@ def evaluate(
     per_user = {f"{m}@{k}": np.empty(len(users)) for k in ks for m in ("recall", "ndcg")}
     for start in range(0, len(users), batch_size):
         b = users[start : start + batch_size]
-        scores = np.array(score_fn(b), dtype=np.float64)  # copy: score_fn may return a read-only view
-        seen = mask[b].toarray().astype(bool)
-        scores[seen] = -np.inf
-        top = np.argpartition(-scores, kmax, axis=1)[:, :kmax]
-        order = np.take_along_axis(scores, top, axis=1).argsort(axis=1)[:, ::-1]
-        top = np.take_along_axis(top, order, axis=1)
+        scores = _as_scores(score_fn(b))
+        seen = torch.from_numpy(mask[b].toarray().astype(bool)).to(scores.device)
+        scores.masked_fill_(seen, float("-inf"))
+        top = torch.topk(scores, kmax, dim=1, sorted=True).indices.cpu().numpy()
         for j, u in enumerate(b):
             for k in ks:
                 r, n = recall_ndcg_at_k(top[j], truth[int(u)], k)

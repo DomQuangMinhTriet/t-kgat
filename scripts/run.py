@@ -38,6 +38,7 @@ def main() -> None:
     ap.add_argument("--model", required=True)
     ap.add_argument("--registry", default="results/registry.csv")
     ap.add_argument("--runs-dir", default="results/runs")
+    ap.add_argument("--device", default="auto", help='"auto" (CUDA if available), "cuda", "cuda:1" or "cpu"')
     args = ap.parse_args()
 
     dcfg = load_config(args.data)
@@ -50,29 +51,32 @@ def main() -> None:
     base = {"dataset": dcfg["name"], "split_sha256": split_sha[:12], "model": tag}
 
     fitted: dict[int, dict[int, object]] = {}
+    devices: dict[int, dict[int, str]] = {}
     val_means = []
     for g, point in enumerate(mcfg["grid"]):
-        fitted[g] = {}
+        fitted[g], devices[g] = {}, {}
         scores = []
         for seed in seeds:
             if mcfg["name"] == "mostpop":
-                model, epoch, secs = MostPop(data, **point), 0, 0.0
+                model, epoch, secs, dev = MostPop(data, **point), 0, 0.0, "cpu"
                 res = evaluate(model.score, data.val, data.mask_val)
                 val = {k: res[k] for k in METRICS}
                 n_val = res["n_users"]
             elif mcfg["name"] == "bprmf":
-                fit = fit_bpr(data, BPRConfig(**point, **mcfg.get("fixed", {})), seed)
-                model, epoch, secs, val = fit.model, fit.best_epoch, fit.seconds, fit.best_val
+                fit = fit_bpr(data, BPRConfig(**point, **mcfg.get("fixed", {}), device=args.device), seed)
+                model, epoch, secs, val, dev = fit.model, fit.best_epoch, fit.seconds, fit.best_val, fit.device
                 n_val = len(data.val)
             else:
                 raise ValueError(mcfg["name"])
             fitted[g][seed] = model
+            devices[g][seed] = dev
             scores.append(val["recall@20"])
             registry.append(args.registry, {
                 **base, "config": point, "seed": seed, "phase": "val", "best_epoch": epoch,
-                **val, "n_users": n_val, "seconds": round(secs, 1),
+                **val, "n_users": n_val, "seconds": round(secs, 1), "device": dev,
             })
-            print(f"[val] grid={point} seed={seed} " + " ".join(f"{k}={val[k]:.4f}" for k in METRICS))
+            print(f"[val] grid={point} seed={seed} device={dev} epoch={epoch} {secs:.0f}s "
+                  + " ".join(f"{k}={val[k]:.4f}" for k in METRICS))
         val_means.append(float(np.mean(scores)))
 
     best = int(np.argmax(val_means))
@@ -82,11 +86,12 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     summary = []
     for seed, model in fitted[best].items():
+        dev = devices[best][seed]
         res = evaluate(model.score, data.test, data.mask_test)
         test = {k: res[k] for k in METRICS}
         registry.append(args.registry, {
             **base, "config": mcfg["grid"][best], "seed": seed, "phase": "test",
-            **test, "n_users": res["n_users"],
+            **test, "n_users": res["n_users"], "device": dev,
         })
         np.savez(out_dir / f"{tag}_seed{seed}.npz", users=res["users"], **{k: v for k, v in res["per_user"].items()})
         summary.append(test)

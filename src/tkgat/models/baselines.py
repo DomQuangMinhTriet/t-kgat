@@ -46,6 +46,7 @@ class BPRMF(nn.Module):
         return x_ui, x_uj, reg
 
     @torch.no_grad()
-    def score(self, users: np.ndarray) -> np.ndarray:
-        eu = self.user.weight[torch.as_tensor(users)]
-        return (eu @ self.item.weight.T).cpu().numpy()
+    def score(self, users: np.ndarray) -> torch.Tensor:
+        """Scores of every item for ``users``, as a tensor on the model's device."""
+        idx = torch.as_tensor(users, device=self.user.weight.device)
+        return self.user.weight[idx] @ self.item.weight.T

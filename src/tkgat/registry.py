@@ -14,7 +14,7 @@ from pathlib import Path
 
 FIELDS = [
     "run_at", "git_commit", "dataset", "split_sha256", "model", "config", "seed", "phase",
-    "best_epoch", "recall@10", "recall@20", "ndcg@10", "ndcg@20", "n_users", "seconds",
+    "best_epoch", "recall@10", "recall@20", "ndcg@10", "ndcg@20", "n_users", "seconds", "device",
 ]
 
 
@@ -46,6 +46,12 @@ def append(path: str | Path, row: dict) -> None:
     }
     if isinstance(row.get("config"), dict):
         row["config"] = json.dumps(row["config"], sort_keys=True)
+    if not new:
+        with path.open(encoding="utf-8") as f:
+            header = f.readline().strip().split(",")
+        if header != FIELDS:
+            raise ValueError(f"{path} has columns {header}, expected {FIELDS}; "
+                             "move the old file aside instead of mixing formats")
     with path.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
         if new:

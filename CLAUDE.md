@@ -47,7 +47,8 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
 | `src/tkgat/data/` | `loaders`, `clean` (duplicate titles, item 267), `split` (temporal split, k-core), `leakage` (`check_split`), `encode` |
 | `src/tkgat/kg/linking.py` | ML-100K → ML-1M → ML-20M → Freebase/YAGO links, name + year checks |
 | `src/tkgat/models/baselines.py` | `MostPop` (optionally recent window), `BPRMF` |
-| `src/tkgat/train/bpr.py` | BPR training, negatives sampled from train only, early stop on val |
+| `src/tkgat/device.py` | `resolve_device("auto"/"cuda"/"cpu")`, `seed_all` (deterministic kernels), device label for the registry |
+| `src/tkgat/train/bpr.py` | BPR training on any device; negatives sampled on the device from train positives only; early stop on val |
 | `src/tkgat/eval/` | full-ranking Recall/NDCG@K per user; paired Wilcoxon, paired t, bootstrap CI, Holm |
 | `src/tkgat/registry.py` | appends every val/test score with git commit, config, seed |
 | `scripts/01…05` | verify data → build splits → link entities → fetch Wikidata → Wikidata coverage report |
@@ -63,12 +64,14 @@ Planned (not written yet): `scripts/06_build_kg.py`, `src/tkgat/models/kgat.py` 
 ## Commands (Windows PowerShell, repo root)
 ```powershell
 python -m venv .venv; .venv\Scripts\Activate.ps1
-pip install -e ".[dev]"            # CPU torch is fine for 100K; install CUDA torch first if a GPU is used
+pip install torch --index-url https://download.pytorch.org/whl/cu128   # GPU build first (RTX 3050, 4 GB)
+pip install -e ".[dev]"
+python -c "import torch; print(torch.cuda.is_available())"             # must print True
 python scripts/01_verify_data.py
 python scripts/02_build_splits.py --data configs/data/ml100k.yaml   # also ml100k_k10, ml1m
 python scripts/03_link_entities.py
 python scripts/05_wikidata_report.py
-python scripts/run.py --data configs/data/ml1m.yaml --model configs/model/bprmf.yaml
+python scripts/run.py --data configs/data/ml1m.yaml --model configs/model/bprmf.yaml   # --device auto|cuda|cpu
 ruff check .; pytest                # both must pass before every commit (CI runs them)
 ```
 `data/processed/` is rebuilt from `data/raw/` by scripts 02–03; run them on a fresh machine.
@@ -79,11 +82,25 @@ ruff check .; pytest                # both must pass before every commit (CI run
 - MovieLens timestamps are rating-entry times: 78% of ML-100K ratings (72% of ML-1M) fall on the
   user's first day. Δt between one user's edges is often ~0, so the timestamp-permutation control is
   mandatory for every time-aware variant.
-- Smoke baselines on ML-100K (not official): MostPop Recall@20 = 0.1555; BPR-MF 0.156 ± 0.026.
+- Smoke baselines on ML-100K (not official): MostPop test Recall@20 = 0.1555. BPR-MF val Recall@20 of the
+  three grid points are within one std of each other (0.168–0.181 over 5 seeds), so the selected point and
+  its test score (0.156 ± 0.026 with the old CPU sampler, 0.189 ± 0.019 with the device sampler) change
+  with the random stream. Selection on 66 val users is noisy: report it, and prefer ML-1M for conclusions.
 - KB4Rec covers 97.2% of ML-100K items. Known wrong link: "Clubland" → Cloudland Canyon State Park.
 - Wikidata: 119,748 facts, 18 relations, 3,725 of 3,811 linked films. Statement dates exist almost
   only for `award_received` (80%) and `nominated_for` (97%). Titanic's Oscars (1998-03-23) fall between
   t1 and t2 of ML-100K.
+
+## GPU rules
+- Every model, trainer and script takes a `device` (default `"auto"`) and keeps tensors on it: no
+  per-sample Python loops or `.cpu()` calls inside the training loop; sample negatives with a
+  `torch.Generator` on the device (see `NegativeSampler`). Score functions may return torch tensors;
+  `evaluate` masks and takes top-K on their device.
+- Call `seed_all(seed)` at the start of each run. Same seed + same device = same numbers; CPU and GPU
+  streams differ, which is why the registry has a `device` column.
+- The laptop GPU has 4 GB: keep full-graph tensors for KGAT in float32 and use sparse adjacency
+  (`torch.sparse`) for propagation; check `torch.cuda.max_memory_allocated()` on ML-1M before long runs.
+- Tests must pass on CPU (CI has no GPU); GPU-only checks use `pytest.mark.skipif(not torch.cuda.is_available())`.
 
 ## How to work with the user
 - Before starting a task, say which item of `docs/plan.md` §12 it belongs to and what will change.

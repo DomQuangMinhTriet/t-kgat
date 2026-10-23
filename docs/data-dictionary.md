@@ -34,4 +34,4 @@ One row per (film, relation, target). Dates are ISO `YYYY-MM-DD`; empty when Wik
 
 ## Results
 `results/registry.csv`: run_at, git_commit, dataset, split_sha256, model, config, seed, phase (val/test),
-best_epoch, recall@10, recall@20, ndcg@10, ndcg@20, n_users, seconds.
+best_epoch, recall@10, recall@20, ndcg@10, ndcg@20, n_users, seconds, device (`cpu` or `cuda:<GPU name>`).
