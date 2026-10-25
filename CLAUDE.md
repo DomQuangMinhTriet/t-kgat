@@ -62,7 +62,7 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
 | `docs/` | `plan.md`, `decisions/`, `data-dictionary.md`, `meetings/`, `study/` (guides), `theory/` (team notes) |
 
 Planned (not written yet): `src/tkgat/models/kgat.py` (+ T-KGAT),
-`notebooks/01_eda.ipynb`, `02_entity_linking.ipynb`, `03_kg_temporal.ipynb`,
+`notebooks/02_entity_linking.ipynb`, `03_kg_temporal.ipynb`,
 `00_present_2026-10-31.ipynb`, `docs/data-report.md`.
 
 ## Commands (Windows PowerShell, repo root)
@@ -91,6 +91,10 @@ ruff check .; pytest                # both must pass before every commit (CI run
   three grid points are within one std of each other (0.168–0.181 over 5 seeds), so the selected point and
   its test score (0.156 ± 0.026 with the old CPU sampler, 0.189 ± 0.019 with the device sampler) change
   with the random stream. Selection on 66 val users is noisy: report it, and prefer ML-1M for conclusions.
+- Official ML-1M baselines (verified 2026-10-25 with `registry.load()`), test Recall@20: MostPop 0.0902,
+  MostPop with a 7-day window 0.1060, BPR-MF 0.1194 ± 0.0031 (sample std over 5 seeds; grid point
+  dim 64, lr 1e-3, l2 1e-4 selected on val). BPR-MF is reproducible on the GPU: the re-run at 08f5e63
+  gave the same test score for every seed as the run at 4759618.
 - KB4Rec covers 97.2% of ML-100K items. Known wrong link: "Clubland" → Cloudland Canyon State Park.
 - Wikidata: 119,748 facts, 18 relations, 3,725 of 3,811 linked films. Statement dates exist almost
   only for `award_received` (80%) and `nominated_for` (97%). Titanic's Oscars (1998-03-23) fall between
