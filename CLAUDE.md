@@ -32,8 +32,9 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
    or from files written by the scripts. 5 seeds (2019–2023), report mean ± std, paired Wilcoxon per user
    with Holm correction (`src/tkgat/eval/stats.py`). "std" is always the **sample** standard deviation
    over seeds (`ddof=1`; numpy's default `ddof=0` is wrong here, pandas' `.std()` is right). Read the
-   registry through `tkgat.registry.load()` (newest run per dataset/model/config/seed/phase); the file is
-   append-only, so never edit or delete old rows.
+   registry through `tkgat.registry.load()` (newest run per dataset/split_sha256/model/config/seed/phase;
+   "dataset" is the data config's `run_name`, unique per split); the file is append-only, so never edit or
+   delete old rows.
 5. **Data never enters git.** `data/raw/` and `data/processed/` are ignored (MovieLens/KB4Rec licences).
    Do not print large data dumps into the chat either.
 6. **Protocol changes need a decision record.** New file in `docs/decisions/NNNN-*.md` (context,

@@ -93,3 +93,13 @@ def test_load_breaks_run_at_ties_by_line_order(tmp_path):
     rows = [_row("2026-10-23T10:00:00Z", 2019, recall=0.1), _row("2026-10-23T10:00:00Z", 2019, recall=0.2)]
     pd.DataFrame(rows, columns=registry.FIELDS).to_csv(path, index=False)
     assert registry.load(path)["recall@20"].tolist() == [0.2]
+
+
+def test_load_keeps_runs_of_different_splits(tmp_path):
+    """Two splits with the same dataset name are different runs, not re-runs of each other."""
+    path = tmp_path / "registry.csv"
+    a = _row("2026-10-23T10:00:00Z", 2019, recall=0.18) | {"split_sha256": "aaa5core"}
+    b = _row("2026-10-24T10:00:00Z", 2019, recall=0.21) | {"split_sha256": "bbb10core"}
+    pd.DataFrame([a, b], columns=registry.FIELDS).to_csv(path, index=False)
+    latest = registry.load(path)
+    assert sorted(latest["split_sha256"]) == ["aaa5core", "bbb10core"]
