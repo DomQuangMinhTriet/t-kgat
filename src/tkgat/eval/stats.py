@@ -1,9 +1,38 @@
-"""Paired significance tests on per-user metrics."""
+"""Paired significance tests on per-user metrics.
+
+The paired functions match arrays by position. Load per-user scores with :func:`load_per_user`, which
+checks that both files hold the same evaluation users in the same order before returning the arrays.
+"""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from scipy.stats import wilcoxon
+
+
+def load_per_user(path_a: str | Path, path_b: str | Path, metric: str = "recall@20") -> tuple[np.ndarray, np.ndarray]:
+    """Per-user ``metric`` from two ``results/runs/<run_name>/<tag>_seed<seed>.npz`` files, ready for pairing.
+
+    Raises ``ValueError`` unless both files hold exactly the same ``users`` array (same users, same order),
+    e.g. when the files come from different splits or run names.
+    """
+    with np.load(path_a) as fa, np.load(path_b) as fb:
+        users_a, users_b = fa["users"], fb["users"]
+        if not np.array_equal(users_a, users_b):
+            only_a = len(np.setdiff1d(users_a, users_b))
+            only_b = len(np.setdiff1d(users_b, users_a))
+            raise ValueError(
+                f"per-user files do not hold the same users: {path_a} has {len(users_a)}, {path_b} has "
+                f"{len(users_b)} ({only_a} only in the first, {only_b} only in the second"
+                f"{', same users in a different order' if only_a == only_b == 0 else ''}); "
+                "compare runs of the same split only"
+            )
+        for path, f in ((path_a, fa), (path_b, fb)):
+            if metric not in f:
+                raise KeyError(f"{path} has no per-user metric {metric!r}; available: {sorted(f.files)}")
+        return np.asarray(fa[metric], dtype=float), np.asarray(fb[metric], dtype=float)
 
 
 def paired_wilcoxon(a: np.ndarray, b: np.ndarray) -> dict:
