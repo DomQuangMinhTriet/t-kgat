@@ -62,7 +62,7 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
 | `docs/` | `plan.md`, `decisions/`, `data-dictionary.md`, `meetings/`, `study/` (guides), `theory/` (team notes) |
 
 Planned (not written yet): `src/tkgat/models/kgat.py` (+ T-KGAT),
-`notebooks/02_entity_linking.ipynb`, `03_kg_temporal.ipynb`,
+`notebooks/02_entity_linking.ipynb`,
 `00_present_2026-10-31.ipynb`, `docs/data-report.md`.
 
 ## Commands (Windows PowerShell, repo root)
@@ -105,8 +105,9 @@ ruff check .; pytest                # both must pass before every commit (CI run
   static 37,103; ML-1M default 103,443 / drop_undated 84,522 / static 104,782.
   ML-1M has the same KG at t1 and t2 (no dated fact between 2000-12-02 and 2000-12-29).
 - The time filter drops only ~1.5% of facts (ML-100K: 543 of 37,103 at t1), but they fall on popular
-  films: the 10% most-rated train items hold 16% of all facts yet 46% of the future award/nomination facts
-  removed at t1 (ML-1M: 15% vs 37%). Titanic alone loses 28 facts at t1.
+  films: the 10% most-rated train items hold 16% of all facts yet 44% of the future award/nomination facts
+  removed at t1 (ML-1M: 15% vs 36%; `notebooks/03_kg_temporal.ipynb`, section 5). Titanic alone loses
+  28 facts at t1; its 11 Oscars (1998-03-23) are only in the test KG (t2).
 
 ## GPU rules
 - Every model, trainer and script takes a `device` (default `"auto"`) and keeps tensors on it: no
