@@ -7,14 +7,21 @@ from scipy.stats import wilcoxon
 
 
 def paired_wilcoxon(a: np.ndarray, b: np.ndarray) -> dict:
-    """Two-sided Wilcoxon signed-rank test on matched per-user scores."""
-    mask = ~(np.isnan(a) | np.isnan(b))
-    a, b = a[mask], b[mask]
+    """Two-sided Wilcoxon signed-rank test on matched per-user scores.
+
+    Uses ``zero_method="wilcox"``: users whose difference is exactly 0 (often both models score 0) are
+    dropped before ranking, as in Wilcoxon's original test. The result therefore reports both
+    ``n_pairs`` (users with a score in both arrays; ``n`` is kept as an alias) and ``n_nonzero`` (the
+    differences actually ranked, i.e. the effective sample size of the test). Report ``n_nonzero``.
+    """
+    a, b = _paired(a, b)
     diff = a - b
+    n_pairs, n_nonzero = int(len(a)), int(np.count_nonzero(diff))
+    sizes = {"n": n_pairs, "n_pairs": n_pairs, "n_nonzero": n_nonzero}
     if np.allclose(diff, 0):
-        return {"n": int(len(a)), "mean_diff": 0.0, "p_value": 1.0}
+        return {**sizes, "mean_diff": 0.0, "p_value": 1.0}
     stat = wilcoxon(a, b, zero_method="wilcox", alternative="two-sided")
-    return {"n": int(len(a)), "mean_diff": float(diff.mean()), "p_value": float(stat.pvalue)}
+    return {**sizes, "mean_diff": float(diff.mean()), "p_value": float(stat.pvalue)}
 
 
 def _paired(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
