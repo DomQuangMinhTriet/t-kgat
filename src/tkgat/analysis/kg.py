@@ -122,3 +122,19 @@ def film_fact_status(film_facts: pd.DataFrame, dropped: pd.DataFrame) -> pd.Data
     out["status"] = status.to_numpy()
     out["reason_t1"] = [at["t1"].get((r, t), "") for r, t in zip(out["relation"], out["tail"], strict=True)]
     return out.reset_index(drop=True)
+
+
+def items_with_filtered_facts(
+    static_triples: pd.DataFrame, filtered_triples: pd.DataFrame, entities: pd.DataFrame
+) -> set[int]:
+    """Raw ids of the items whose number of triples differs between the static KG and a time-filtered KG
+    at the same cut-off, i.e. the items that lose at least one fact to the time filter."""
+    items = entities[entities["kind"] == "item"].set_index("entity")["key"].astype(int)
+    s = static_triples["h"].value_counts()
+    f = filtered_triples["h"].value_counts().reindex(s.index, fill_value=0)
+    return set(items[s.index[s != f]].astype(int))
+
+
+def positive_share(positives: pd.DataFrame, items: set[int]) -> float:
+    """Share of the positives (rows of ``val.csv`` / ``test.csv``) whose item is in ``items``."""
+    return float(positives["item"].isin(items).mean()) if len(positives) else 0.0

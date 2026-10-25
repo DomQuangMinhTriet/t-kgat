@@ -108,6 +108,9 @@ ruff check .; pytest                # both must pass before every commit (CI run
   films: the 10% most-rated train items hold 16% of all facts yet 44% of the future award/nomination facts
   removed at t1 (ML-1M: 15% vs 36%; `notebooks/03_kg_temporal.ipynb`, section 5). Titanic alone loses
   28 facts at t1; its 11 Oscars (1998-03-23) are only in the test KG (t2).
+- Only ~1.5% of facts are time-filtered, but the affected items carry ~48-53% (ML-100K) / ~41-43% (ML-1M)
+  of val/test positives (`notebooks/03_kg_temporal.ipynb`, section 6: 344 / 899 items that lose at least
+  one fact; val 53.1% / 40.6% at t1, test 48.1% / 42.6% at t2).
 
 ## GPU rules
 - Every model, trainer and script takes a `device` (default `"auto"`) and keeps tensors on it: no

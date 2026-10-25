@@ -138,3 +138,16 @@ def test_film_fact_status():
     assert s.loc[("followed_by", "Q_seq"), "status"] == "dropped_both"
     assert s.loc[("genre", "Q_drama"), "status"] == "kept_t1" and s.loc[("genre", "Q_drama"), "reason_t1"] == ""
     assert str(s.loc[("award_received", "Q_pic"), "statement_date"]) == "1998-03-23"
+
+
+def test_items_with_filtered_facts_and_positive_share():
+    ent = pd.DataFrame(
+        {"entity": [0, 1, 2, 3], "kind": ["item", "item", "item", "wikidata"], "key": ["10", "20", "30", "Q1"]}
+    )
+    static = pd.DataFrame({"h": [0, 0, 1, 2], "r": [0, 1, 0, 0], "t": [3, 3, 3, 3]})
+    filtered = pd.DataFrame({"h": [0, 1], "r": [0, 0], "t": [3, 3]})  # item 10 loses one fact, item 30 all
+    assert kg.items_with_filtered_facts(static, filtered, ent) == {10, 30}
+    assert kg.items_with_filtered_facts(static, static, ent) == set()
+    val = pd.DataFrame({"user": [1, 1, 2, 3], "item": [10, 20, 30, 20]})
+    assert kg.positive_share(val, {10, 30}) == pytest.approx(0.5)
+    assert kg.positive_share(val.iloc[:0], {10}) == 0.0
