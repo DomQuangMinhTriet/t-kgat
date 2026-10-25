@@ -16,6 +16,9 @@ pip install -e ".[dev]"
 python scripts/01_verify_data.py                                    # raw data present and unchanged
 python scripts/02_build_splits.py --data configs/data/ml100k.yaml   # refuses to save a leaky split
 python scripts/03_link_entities.py                                  # ML-100K/1M -> ML-20M -> Freebase/YAGO
+python scripts/04_fetch_wikidata.py                                 # dated Wikidata facts (needs internet)
+python scripts/05_wikidata_report.py                                # coverage and dated share per relation
+python scripts/06_build_kg.py --data configs/data/ml100k.yaml       # time-consistent KG at t1 and t2
 python scripts/run.py --data configs/data/ml100k.yaml --model configs/model/mostpop.yaml
 python scripts/run.py --data configs/data/ml100k.yaml --model configs/model/bprmf.yaml
 pytest
@@ -25,10 +28,11 @@ pytest
 ```
 configs/      one YAML per data protocol and per model (with its search grid)
 data/         raw + processed data (not committed) and checksums
-src/tkgat/   data (load, clean, split, leakage checks), kg (linking), models, train, eval
+src/tkgat/   data (load, clean, split, leakage checks), kg (linking, time-consistent KG), models, train, eval,
+              analysis (notebook statistics), registry
 scripts/      numbered pipeline steps + run.py
-tests/        leakage, split, metric and linking tests
-notebooks/    01_eda, 02_entity_linking, 00_present_<date>
+tests/        leakage, split, metric, statistics, registry, linking, KG and analysis tests
+notebooks/    01_eda, 02_entity_linking, 03_kg_temporal, 00_present_<date>
 results/      registry.csv (every val/test score) and per-user run files
 docs/         decisions/, data-report.md (week 2), data-dictionary.md, meetings/, theory/
 ```
