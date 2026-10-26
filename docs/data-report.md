@@ -7,7 +7,7 @@ Mọi ngày và mọi mốc thời gian trong báo cáo tính theo UTC. Mọi co
 ## Tóm tắt
 
 - **Dữ liệu.** ML-100K có 943 user, 1.682 item được rating, 100.000 rating, từ 20/09/1997 đến 22/04/1998. ML-1M có 6.040 user, 3.706 item được rating, 1.000.209 rating, từ 25/04/2000 đến 28/02/2003, nhưng 90,5% rating nằm trong năm 2000. Cả 9 file gốc khớp SHA-256.
-- **Timestamp là lúc nhập rating.** 77,9% rating của ML-100K và 72,4% của ML-1M nằm trong 24 giờ đầu của user. Vì vậy các cạnh của một user gần như trùng thời điểm, còn các cạnh của một item trải trên nhiều tháng (mục 3).
+- **Timestamp.** README của GroupLens chỉ mô tả timestamp là số giây kể từ epoch (UTC); nhóm hiểu đó là lúc user ghi rating. Cách hiểu này nhất quán với số liệu: 77,9% rating của ML-100K và 72,4% của ML-1M nằm trong 24 giờ đầu của user, nên các cạnh của một user gần như trùng thời điểm, còn các cạnh của một item trải trên nhiều tháng (mục 3). Báo cáo chưa kiểm tra nguyên nhân.
 - **Chia theo mốc t1/t2** giữ lại 12,6% (val) và 13,3% (test) positive của ML-100K, tức chỉ 66 và 51 user; ML-1M giữ lại 21,0% và 75,7% với 480 và 952 user (mục 4).
 - **KG theo thời gian** chỉ bỏ 1,5% (ML-100K) và 1,3% (ML-1M) số fact tại t1, nhưng các item mất fact nhận 53,1% và 48,1% positive val/test của ML-100K, 40,6% và 42,6% của ML-1M (mục 6).
 - **Baseline trên ML-1M** (Recall@20 trên test): MostPop 0,0902; MostPop recent (cửa sổ 7 ngày) 0,1060; BPR-MF 0,1194 ± 0,0031. Baseline ML-100K: chưa có (mục 7).
@@ -52,7 +52,7 @@ Kết quả: ML-100K từ 1.682 item được rating còn 1.663 item trong danh 
 
 ## 3. Rating theo phiên và hệ quả cho Δt
 
-**Timestamp là lúc nhập rating, không phải lúc xem phim.** Người dùng đăng ký rồi chấm hàng loạt phim đã xem từ trước. Hình 1 cho thấy số rating mỗi tuần dao động mạnh với những tuần tăng đột biến; ở ML-1M, trục log cho thấy lượng rating giảm dần sau các tuần đó. Báo cáo chưa kiểm tra nguyên nhân của các đột biến.
+**Timestamp.** README đi kèm cả hai bộ dữ liệu chỉ mô tả timestamp là số giây kể từ epoch (UTC) và không nói đó là thời điểm nào của rating. Nhóm hiểu đó là lúc user ghi rating chứ không phải lúc xem phim; các số dưới đây (nhiều rating dồn vào 24 giờ đầu của user) nhất quán với cách hiểu này nhưng không chứng minh nó. Hình 1 cho thấy số rating mỗi tuần dao động mạnh với những tuần tăng đột biến; ở ML-1M, trục log cho thấy lượng rating giảm dần sau các tuần đó. Báo cáo chưa kiểm tra nguyên nhân của các đột biến.
 
 ![Hình 1. Số rating mỗi tuần, tuần tính theo UTC; vùng xám đậm là cửa sổ val [t1, t2), vùng xám nhạt là test (từ t2). Panel ML-1M dùng thang log.](figures/fig1_rating_theo_tuan.png)
 
@@ -98,7 +98,7 @@ Chú thích: "user mới" ở bảng này là user không có trong train sau 5-
 
 ![Hình 3. Tỷ lệ positive của mỗi cửa sổ còn lại hoặc bị loại vì user mới hoặc item mới.](figures/fig3_positive_con_lai.png)
 
-- **ML-100K:** phần lớn positive của val và test bị loại vì user mới (4.886 trên 5.648 positive ở val, 4.805 trên 5.612 ở test). Trong các positive bị loại đó, 99,8% (val) và 99,6% (test) thuộc user có rating đầu tiên từ t1 trở đi, tức user chưa có tương tác nào trước mốc (116 trong 117 user bị loại ở val, 96 trong 97 ở test). Điều này phù hợp với việc rating được nhập theo phiên ngay sau khi đăng ký (mục 3). Chỉ còn 12,6% và 13,3% positive, tức 66 và 51 user. Kết quả trên bộ này sẽ nhiễu: báo cáo mọi số kèm độ lệch chuẩn qua seed và cần kiểm định cặp.
+- **ML-100K:** phần lớn positive của val và test bị loại vì user mới (4.886 trên 5.648 positive ở val, 4.805 trên 5.612 ở test). Trong các positive bị loại đó, 99,8% (val) và 99,6% (test) thuộc user có rating đầu tiên từ t1 trở đi, tức user chưa có tương tác nào trước mốc (116 trong 117 user bị loại ở val, 96 trong 97 ở test). Điều này phù hợp với việc phần lớn rating của một user được ghi trong 24 giờ đầu (mục 3). Chỉ còn 12,6% và 13,3% positive, tức 66 và 51 user. Kết quả trên bộ này sẽ nhiễu: báo cáo mọi số kèm độ lệch chuẩn qua seed và cần kiểm định cặp.
 - **ML-1M:** val dài 27 ngày (từ 02/12/2000 đến 29/12/2000): 45.605 trên 57.812 positive bị loại vì user mới, và 99,0% trong số đó thuộc user có rating đầu tiên từ t1 trở đi (611 trong 622 user bị loại); chỉ còn 21,0% positive (480 user). Test dài 791 ngày: 12.911 trên 54.452 positive bị loại vì user mới, trong đó 83,7% thuộc user có rating đầu tiên từ t1 trở đi (195 trong 233 user bị loại) và 16,3% thuộc user đã có rating trước t1 nhưng không vào train; báo cáo chưa phân tách lý do (không có positive trước t1, hay bị loại bởi 5-core). 75,7% positive của test (952 user) thuộc user có trong train. Mỗi cửa sổ chứa khoảng 10% số rating (phân vị 80% và 90%), nhưng độ dài và thành phần user khác hẳn nhau, nên điểm val và điểm test của ML-1M không so trực tiếp được. Độ dài cửa sổ làm tròn đến ngày: ML-100K có val 25 ngày và test 22 ngày.
 - **Vì sao nên dựa chủ yếu vào ML-1M khi kết luận:** test của ML-1M có 952 user, test của ML-100K chỉ có 51 user.
 
@@ -175,11 +175,11 @@ Baseline chính thức hiện chỉ có trên ML-1M. Mỗi baseline được ch�
 ## 8. Hạn chế và việc tiếp theo
 
 **Hạn chế đã biết**
-1. Wikidata là bản chụp ngày 17/10/2026, không phải tri thức có sẵn vào thời điểm các rating được nhập; mọi kết quả dùng KG phải nêu điều này.
+1. Wikidata là bản chụp ngày 17/10/2026, không phải tri thức có sẵn vào thời điểm của các rating; mọi kết quả dùng KG phải nêu điều này.
 2. Ngày chỉ có năm: 44,4% giá trị `point_in_time` và phần lớn các ngày khác kết thúc bằng `-01-01`; đọc là 31/12 là thận trọng nhưng có thể bỏ nhầm fact (quyết định 0006 A).
 3. Fact không có ngày nào (18,1%) được giữ theo mặc định; biến thể drop_undated đo ảnh hưởng của giả định này.
 4. ML-100K chỉ còn 66 user val và 51 user test; val của ML-1M chỉ dài 27 ngày.
-5. Timestamp là lúc nhập rating nên các suy luận về Δt mới là giả thuyết.
+5. Timestamp được hiểu là lúc user ghi rating (README của GroupLens chỉ nói số giây kể từ epoch), nên các suy luận về Δt mới là giả thuyết.
 6. Độ chính xác liên kết: chưa có (kiểm tay chưa xong); baseline ML-100K: chưa có.
 7. Chưa đo ảnh hưởng của rò rỉ qua KG lên Recall@20, vì KGAT chưa được chạy.
 
