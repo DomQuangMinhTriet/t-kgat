@@ -28,3 +28,20 @@ def test_perfect_and_empty_ranking():
     assert r == 1.0 and math.isclose(n, 1.0)
     r, n = recall_ndcg_at_k(np.array([0, 1]), np.array([3]), k=2)
     assert r == 0.0 and n == 0.0
+
+
+def test_truth_larger_than_k_uses_min_k_truth_in_idcg():
+    # ranking [4, 1, 0, 2, 3], truth {0, 1, 2, 3, 9} (5 items), K = 3: top 3 = [4, 1, 0] hits at ranks 2 and 3
+    ranked, truth = np.array([4, 1, 0, 2, 3]), np.array([0, 1, 2, 3, 9])
+    r, n = recall_ndcg_at_k(ranked, truth, k=3)
+    assert math.isclose(r, 2 / 5)  # recall divides by |truth|, not by K
+    dcg = 1 / math.log2(3) + 1 / math.log2(4)
+    idcg = 1 / math.log2(2) + 1 / math.log2(3) + 1 / math.log2(4)  # min(K, |truth|) = 3 terms, not 5
+    assert math.isclose(n, dcg / idcg)
+
+
+def test_perfect_ranking_with_truth_larger_than_k():
+    # the best possible top 3 holds 3 of 5 truth items: recall is capped at K / |truth|, NDCG is exactly 1
+    truth = np.array([7, 8, 9, 3, 4])
+    r, n = recall_ndcg_at_k(np.array([7, 8, 9, 0, 1]), truth, k=3)
+    assert math.isclose(r, 3 / 5) and math.isclose(n, 1.0)
