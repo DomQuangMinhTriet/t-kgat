@@ -143,6 +143,12 @@ def add_conventions(n: Numbers) -> None:
     n.add(S_CONV, "conv.timezone", "Mọi ngày và mọi mốc thời gian tính theo UTC", src)
     n.add(
         S_CONV,
+        "conv.year_only_dates",
+        "ngày chỉ có năm được đọc là 31/12 của năm đó; ngày chỉ có tháng là ngày cuối tháng (quyết định 0004 và 0006)",
+        "src/tkgat/kg/temporal.py (end_of_period)",
+    )
+    n.add(
+        S_CONV,
         "conv.window_rounding",
         f"Độ dài cửa sổ tính bằng ngày = chênh lệch thời gian (giây) chia {DAY}, làm tròn đến số nguyên gần nhất; "
         "val = [t1, t2), test = từ t2 đến rating cuối cùng của dữ liệu gốc",

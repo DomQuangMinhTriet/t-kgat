@@ -18,6 +18,7 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `conv.seeds` | 5 seed (2019–2023) | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.k` | 10 và 20 | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.timezone` | Mọi ngày và mọi mốc thời gian tính theo UTC | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
+| `conv.year_only_dates` | ngày chỉ có năm được đọc là 31/12 của năm đó; ngày chỉ có tháng là ngày cuối tháng (quyết định 0004 và 0006) | src/tkgat/kg/temporal.py (end_of_period) |
 | `conv.window_rounding` | Độ dài cửa sổ tính bằng ngày = chênh lệch thời gian (giây) chia 86400, làm tròn đến số nguyên gần nhất; val = [t1, t2), test = từ t2 đến rating cuối cùng của dữ liệu gốc | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.item_bases` | có ba cơ sở đếm item: item được rating (dữ liệu gốc); item trong danh mục liên kết (sau làm sạch); item trong train (sau 5-core) | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 
