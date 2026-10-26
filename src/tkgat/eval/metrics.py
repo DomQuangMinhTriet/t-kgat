@@ -47,13 +47,15 @@ def evaluate(
     batch_size: int = 512,
 ) -> dict:
     users = np.array(sorted(truth), dtype=np.int64)
-    kmax = max(ks)
     per_user = {f"{m}@{k}": np.empty(len(users)) for k in ks for m in ("recall", "ndcg")}
     for start in range(0, len(users), batch_size):
         b = users[start : start + batch_size]
         scores = _as_scores(score_fn(b))
         seen = torch.from_numpy(mask[b].toarray().astype(bool)).to(scores.device)
         scores.masked_fill_(seen, float("-inf"))
+        # K larger than the catalogue ranks every item; recall still divides by |truth| and IDCG uses
+        # min(K, |truth|), so the @K values stay defined
+        kmax = min(max(ks), scores.shape[1])
         top = torch.topk(scores, kmax, dim=1, sorted=True).indices.cpu().numpy()
         for j, u in enumerate(b):
             for k in ks:
