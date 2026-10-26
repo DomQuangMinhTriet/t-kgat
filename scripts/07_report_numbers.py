@@ -150,8 +150,8 @@ def add_conventions(n: Numbers) -> None:
     n.add(
         S_CONV,
         "conv.window_rounding",
-        f"Độ dài cửa sổ tính bằng ngày = chênh lệch thời gian (giây) chia {DAY}, làm tròn đến số nguyên gần nhất; "
-        "val = [t1, t2), test = từ t2 đến rating cuối cùng của dữ liệu gốc",
+        f"Mọi số ngày (khoảng thời gian của dữ liệu và độ dài cửa sổ) = chênh lệch thời gian (giây) chia {DAY}, "
+        "làm tròn đến số nguyên gần nhất; val = [t1, t2), test = từ t2 đến rating cuối cùng của dữ liệu gốc",
         src,
     )
     n.add(
@@ -195,7 +195,7 @@ def add_overview_and_cleaning(n: Numbers, key: str, d: dict) -> None:
     )
     n.add(S1, f"{key}.first_date", vn_date(ov["first"]), src)
     n.add(S1, f"{key}.last_date", vn_date(ov["last"]), src)
-    n.add(S1, f"{key}.span_days", vn_int(ov["span_days"]), src)
+    n.add(S1, f"{key}.span_days", vn_int(ov["span_days"]), src + " (làm tròn đến ngày)")
     n.add(S1, f"{key}.median_ratings_per_user", vn_int(ov["median_ratings_per_user"]), src)
     years = eda.year_shares(d["inter"])
     n.add(S1, f"{key}.peak_year", str(int(years.idxmax())), src + " qua eda.year_shares")
@@ -256,12 +256,12 @@ def add_split(n: Numbers, key: str, d: dict) -> None:
     n.add(S4, f"{key}.kcore", f"{cfg['kcore']}-core, tính trên train", src)
     n.add(S4, f"{key}.t1", vn_date(pd.to_datetime(m["t1"], unit="s").date()), src)
     n.add(S4, f"{key}.t2", vn_date(pd.to_datetime(m["t2"], unit="s").date()), src)
-    n.add(S4, f"{key}.val_window_days", vn_dec((m["t2"] - m["t1"]) / DAY, 0), src + " (làm tròn đến ngày)")
+    n.add(S4, f"{key}.val_window_days", vn_int(eda.days(m["t2"] - m["t1"])), src + " (làm tròn đến ngày)")
     last = int(d["inter"]["ts"].max())
     n.add(
         S4,
         f"{key}.test_window_days",
-        vn_dec((last - m["t2"]) / DAY, 0),
+        vn_int(eda.days(last - m["t2"])),
         src + " và ngày cuối của data/raw (làm tròn đến ngày)",
     )
     n.add(S4, f"{key}.train_positives_before_kcore", vn_int(m["train_pos_before_kcore"]), src)

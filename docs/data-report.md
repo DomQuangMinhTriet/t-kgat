@@ -23,14 +23,14 @@ Nhóm dùng MovieLens-100K (bộ chính theo kế hoạch, do Phôn chạy) và 
 | Rating | 100.000 | 1.000.209 |
 | Mật độ = rating / (user × item được rating) | 6,3% | 4,5% |
 | Khoảng thời gian (UTC) | 20/09/1997 – 22/04/1998 | 25/04/2000 – 28/02/2003 |
-| Số ngày giữa rating đầu và cuối | 214 | 1.038 |
+| Số ngày giữa rating đầu và cuối (làm tròn) | 215 | 1.039 |
 | Trung vị số rating mỗi user | 65 | 96 |
 | Rating ≥ 4 (positive), trên mọi rating gốc | 55,4% | 57,5% |
 | Năm có nhiều rating nhất | 1997 (52,9%) | 2000 (90,5%) |
 
 *Bảng 1. Quy mô và khoảng thời gian của hai bộ dữ liệu gốc (trước làm sạch).*
 
-Hai bộ dữ liệu khác nhau về thời gian: ML-100K gói trong 214 ngày, còn ML-1M kéo dài tới năm 2003 nhưng gần như toàn bộ rating nằm trong năm 2000. Điều này giải thích vì sao các cửa sổ val và test của ML-1M có độ dài rất khác nhau (mục 4).
+Hai bộ dữ liệu khác nhau về thời gian: ML-100K gói trong 215 ngày, còn ML-1M kéo dài tới năm 2003 nhưng gần như toàn bộ rating nằm trong năm 2000. Điều này giải thích vì sao các cửa sổ val và test của ML-1M có độ dài rất khác nhau (mục 4).
 
 | Cơ sở đếm item | ML-100K | ML-1M |
 |---|---|---|

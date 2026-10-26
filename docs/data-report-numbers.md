@@ -19,7 +19,7 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `conv.k` | 10 và 20 | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.timezone` | Mọi ngày và mọi mốc thời gian tính theo UTC | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.year_only_dates` | ngày chỉ có năm được đọc là 31/12 của năm đó; ngày chỉ có tháng là ngày cuối tháng (quyết định 0004 và 0006) | src/tkgat/kg/temporal.py (end_of_period) |
-| `conv.window_rounding` | Độ dài cửa sổ tính bằng ngày = chênh lệch thời gian (giây) chia 86400, làm tròn đến số nguyên gần nhất; val = [t1, t2), test = từ t2 đến rating cuối cùng của dữ liệu gốc | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
+| `conv.window_rounding` | Mọi số ngày (khoảng thời gian của dữ liệu và độ dài cửa sổ) = chênh lệch thời gian (giây) chia 86400, làm tròn đến số nguyên gần nhất; val = [t1, t2), test = từ t2 đến rating cuối cùng của dữ liệu gốc | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.item_bases` | có ba cơ sở đếm item: item được rating (dữ liệu gốc); item trong danh mục liên kết (sau làm sạch); item trong train (sau 5-core) | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 
 ## 1. Bộ dữ liệu và nguồn
@@ -37,7 +37,7 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.positive_rating_share` | 55,4% | data/raw/ml-100k qua eda.overview (rating ≥ 4 trên mọi rating gốc) |
 | `ml100k.first_date` | 20/09/1997 | data/raw/ml-100k qua eda.overview |
 | `ml100k.last_date` | 22/04/1998 | data/raw/ml-100k qua eda.overview |
-| `ml100k.span_days` | 214 | data/raw/ml-100k qua eda.overview |
+| `ml100k.span_days` | 215 | data/raw/ml-100k qua eda.overview (làm tròn đến ngày) |
 | `ml100k.median_ratings_per_user` | 65 | data/raw/ml-100k qua eda.overview |
 | `ml100k.peak_year` | 1997 | data/raw/ml-100k qua eda.overview qua eda.year_shares |
 | `ml100k.peak_year_share` | 52,9% | data/raw/ml-100k qua eda.overview qua eda.year_shares |
@@ -49,7 +49,7 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml1m.positive_rating_share` | 57,5% | data/raw/ml-1m qua eda.overview (rating ≥ 4 trên mọi rating gốc) |
 | `ml1m.first_date` | 25/04/2000 | data/raw/ml-1m qua eda.overview |
 | `ml1m.last_date` | 28/02/2003 | data/raw/ml-1m qua eda.overview |
-| `ml1m.span_days` | 1.038 | data/raw/ml-1m qua eda.overview |
+| `ml1m.span_days` | 1.039 | data/raw/ml-1m qua eda.overview (làm tròn đến ngày) |
 | `ml1m.median_ratings_per_user` | 96 | data/raw/ml-1m qua eda.overview |
 | `ml1m.peak_year` | 2000 | data/raw/ml-1m qua eda.overview qua eda.year_shares |
 | `ml1m.peak_year_share` | 90,5% | data/raw/ml-1m qua eda.overview qua eda.year_shares |
