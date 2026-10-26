@@ -128,6 +128,10 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.val_dropped_cold_user` | 4.886 | data/processed/ml-100k/meta.json |
 | `ml100k.val_dropped_cold_item` | 50 | data/processed/ml-100k/meta.json |
 | `ml100k.val_cold_items` | 140 | data/processed/ml-100k/meta.json |
+| `ml100k.val_cold_user_new_share` | 99,8% | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); tỷ lệ positive bị loại vì user mới |
+| `ml100k.val_cold_user_old_share` | 0,2% | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); phần thuộc user có rating trước t1 |
+| `ml100k.val_cold_users` | 117 | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); số user bị loại |
+| `ml100k.val_cold_users_new` | 116 | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); trong đó user mới |
 | `ml100k.val_positives` | 712 | data/processed/ml-100k/meta.json |
 | `ml100k.val_users` | 66 | data/processed/ml-100k/meta.json |
 | `ml100k.val_kept_share` | 12,6% | data/processed/ml-100k/meta.json |
@@ -135,6 +139,10 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.test_dropped_cold_user` | 4.805 | data/processed/ml-100k/meta.json |
 | `ml100k.test_dropped_cold_item` | 60 | data/processed/ml-100k/meta.json |
 | `ml100k.test_cold_items` | 183 | data/processed/ml-100k/meta.json |
+| `ml100k.test_cold_user_new_share` | 99,6% | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); tỷ lệ positive bị loại vì user mới |
+| `ml100k.test_cold_user_old_share` | 0,4% | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); phần thuộc user có rating trước t1 |
+| `ml100k.test_cold_users` | 97 | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); số user bị loại |
+| `ml100k.test_cold_users_new` | 96 | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); trong đó user mới |
 | `ml100k.test_positives` | 747 | data/processed/ml-100k/meta.json |
 | `ml100k.test_users` | 51 | data/processed/ml-100k/meta.json |
 | `ml100k.test_kept_share` | 13,3% | data/processed/ml-100k/meta.json |
@@ -153,6 +161,10 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml1m.val_dropped_cold_user` | 45.605 | data/processed/ml-1m/meta.json |
 | `ml1m.val_dropped_cold_item` | 74 | data/processed/ml-1m/meta.json |
 | `ml1m.val_cold_items` | 157 | data/processed/ml-1m/meta.json |
+| `ml1m.val_cold_user_new_share` | 99,0% | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); tỷ lệ positive bị loại vì user mới |
+| `ml1m.val_cold_user_old_share` | 1,0% | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); phần thuộc user có rating trước t1 |
+| `ml1m.val_cold_users` | 622 | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); số user bị loại |
+| `ml1m.val_cold_users_new` | 611 | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); trong đó user mới |
 | `ml1m.val_positives` | 12.133 | data/processed/ml-1m/meta.json |
 | `ml1m.val_users` | 480 | data/processed/ml-1m/meta.json |
 | `ml1m.val_kept_share` | 21,0% | data/processed/ml-1m/meta.json |
@@ -160,6 +172,10 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml1m.test_dropped_cold_user` | 12.911 | data/processed/ml-1m/meta.json |
 | `ml1m.test_dropped_cold_item` | 343 | data/processed/ml-1m/meta.json |
 | `ml1m.test_cold_items` | 221 | data/processed/ml-1m/meta.json |
+| `ml1m.test_cold_user_new_share` | 83,7% | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); tỷ lệ positive bị loại vì user mới |
+| `ml1m.test_cold_user_old_share` | 16,3% | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); phần thuộc user có rating trước t1 |
+| `ml1m.test_cold_users` | 233 | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); số user bị loại |
+| `ml1m.test_cold_users_new` | 195 | tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1); trong đó user mới |
 | `ml1m.test_positives` | 41.198 | data/processed/ml-1m/meta.json |
 | `ml1m.test_users` | 952 | data/processed/ml-1m/meta.json |
 | `ml1m.test_kept_share` | 75,7% | data/processed/ml-1m/meta.json |

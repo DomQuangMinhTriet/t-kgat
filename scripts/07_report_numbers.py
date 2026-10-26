@@ -52,8 +52,10 @@ from tkgat.analysis.report import (  # noqa: E402
     vn_pct,
     vn_pm,
 )
+from tkgat.data.clean import clean  # noqa: E402
 from tkgat.data.leakage import check_split  # noqa: E402
 from tkgat.data.loaders import load  # noqa: E402
+from tkgat.data.split import dedupe_pairs  # noqa: E402
 from tkgat.pipeline.build import load_config, load_saved  # noqa: E402
 
 # Fixed conventions: the computations below use these constants, and the numbers file lists them, so a
@@ -249,9 +251,42 @@ def add_sessions(n: Numbers, key: str, d: dict, ctx: dict) -> None:
     ctx[(key, "weekly")] = eda.weekly_counts(x)
 
 
+def cold_user_origin(d: dict) -> dict[str, dict[str, float]]:
+    """Where the positives dropped because their user is not in train come from.
+
+    A "new" user is one whose first rating (any value, after cleaning and deduplication) is at or after t1, so
+    it has no interaction before the cut-off. The split is replayed as ``temporal_split`` does and the count of
+    dropped positives is checked against meta.json.
+    """
+    cfg, m = d["cfg"], d["meta"]
+    inter, items = load(cfg["name"], ROOT / cfg["raw_dir"])
+    if cfg.get("clean"):
+        inter, items, _ = clean(inter, items)
+    df = dedupe_pairs(inter[["user", "item", "rating", "ts"]])
+    t1, t2 = m["t1"], m["t2"]
+    first = df.groupby("user")["ts"].min()
+    train_users = set(d["train"]["user"])
+    out = {}
+    for part, window in (("val", (df["ts"] >= t1) & (df["ts"] < t2)), ("test", df["ts"] >= t2)):
+        pos = df[window & (df["rating"] >= m["config"]["min_rating"])]
+        cold = pos[~pos["user"].isin(train_users)]
+        assert (
+            len(cold) == m[f"{part}_dropped_cold_user_interactions"]
+        ), f"{part}: cold-user positives differ from meta.json"
+        users = cold["user"].unique()
+        is_new = first.reindex(cold["user"]).to_numpy() >= t1
+        out[part] = {
+            "new_share": float(is_new.mean()),
+            "users": len(users),
+            "new_users": int((first.reindex(users) >= t1).sum()),
+        }
+    return out
+
+
 def add_split(n: Numbers, key: str, d: dict) -> None:
     m, cfg = d["meta"], d["meta"]["config"]
     src = f"{rel(ROOT / d['cfg']['processed_dir'])}/meta.json"
+    origin = cold_user_origin(d)
     n.add(S4, f"{key}.quantiles", f"{round(100 * cfg['q_val'])}% và {round(100 * cfg['q_test'])}% thời gian", src)
     n.add(S4, f"{key}.kcore", f"{cfg['kcore']}-core, tính trên train", src)
     n.add(S4, f"{key}.t1", vn_date(pd.to_datetime(m["t1"], unit="s").date()), src)
@@ -273,6 +308,22 @@ def add_split(n: Numbers, key: str, d: dict) -> None:
         n.add(S4, f"{key}.{part}_dropped_cold_user", vn_int(m[f"{part}_dropped_cold_user_interactions"]), src)
         n.add(S4, f"{key}.{part}_dropped_cold_item", vn_int(m[f"{part}_dropped_cold_item_interactions"]), src)
         n.add(S4, f"{key}.{part}_cold_items", vn_int(m[f"{part}_cold_items"]), src)
+        o = origin[part]
+        osrc = "tính lại từ data/raw theo temporal_split, đối chiếu meta.json (user mới = rating đầu tiên từ t1)"
+        n.add(
+            S4,
+            f"{key}.{part}_cold_user_new_share",
+            vn_pct(o["new_share"]),
+            osrc + "; tỷ lệ positive bị loại vì user mới",
+        )
+        n.add(
+            S4,
+            f"{key}.{part}_cold_user_old_share",
+            vn_pct(1 - o["new_share"]),
+            osrc + "; phần thuộc user có rating trước t1",
+        )
+        n.add(S4, f"{key}.{part}_cold_users", vn_int(o["users"]), osrc + "; số user bị loại")
+        n.add(S4, f"{key}.{part}_cold_users_new", vn_int(o["new_users"]), osrc + "; trong đó user mới")
         n.add(S4, f"{key}.{part}_positives", vn_int(m[f"{part}_pos"]), src)
         n.add(S4, f"{key}.{part}_users", vn_int(m[f"{part}_users"]), src)
         n.add(S4, f"{key}.{part}_kept_share", vn_pct(m[f"{part}_pos"] / m[f"{part}_pos_before_filter"]), src)
