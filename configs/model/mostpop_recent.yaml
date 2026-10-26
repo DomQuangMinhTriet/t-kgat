@@ -1,6 +1,10 @@
-# Popularity over the last N days before t1; N is chosen on validation.
+# Popularity over the last N days before t1; N is chosen on validation only (decision 0007).
+# The grid was {7, 14, 30}: 7 was its smallest value and validation fell steadily with N.
 name: mostpop
 grid:
+  - {window_days: 1}
+  - {window_days: 3}
+  - {window_days: 5}
   - {window_days: 7}
   - {window_days: 14}
   - {window_days: 30}
