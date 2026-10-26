@@ -18,6 +18,12 @@ def _utc(ts: pd.Series) -> pd.Series:
     return pd.to_datetime(ts, unit="s", utc=True)
 
 
+def days(seconds: float) -> int:
+    """Whole days nearest to ``seconds / 86400`` (a half day rounds up): the one rounding rule for every
+    number of days of the data report (time span of a dataset, length of a window)."""
+    return int(seconds / DAY + 0.5)
+
+
 def overview(inter: pd.DataFrame) -> dict:
     """One row of the overview table: size, density and time span."""
     n_users, n_items = inter["user"].nunique(), inter["item"].nunique()
@@ -29,7 +35,7 @@ def overview(inter: pd.DataFrame) -> dict:
         "density": len(inter) / (n_users * n_items),
         "first": t.min().date(),
         "last": t.max().date(),
-        "span_days": int((t.max() - t.min()).total_seconds() // DAY),
+        "span_days": days((t.max() - t.min()).total_seconds()),
         "median_ratings_per_user": float(inter.groupby("user").size().median()),
     }
 

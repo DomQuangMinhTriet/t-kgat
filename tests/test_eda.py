@@ -30,6 +30,14 @@ def test_overview_and_density():
     assert o["span_days"] == 2 and o["median_ratings_per_user"] == 3.0
 
 
+def test_days_rounds_to_the_nearest_whole_day():
+    assert eda.days(0) == 0 and eda.days(DAY) == 1 and eda.days(2 * DAY) == 2
+    assert eda.days(214.84 * DAY) == 215 and eda.days(1038.78 * DAY) == 1039  # a floor would give 214 and 1038
+    assert eda.days(24.49 * DAY) == 24 and eda.days(24.5 * DAY) == 25  # a half day rounds up
+    two_and_three_quarters = frame([(1, 1, 5, 0), (1, 2, 5, int(2.75 * DAY))])
+    assert eda.overview(two_and_three_quarters)["span_days"] == 3
+
+
 def test_first_window_and_calendar_day():
     # within 24 h of the first rating: user 1 -> 3 of 4, user 2 -> 1 of 2 (25 h is outside)
     assert eda.first_window_share(INTER) == pytest.approx(4 / 6)
