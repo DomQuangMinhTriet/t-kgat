@@ -145,7 +145,13 @@ Quy tắc ánh xạ ML-100K → ML-1M, theo thứ tự ưu tiên: khớp tiêu �
 
 **Phần tương tác bị ảnh hưởng.** Một item "bị lọc" là item có số triple khác nhau giữa static và default tại cùng một mốc. Có 344 item (36,9% item train) ở ML-100K và 899 item (29,9% item train) ở ML-1M. Các item này nhận 53,1% positive val và 48,1% positive test của ML-100K, 40,6% và 42,6% của ML-1M. Tức là dù chỉ một phần nhỏ fact bị lọc, phần lớn các tương tác dùng để chọn mô hình và chấm điểm nằm trên item mà KG tĩnh chứa thông tin tương lai. Mức ảnh hưởng thực tế lên Recall@20 **chưa được đo**: chỉ có thể đo khi chạy KGAT với hai biến thể.
 
-**Hai ví dụ.** *Titanic (1997)* có 136 fact; KG tại t1 thiếu 28 fact trong số đó. 11 giải thưởng, đều là giải Oscar, được trao ngày 23/03/1998, sau t1 (07/03/1998) nhưng trước t2 (31/03/1998): chúng không có trong KG của train/val nhưng có trong KG của test. 15 giải hoặc đề cử bị loại ở cả hai mốc, trong đó 13 giải chỉ ghi năm. *Toy Story (1995)* mất 2 fact tại t1, trong đó có liên kết `followed_by → Toy Story 2`, phim ra mắt ngày 24/11/1999, sau toàn bộ dữ liệu ML-100K: một KG tĩnh sẽ cho mô hình biết trước phim này có phần tiếp theo.
+**Hai ví dụ.** *Titanic (1997)* có 136 fact; KG tại t1 thiếu 28 fact trong số đó, gồm ba nhóm:
+
+- 11 giải thưởng, đều là giải Oscar, được trao ngày 23/03/1998, sau t1 (07/03/1998) nhưng trước t2 (31/03/1998): chúng không có trong KG của train/val nhưng có trong KG của test.
+- 15 giải hoặc đề cử bị loại ở cả hai mốc, trong đó 13 giải chỉ ghi năm.
+- 2 fact khác, không phải giải thưởng: `distributed_by → Disney+` (ngày tồn tại của đích: 12/11/2019) và `cast_member → Lewis Abernathy` (ngày tồn tại của đích: 31/12/2000). Cả hai bị loại vì thực thể đích chưa tồn tại tại hai mốc. Ngày của Lewis Abernathy là ngày sinh mà Wikidata ghi là `2000-01-01`, và quy tắc năm-only đọc thành 31/12; với một người tham gia phim năm 1997 thì ngày này đáng ngờ, nhưng báo cáo chưa kiểm tra lại nguồn.
+
+*Toy Story (1995)* mất 2 fact tại t1, trong đó có liên kết `followed_by → Toy Story 2`, phim ra mắt ngày 24/11/1999, sau toàn bộ dữ liệu ML-100K: một KG tĩnh sẽ cho mô hình biết trước phim này có phần tiếp theo.
 
 ## 7. Baseline
 

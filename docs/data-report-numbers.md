@@ -207,6 +207,8 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `titanic.awards_added_t2` | 11 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
 | `titanic.oscars_added_t2` | 11 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
 | `titanic.awards_date` | 23/03/1998 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
+| `titanic.missing_t1_other` | 2 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) (fact không thuộc award_received/nominated_for) |
+| `titanic.missing_t1_other_facts` | cast_member → Lewis Abernathy (ngày tồn tại của đích: 31/12/2000); distributed_by → Disney+ (ngày tồn tại của đích: 12/11/2019) | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
 | `titanic.dropped_both` | 15 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
 | `titanic.dropped_both_year_only` | 13 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
 | `toystory.title` | Toy Story (1995) | ml100k_links.csv |

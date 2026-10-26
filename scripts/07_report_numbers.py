@@ -444,6 +444,21 @@ def add_kg_global(n: Numbers, facts: pd.DataFrame, d100: dict) -> None:
         tsrc,
     )
     dates = both["statement_date"].dropna().astype(str)
+    missing = tit[tit["status"] != "kept_t1"]
+    other = missing[~missing["relation"].isin(kg.AWARD_RELATIONS)]
+    assert len(missing) == len(added) + len(both) + len(other), "Titanic: facts missing at t1 do not add up"
+    n.add(S6, "titanic.missing_t1_other", vn_int(len(other)), tsrc + " (fact không thuộc award_received/nominated_for)")
+    n.add(
+        S6,
+        "titanic.missing_t1_other_facts",
+        "; ".join(
+            f"{r.relation} → {r.tail_label} (ngày tồn tại của đích: {vn_date(r.tail_date)})"
+            if r.tail_date
+            else f"{r.relation} → {r.tail_label}"
+            for r in other.itertuples()
+        ),
+        tsrc,
+    )
     n.add(S6, "titanic.dropped_both", vn_int(len(both)), tsrc)
     n.add(S6, "titanic.dropped_both_year_only", vn_int(dates.str.endswith("-12-31").sum()), tsrc)
     toy = kg.film_fact_status(facts[facts["freebase_id"] == TOY_STORY], dropped)
