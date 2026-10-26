@@ -13,7 +13,11 @@ Protocol
    test metrics are saved under ``results/runs/`` for significance tests.
 5. Every trained run (grid point x seed) also writes its per-epoch history
    (loss, and val metrics on evaluated epochs) with its config to
-   ``results/runs/<dataset>/<tag>_<grid index>_seed<seed>_history.csv``.
+   ``results/runs/<run_name>/<tag>_<grid index>_seed<seed>_history.csv``.
+
+``run_name`` (optional in the data config, default ``name``) identifies the split in the registry
+``dataset`` column and in ``results/runs/``; ``name`` only selects the loader. Two configs of the same
+dataset (e.g. 5-core and 10-core) must have different run names so their results never overwrite each other.
 """
 
 from __future__ import annotations
@@ -57,8 +61,9 @@ def main(argv: list[str] | None = None) -> None:
     split_sha = registry.sha256_file(Path(dcfg["processed_dir"]) / "meta.json")
     seeds = mcfg.get("seeds", [0])
     tag = Path(args.model).stem
-    base = {"dataset": dcfg["name"], "split_sha256": split_sha[:12], "model": tag}
-    out_dir = Path(args.runs_dir) / dcfg["name"]
+    run_name = dcfg.get("run_name", dcfg["name"])
+    base = {"dataset": run_name, "split_sha256": split_sha[:12], "model": tag}
+    out_dir = Path(args.runs_dir) / run_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     fitted: dict[int, dict[int, object]] = {}

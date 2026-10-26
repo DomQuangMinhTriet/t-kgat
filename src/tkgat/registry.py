@@ -108,11 +108,15 @@ def append(path: str | Path, row: dict) -> None:
         w.writerow(row)
 
 
-RUN_KEY = ["dataset", "model", "config", "seed", "phase"]
+RUN_KEY = ["dataset", "split_sha256", "model", "config", "seed", "phase"]
 
 
 def load(path: str | Path = "results/registry.csv", latest: bool = True) -> pd.DataFrame:
-    """Read the registry; with ``latest``, keep only the newest run of each (dataset, model, config, seed, phase).
+    """Read the registry; with ``latest``, keep only the newest run of each
+    (dataset, split_sha256, model, config, seed, phase).
+
+    ``split_sha256`` is part of the key so that runs on two different splits (e.g. a rebuilt split, or a
+    sensitivity split that shares a dataset name) are never treated as re-runs of each other.
 
     The file itself is append-only: a re-run adds rows and never edits old ones, so readers decide which run
     counts. "Newest" is the largest ``run_at`` (ties: the later line), not the line order, because a union

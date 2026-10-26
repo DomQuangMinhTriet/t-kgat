@@ -89,3 +89,42 @@ def test_save_history_refuses_test_scores(tmp_path):
         registry.save_history(tmp_path / "h.csv", [{"epoch": 1, "loss": 0.5, "test_recall@20": 0.1}], {})
     with pytest.raises(ValueError, match="test"):
         registry.save_history(tmp_path / "h.csv", [{"epoch": 1, "loss": 0.5}], {"phase_test": 1})
+
+
+def test_run_name_keeps_two_splits_of_one_dataset_apart(synthetic, tmp_path):
+    """Same loader name, different run_name and split: separate run folders, both kept by registry.load()."""
+    mcfg = {"name": "mostpop", "seeds": [0], "grid": [{"window_days": None}]}
+    (tmp_path / "mostpop.yaml").write_text(yaml.safe_dump(mcfg), encoding="utf-8")
+    run = load_run_script()
+    for run_name, kcore in (("synthetic", 2), ("synthetic-k3", 3)):
+        dcfg = {
+            "name": "synthetic",
+            "processed_dir": str(tmp_path / f"processed-{kcore}"),
+            "split": {"q_val": 0.8, "q_test": 0.9, "min_rating": 4, "kcore": kcore},
+        }
+        if run_name != "synthetic":
+            dcfg["run_name"] = run_name  # the first config relies on the default (run_name = name)
+        save_split(temporal_split(synthetic, SplitConfig(**dcfg["split"])), dcfg, {})
+        cfg_path = tmp_path / f"data-{kcore}.yaml"
+        cfg_path.write_text(yaml.safe_dump(dcfg), encoding="utf-8")
+        run.main(
+            [
+                "--data",
+                str(cfg_path),
+                "--model",
+                str(tmp_path / "mostpop.yaml"),
+                "--registry",
+                str(tmp_path / "registry.csv"),
+                "--runs-dir",
+                str(tmp_path / "runs"),
+                "--device",
+                "cpu",
+            ]
+        )
+
+    for run_name in ("synthetic", "synthetic-k3"):
+        assert (tmp_path / "runs" / run_name / "mostpop_seed0.npz").exists()
+        assert (tmp_path / "runs" / run_name / "mostpop_summary.json").exists()
+    test = registry.load(tmp_path / "registry.csv").query("phase == 'test'")
+    assert sorted(test["dataset"]) == ["synthetic", "synthetic-k3"]
+    assert test["split_sha256"].nunique() == 2

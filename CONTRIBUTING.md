@@ -5,9 +5,13 @@
    The test set is scored once per selected configuration, by `scripts/run.py`.
 2. **No hand-copied numbers.** Every number in a report or notebook comes from `results/registry.csv`
    or from files written by the scripts. Read the registry with `tkgat.registry.load()`, which keeps
-   only the newest run of each (dataset, model, config, seed, phase); never edit or delete old rows.
+   only the newest run of each (dataset, split_sha256, model, config, seed, phase); never edit or delete
+   old rows. The registry "dataset" is the data config's `run_name`, so give every split its own run name.
    Spread over seeds is reported as mean ± **sample** standard deviation (`ddof=1`), as
    `scripts/run.py` does; with numpy use `np.std(x, ddof=1)` (pandas `.std()` already uses `ddof=1`).
+   Per-user comparisons use `tkgat.eval.stats.paired_wilcoxon`, which applies `zero_method="wilcox"`
+   (users with a zero difference are dropped before ranking); report its `n_nonzero` as the test's sample
+   size next to `n_pairs`, and correct several comparisons with `holm`.
 3. **Data stays out of git.** Download it with the instructions in `data/README.md`; verify with
    `python scripts/01_verify_data.py`.
 

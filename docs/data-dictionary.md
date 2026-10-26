@@ -57,3 +57,6 @@ comparable across variants; in `default` and `drop_undated` some entities have n
 ## Results
 `results/registry.csv`: run_at, git_commit, dataset, split_sha256, model, config, seed, phase (val/test),
 best_epoch, recall@10, recall@20, ndcg@10, ndcg@20, n_users, seconds, device (`cpu` or `cuda:<GPU name>`).
+`dataset` is the data config's `run_name` (default: its `name`), e.g. `ml-100k-k10` for the 10-core
+sensitivity split; per-run files are in `results/runs/<run_name>/`. `registry.load()` keeps the newest row per
+(dataset, split_sha256, model, config, seed, phase).

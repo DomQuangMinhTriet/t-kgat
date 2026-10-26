@@ -1,5 +1,6 @@
 # Sensitivity check: same protocol as ml100k.yaml but 10-core, as in the KGAT paper.
-name: ml-100k
+name: ml-100k          # selects the loader
+run_name: ml-100k-k10  # registry "dataset" column and results/runs/<run_name>/ (default: name)
 raw_dir: data/raw/ml-100k
 processed_dir: data/processed/ml-100k-k10
 clean: true
