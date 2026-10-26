@@ -35,6 +35,10 @@ pre-commit install
 pytest
 ```
 
+`ruff` is pinned to one version (`ruff==0.6.9` in `pyproject.toml`, `rev: v0.6.9` in `.pre-commit-config.yaml`);
+CI fails if the two differ. After pulling a change to the pin, run `pip install -e ".[dev]"` again so the
+editor, the pre-commit hook and CI all format and lint the same way.
+
 ## Decisions
 Every decision that changes the protocol gets a short file in `docs/decisions/` (context, decision,
 consequences). Never edit an accepted decision; supersede it with a new one.

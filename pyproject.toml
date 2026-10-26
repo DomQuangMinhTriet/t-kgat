@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6", "jupyter", "nbconvert", "nbstripout", "pre-commit"]
+dev = ["pytest>=8", "ruff==0.6.9", "jupyter", "nbconvert", "nbstripout", "pre-commit"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
