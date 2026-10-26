@@ -17,11 +17,11 @@ DEVICES = ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])
 def _reference_evaluate(scores, truth, mask, ks=(10, 20)):
     """The pre-GPU NumPy implementation, kept here as the oracle."""
     users = np.array(sorted(truth))
-    kmax = max(ks)
+    kmax = min(max(ks), scores.shape[1])
     out = {f"{m}@{k}": [] for k in ks for m in ("recall", "ndcg")}
     s = scores[users].astype(np.float64).copy()
     s[mask[users].toarray().astype(bool)] = -np.inf
-    top = np.argpartition(-s, kmax, axis=1)[:, :kmax]
+    top = np.argpartition(-s, kmax - 1, axis=1)[:, :kmax]
     order = np.take_along_axis(s, top, axis=1).argsort(axis=1)[:, ::-1]
     top = np.take_along_axis(top, order, axis=1)
     for j, u in enumerate(users):
@@ -75,3 +75,34 @@ def test_cuda_request_without_gpu_fails_loudly(monkeypatch):
     assert resolve_device("auto").type == "cpu"
     with pytest.raises(RuntimeError):
         resolve_device("cuda")
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_k_larger_than_the_number_of_items(device):
+    """Fewer items than K: every item is ranked, no error, and the @K values match the NumPy oracle."""
+    rng = np.random.default_rng(2)
+    n_users, n_items = 12, 5
+    scores = rng.normal(size=(n_users, n_items))
+    mask = sp.csr_matrix((rng.random((n_users, n_items)) < 0.2).astype(np.float32))
+    # as in the real splits, ground-truth items are never in the mask (masked items tie at -inf, and
+    # their order among themselves is implementation-defined)
+    dense = mask.toarray().astype(bool)
+    truth = {}
+    for u in range(n_users):
+        unseen = np.flatnonzero(~dense[u])
+        truth[u] = rng.choice(unseen, min(2, len(unseen)), replace=False)
+    t = torch.as_tensor(scores, device=device)
+    got = evaluate(lambda b: t[torch.as_tensor(b, device=device)], truth, mask, ks=(10,))
+    ref = _reference_evaluate(scores, truth, mask, ks=(10,))
+    for k, v in ref.items():
+        assert got[k] == pytest.approx(v, abs=1e-12)
+
+
+def test_k_larger_than_the_number_of_items_by_hand():
+    # items ranked 2, 0, 4, 1, 3; truth {0, 3}: with K = 10 > 5 items both are found
+    scores = np.array([[0.8, 0.2, 0.9, 0.1, 0.5]])
+    res = evaluate(lambda users: scores, {0: np.array([0, 3])}, sp.csr_matrix((1, 5), dtype=np.float32), ks=(10,))
+    assert res["recall@10"] == 1.0
+    dcg = 1 / np.log2(3) + 1 / np.log2(6)  # ranks 2 and 5
+    idcg = 1 / np.log2(2) + 1 / np.log2(3)  # min(K, |truth|) = 2
+    assert res["ndcg@10"] == pytest.approx(dcg / idcg)
