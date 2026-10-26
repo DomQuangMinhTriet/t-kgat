@@ -17,6 +17,9 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `conv.positive_rating` | rating ≥ 4 | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.seeds` | 5 seed (2019–2023) | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.k` | 10 và 20 | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
+| `conv.timezone` | Mọi ngày và mọi mốc thời gian tính theo UTC | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
+| `conv.window_rounding` | Độ dài cửa sổ tính bằng ngày = chênh lệch thời gian (giây) chia 86400, làm tròn đến số nguyên gần nhất; val = [t1, t2), test = từ t2 đến rating cuối cùng của dữ liệu gốc | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
+| `conv.item_bases` | có ba cơ sở đếm item: item được rating (dữ liệu gốc); item trong danh mục liên kết (sau làm sạch); item trong train (sau 5-core) | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 
 ## 1. Bộ dữ liệu và nguồn
 
@@ -26,10 +29,11 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `checksum.ok` | 9 | data/checksums.json và data/raw/ (SHA-256) |
 | `checksum.missing` | 0 | data/checksums.json và data/raw/ (SHA-256) |
 | `checksum.mismatch` | 0 | data/checksums.json và data/raw/ (SHA-256) |
-| `ml100k.users` | 943 | data/raw/ml-100k qua eda.overview |
-| `ml100k.items` | 1.682 | data/raw/ml-100k qua eda.overview |
+| `ml100k.users` | 943 | data/raw/ml-100k qua eda.overview (cơ sở: user có ít nhất một rating) |
+| `ml100k.rated_items` | 1.682 | data/raw/ml-100k qua eda.overview (cơ sở: item có ít nhất một rating) |
 | `ml100k.ratings` | 100.000 | data/raw/ml-100k qua eda.overview |
-| `ml100k.density` | 6,3% | data/raw/ml-100k qua eda.overview |
+| `ml100k.density` | 6,3% | data/raw/ml-100k qua eda.overview (rating / (user × item được rating)) |
+| `ml100k.positive_rating_share` | 55,4% | data/raw/ml-100k qua eda.overview (rating ≥ 4 trên mọi rating gốc) |
 | `ml100k.first_date` | 20/09/1997 | data/raw/ml-100k qua eda.overview |
 | `ml100k.last_date` | 22/04/1998 | data/raw/ml-100k qua eda.overview |
 | `ml100k.span_days` | 214 | data/raw/ml-100k qua eda.overview |
@@ -37,10 +41,11 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.peak_year` | 1997 | data/raw/ml-100k qua eda.overview qua eda.year_shares |
 | `ml100k.peak_year_share` | 52,9% | data/raw/ml-100k qua eda.overview qua eda.year_shares |
 | `ml100k.last_year` | 1998 | data/raw/ml-100k qua eda.overview qua eda.year_shares |
-| `ml1m.users` | 6.040 | data/raw/ml-1m qua eda.overview |
-| `ml1m.items` | 3.706 | data/raw/ml-1m qua eda.overview |
+| `ml1m.users` | 6.040 | data/raw/ml-1m qua eda.overview (cơ sở: user có ít nhất một rating) |
+| `ml1m.rated_items` | 3.706 | data/raw/ml-1m qua eda.overview (cơ sở: item có ít nhất một rating) |
 | `ml1m.ratings` | 1.000.209 | data/raw/ml-1m qua eda.overview |
-| `ml1m.density` | 4,5% | data/raw/ml-1m qua eda.overview |
+| `ml1m.density` | 4,5% | data/raw/ml-1m qua eda.overview (rating / (user × item được rating)) |
+| `ml1m.positive_rating_share` | 57,5% | data/raw/ml-1m qua eda.overview (rating ≥ 4 trên mọi rating gốc) |
 | `ml1m.first_date` | 25/04/2000 | data/raw/ml-1m qua eda.overview |
 | `ml1m.last_date` | 28/02/2003 | data/raw/ml-1m qua eda.overview |
 | `ml1m.span_days` | 1.038 | data/raw/ml-1m qua eda.overview |
@@ -112,12 +117,12 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.kcore` | 5-core, tính trên train | data/processed/ml-100k/meta.json |
 | `ml100k.t1` | 07/03/1998 | data/processed/ml-100k/meta.json |
 | `ml100k.t2` | 31/03/1998 | data/processed/ml-100k/meta.json |
-| `ml100k.val_window_days` | 25 | data/processed/ml-100k/meta.json |
-| `ml100k.test_window_days` | 22 | data/processed/ml-100k/meta.json và ngày cuối của data/raw |
+| `ml100k.val_window_days` | 25 | data/processed/ml-100k/meta.json (làm tròn đến ngày) |
+| `ml100k.test_window_days` | 22 | data/processed/ml-100k/meta.json và ngày cuối của data/raw (làm tròn đến ngày) |
 | `ml100k.train_positives_before_kcore` | 43.929 | data/processed/ml-100k/meta.json |
 | `ml100k.train_positives` | 43.018 | data/processed/ml-100k/meta.json |
-| `ml100k.train_users` | 745 | data/processed/ml-100k/meta.json |
-| `ml100k.train_items` | 932 | data/processed/ml-100k/meta.json |
+| `ml100k.train_users` | 745 | data/processed/ml-100k/meta.json (cơ sở: user trong train sau 5-core) |
+| `ml100k.train_items` | 932 | data/processed/ml-100k/meta.json (cơ sở: item trong train sau 5-core) |
 | `ml100k.val_positives_before_filter` | 5.648 | data/processed/ml-100k/meta.json |
 | `ml100k.val_dropped_cold_user` | 4.886 | data/processed/ml-100k/meta.json |
 | `ml100k.val_dropped_cold_item` | 50 | data/processed/ml-100k/meta.json |
@@ -137,12 +142,12 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml1m.kcore` | 5-core, tính trên train | data/processed/ml-1m/meta.json |
 | `ml1m.t1` | 02/12/2000 | data/processed/ml-1m/meta.json |
 | `ml1m.t2` | 29/12/2000 | data/processed/ml-1m/meta.json |
-| `ml1m.val_window_days` | 27 | data/processed/ml-1m/meta.json |
-| `ml1m.test_window_days` | 791 | data/processed/ml-1m/meta.json và ngày cuối của data/raw |
+| `ml1m.val_window_days` | 27 | data/processed/ml-1m/meta.json (làm tròn đến ngày) |
+| `ml1m.test_window_days` | 791 | data/processed/ml-1m/meta.json và ngày cuối của data/raw (làm tròn đến ngày) |
 | `ml1m.train_positives_before_kcore` | 463.017 | data/processed/ml-1m/meta.json |
 | `ml1m.train_positives` | 461.858 | data/processed/ml-1m/meta.json |
-| `ml1m.train_users` | 5.350 | data/processed/ml-1m/meta.json |
-| `ml1m.train_items` | 3.009 | data/processed/ml-1m/meta.json |
+| `ml1m.train_users` | 5.350 | data/processed/ml-1m/meta.json (cơ sở: user trong train sau 5-core) |
+| `ml1m.train_items` | 3.009 | data/processed/ml-1m/meta.json (cơ sở: item trong train sau 5-core) |
 | `ml1m.val_positives_before_filter` | 57.812 | data/processed/ml-1m/meta.json |
 | `ml1m.val_dropped_cold_user` | 45.605 | data/processed/ml-1m/meta.json |
 | `ml1m.val_dropped_cold_item` | 74 | data/processed/ml-1m/meta.json |
@@ -163,13 +168,13 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 
 | Khóa | Giá trị | Nguồn |
 |---|---|---|
-| `ml100k.link_items` | 1.663 | data/processed/links/linking_report.json |
-| `ml100k.link_freebase_items` | 1.617 | data/processed/links/linking_report.json |
+| `ml100k.link_catalog_items` | 1.663 | data/processed/links/linking_report.json (cơ sở: danh mục phim sau làm sạch, kể cả item chưa có rating) |
+| `ml100k.link_freebase_items` | 1.617 | data/processed/links/linking_report.json (cơ sở: danh mục phim sau làm sạch) |
 | `ml100k.link_freebase_item_share` | 97,2% | data/processed/links/linking_report.json |
 | `ml100k.link_freebase_rating_share` | 99,5% | data/processed/links/linking_report.json |
 | `ml100k.link_yago_item_share` | 83,1% | data/processed/links/linking_report.json |
-| `ml1m.link_items` | 3.883 | data/processed/links/linking_report.json |
-| `ml1m.link_freebase_items` | 3.811 | data/processed/links/linking_report.json |
+| `ml1m.link_catalog_items` | 3.883 | data/processed/links/linking_report.json (cơ sở: danh mục phim sau làm sạch, kể cả item chưa có rating) |
+| `ml1m.link_freebase_items` | 3.811 | data/processed/links/linking_report.json (cơ sở: danh mục phim sau làm sạch) |
 | `ml1m.link_freebase_item_share` | 98,2% | data/processed/links/linking_report.json |
 | `ml1m.link_freebase_rating_share` | 99,7% | data/processed/links/linking_report.json |
 | `ml1m.link_yago_item_share` | 84,1% | data/processed/links/linking_report.json |
@@ -207,9 +212,9 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `toystory.facts_lost_t1` | 2 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
 | `toystory.sequel` | Toy Story 2 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
 | `toystory.sequel_date` | 24/11/1999 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
-| `ml100k.kg_items` | 932 | data/processed/ml-100k/kg/*/kg_meta.json |
-| `ml100k.kg_items_linked` | 927 | data/processed/ml-100k/kg/*/kg_meta.json |
-| `ml100k.kg_items_with_facts` | 927 | data/processed/ml-100k/kg/*/kg_meta.json |
+| `ml100k.kg_items` | 932 | data/processed/ml-100k/kg/*/kg_meta.json (cơ sở: item trong train sau 5-core) |
+| `ml100k.kg_items_linked` | 927 | data/processed/ml-100k/kg/*/kg_meta.json (cơ sở: item trong train) |
+| `ml100k.kg_items_with_facts` | 927 | data/processed/ml-100k/kg/*/kg_meta.json (cơ sở: item trong train) |
 | `ml100k.kg_facts` | 37.103 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds |
 | `ml100k.statement_dated_share` | 7,6% | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds |
 | `ml100k.award_share_of_statement_dated` | 97,1% | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds |
@@ -241,9 +246,9 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.affected_item_share` | 36,9% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
 | `ml100k.affected_val_positive_share` | 53,1% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
 | `ml100k.affected_test_positive_share` | 48,1% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
-| `ml1m.kg_items` | 3.009 | data/processed/ml-1m/kg/*/kg_meta.json |
-| `ml1m.kg_items_linked` | 2.988 | data/processed/ml-1m/kg/*/kg_meta.json |
-| `ml1m.kg_items_with_facts` | 2.975 | data/processed/ml-1m/kg/*/kg_meta.json |
+| `ml1m.kg_items` | 3.009 | data/processed/ml-1m/kg/*/kg_meta.json (cơ sở: item trong train sau 5-core) |
+| `ml1m.kg_items_linked` | 2.988 | data/processed/ml-1m/kg/*/kg_meta.json (cơ sở: item trong train) |
+| `ml1m.kg_items_with_facts` | 2.975 | data/processed/ml-1m/kg/*/kg_meta.json (cơ sở: item trong train) |
 | `ml1m.kg_facts` | 104.782 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds |
 | `ml1m.statement_dated_share` | 5,8% | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds |
 | `ml1m.award_share_of_statement_dated` | 97,8% | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds |

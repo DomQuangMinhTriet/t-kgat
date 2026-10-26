@@ -140,6 +140,21 @@ def add_conventions(n: Numbers) -> None:
     n.add(S_CONV, "conv.positive_rating", f"rating ≥ {POSITIVE_RATING}", src)
     n.add(S_CONV, "conv.seeds", f"5 seed ({SEEDS})", src)
     n.add(S_CONV, "conv.k", " và ".join(str(k) for k in KS), src)
+    n.add(S_CONV, "conv.timezone", "Mọi ngày và mọi mốc thời gian tính theo UTC", src)
+    n.add(
+        S_CONV,
+        "conv.window_rounding",
+        f"Độ dài cửa sổ tính bằng ngày = chênh lệch thời gian (giây) chia {DAY}, làm tròn đến số nguyên gần nhất; "
+        "val = [t1, t2), test = từ t2 đến rating cuối cùng của dữ liệu gốc",
+        src,
+    )
+    n.add(
+        S_CONV,
+        "conv.item_bases",
+        "có ba cơ sở đếm item: item được rating (dữ liệu gốc); item trong danh mục liên kết (sau làm sạch); "
+        "item trong train (sau 5-core)",
+        src,
+    )
 
 
 def add_checksums(n: Numbers) -> None:
@@ -162,10 +177,16 @@ def add_checksums(n: Numbers) -> None:
 def add_overview_and_cleaning(n: Numbers, key: str, d: dict) -> None:
     ov, meta = eda.overview(d["inter"]), d["meta"]
     src = f"data/raw/{d['cfg']['name']} qua eda.overview"
-    n.add(S1, f"{key}.users", vn_int(ov["users"]), src)
-    n.add(S1, f"{key}.items", vn_int(ov["items"]), src)
+    n.add(S1, f"{key}.users", vn_int(ov["users"]), src + " (cơ sở: user có ít nhất một rating)")
+    n.add(S1, f"{key}.rated_items", vn_int(ov["items"]), src + " (cơ sở: item có ít nhất một rating)")
     n.add(S1, f"{key}.ratings", vn_int(ov["ratings"]), src)
-    n.add(S1, f"{key}.density", vn_pct(ov["density"]), src)
+    n.add(S1, f"{key}.density", vn_pct(ov["density"]), src + " (rating / (user × item được rating))")
+    n.add(
+        S1,
+        f"{key}.positive_rating_share",
+        vn_pct(float((d["inter"]["rating"] >= POSITIVE_RATING).mean())),
+        src + f" (rating ≥ {POSITIVE_RATING} trên mọi rating gốc)",
+    )
     n.add(S1, f"{key}.first_date", vn_date(ov["first"]), src)
     n.add(S1, f"{key}.last_date", vn_date(ov["last"]), src)
     n.add(S1, f"{key}.span_days", vn_int(ov["span_days"]), src)
@@ -229,13 +250,18 @@ def add_split(n: Numbers, key: str, d: dict) -> None:
     n.add(S4, f"{key}.kcore", f"{cfg['kcore']}-core, tính trên train", src)
     n.add(S4, f"{key}.t1", vn_date(pd.to_datetime(m["t1"], unit="s").date()), src)
     n.add(S4, f"{key}.t2", vn_date(pd.to_datetime(m["t2"], unit="s").date()), src)
-    n.add(S4, f"{key}.val_window_days", vn_dec((m["t2"] - m["t1"]) / DAY, 0), src)
+    n.add(S4, f"{key}.val_window_days", vn_dec((m["t2"] - m["t1"]) / DAY, 0), src + " (làm tròn đến ngày)")
     last = int(d["inter"]["ts"].max())
-    n.add(S4, f"{key}.test_window_days", vn_dec((last - m["t2"]) / DAY, 0), src + " và ngày cuối của data/raw")
+    n.add(
+        S4,
+        f"{key}.test_window_days",
+        vn_dec((last - m["t2"]) / DAY, 0),
+        src + " và ngày cuối của data/raw (làm tròn đến ngày)",
+    )
     n.add(S4, f"{key}.train_positives_before_kcore", vn_int(m["train_pos_before_kcore"]), src)
     n.add(S4, f"{key}.train_positives", vn_int(m["train_pos"]), src)
-    n.add(S4, f"{key}.train_users", vn_int(m["n_users"]), src)
-    n.add(S4, f"{key}.train_items", vn_int(m["n_items"]), src)
+    n.add(S4, f"{key}.train_users", vn_int(m["n_users"]), src + " (cơ sở: user trong train sau 5-core)")
+    n.add(S4, f"{key}.train_items", vn_int(m["n_items"]), src + " (cơ sở: item trong train sau 5-core)")
     for part in ("val", "test"):
         n.add(S4, f"{key}.{part}_positives_before_filter", vn_int(m[f"{part}_pos_before_filter"]), src)
         n.add(S4, f"{key}.{part}_dropped_cold_user", vn_int(m[f"{part}_dropped_cold_user_interactions"]), src)
@@ -258,8 +284,15 @@ def add_linking(n: Numbers) -> None:
     rep = json.loads(path.read_text(encoding="utf-8"))
     for key in DATASETS:
         r = rep[key]
-        n.add(S5, f"{key}.link_items", vn_int(r["items"]), src)
-        n.add(S5, f"{key}.link_freebase_items", vn_int(r["freebase_items"]), src)
+        n.add(
+            S5,
+            f"{key}.link_catalog_items",
+            vn_int(r["items"]),
+            src + " (cơ sở: danh mục phim sau làm sạch, kể cả item chưa có rating)",
+        )
+        n.add(
+            S5, f"{key}.link_freebase_items", vn_int(r["freebase_items"]), src + " (cơ sở: danh mục phim sau làm sạch)"
+        )
         n.add(S5, f"{key}.link_freebase_item_share", vn_pct(r["freebase_item_share"]), src)
         n.add(S5, f"{key}.link_freebase_rating_share", vn_pct(r["freebase_rating_share"]), src)
         n.add(S5, f"{key}.link_yago_item_share", vn_pct(r["yago_item_share"]), src)
@@ -288,9 +321,11 @@ def add_linking(n: Numbers) -> None:
 def add_kg(n: Numbers, key: str, d: dict, facts: pd.DataFrame, ctx: dict) -> None:
     meta = d["metas"]["default"]
     src = f"{rel(ROOT / d['cfg']['processed_dir'])}/kg/*/kg_meta.json"
-    n.add(S6, f"{key}.kg_items", vn_int(meta["n_items"]), src)
-    n.add(S6, f"{key}.kg_items_linked", vn_int(meta["n_items_linked"]), src)
-    n.add(S6, f"{key}.kg_items_with_facts", vn_int(meta["n_items_with_facts"]["t1"]), src)
+    n.add(S6, f"{key}.kg_items", vn_int(meta["n_items"]), src + " (cơ sở: item trong train sau 5-core)")
+    n.add(S6, f"{key}.kg_items_linked", vn_int(meta["n_items_linked"]), src + " (cơ sở: item trong train)")
+    n.add(
+        S6, f"{key}.kg_items_with_facts", vn_int(meta["n_items_with_facts"]["t1"]), src + " (cơ sở: item trong train)"
+    )
     kinds = kg.relation_date_kinds(meta)
     total = kinds["facts"].sum()
     stmt = kinds["facts"] * kinds["statement_dated"]
@@ -499,12 +534,14 @@ def draw_figures(out: Path, data: dict[str, dict], ctx: dict) -> list[Path]:
         ax.axvspan(t1, t2, color=GRID, alpha=0.9, lw=0)
         ax.axvspan(t2, w.index.max() + pd.Timedelta(days=7), color=GRID, alpha=0.45, lw=0)
         ax.plot(w.index, w.values, color=COLOR[key])
+        if key == "ml1m":
+            ax.set_yscale("log")  # one spike around t1 would flatten the rest on a linear axis
         top = ax.get_ylim()[1]
         for t, lab, ha in ((t1, "t1 ", "right"), (t2, " t2", "left")):
             ax.axvline(t, color=INK2, lw=1, ls="--")
             ax.text(t, top * 0.97, lab, color=INK2, ha=ha, va="top", fontsize=8)
         ax.set_title(f"{LABEL[key]}: số rating mỗi tuần")
-        ax.set_ylabel("rating / tuần")
+        ax.set_ylabel("rating / tuần" + (" (thang log)" if key == "ml1m" else ""))
         ax.tick_params(axis="x", rotation=30)
     fig.tight_layout()
     paths.append(out / "fig1_rating_theo_tuan.png")
