@@ -1,0 +1,14 @@
+# Random 10% of the users of MovieLens-1M (all their ratings), for runs on small machines (decision 0008).
+# Same protocol as ml1m.yaml: the split, 5-core and checks run on the subset. Sampling is seeded.
+name: ml-1m             # selects the loader
+run_name: ml-1m-u10      # registry "dataset" column and results/runs/<run_name>/
+raw_dir: data/raw/ml-1m
+processed_dir: data/processed/ml-1m-u10
+clean: false
+user_fraction: 0.10
+user_seed: 2019
+split:
+  q_val: 0.8
+  q_test: 0.9
+  min_rating: 4
+  kcore: 5

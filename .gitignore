@@ -3,9 +3,14 @@ data/raw/
 data/processed/
 !data/README.md
 !data/checksums.json
+# Local data and the reference KGAT source tree are not committed.
+data-for-Phon (1)/
+data-for-Phon (1).zip
+knowledge_graph_attention_network/
 __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
 .venv/
 .pytest_cache/
 .ruff_cache/
+data/export/

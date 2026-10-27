@@ -56,9 +56,12 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
 | `src/tkgat/train/bpr.py` | BPR training on any device; negatives sampled on the device from train positives only; early stop on val |
 | `src/tkgat/eval/` | full-ranking Recall/NDCG@K per user; paired Wilcoxon, paired t, bootstrap CI, Holm |
 | `src/tkgat/registry.py` | appends every val/test score with git commit, config, seed |
-| `scripts/01…06` | verify data → build splits → link entities → fetch Wikidata → Wikidata coverage report → build KG at t1/t2 |
+| `scripts/01…08` | verify data → build splits → link entities → fetch Wikidata → Wikidata coverage report → build KG at t1/t2 → report numbers → KGAT export |
 | `scripts/run.py` | train every grid point × seed, select on val, score test once |
-| `configs/data/` | `ml100k.yaml` (5-core, main), `ml100k_k10.yaml` (10-core sensitivity), `ml1m.yaml` |
+| `configs/data/` | `ml100k.yaml` (5-core, main), `ml100k_k10.yaml` (10-core sensitivity), `ml1m.yaml`, `ml1m_u10.yaml` / `ml1m_u05.yaml` (random 10% / 5% of the ML-1M users, decision 0008) |
+| `src/tkgat/data/subsample.py` | `subsample_users`: all ratings of a seeded random sample of users (`user_fraction`, `user_seed` in a data config) |
+| `src/tkgat/export/kgat.py` | writes the official split and one KG variant in the KGAT file format (`scripts/08_export_kgat.py`, output in `data/export/`, ignored by git) |
+| `experiments/legacy_kgat_data/` | the 10k-interaction scripts of PR #20, reference only: not the project protocol, never report numbers from them |
 | `configs/model/` | `mostpop.yaml`, `mostpop_recent.yaml`, `bprmf.yaml` |
 | `docs/` | `plan.md`, `decisions/`, `data-dictionary.md`, `meetings/`, `study/` (guides), `theory/` (team notes) |
 
@@ -78,6 +81,7 @@ python scripts/03_link_entities.py
 python scripts/05_wikidata_report.py
 python scripts/06_build_kg.py --data configs/data/ml100k.yaml      # also ml1m; all 3 KG variants
 python scripts/run.py --data configs/data/ml1m.yaml --model configs/model/bprmf.yaml   # --device auto|cuda|cpu
+python scripts/02_build_splits.py --data configs/data/ml1m_u10.yaml    # small dev set; then 06, then 08_export_kgat.py
 ruff check .; pytest                # both must pass before every commit (CI runs them)
 ```
 `data/processed/` is rebuilt from `data/raw/` by scripts 02–03; run them on a fresh machine.
@@ -85,7 +89,8 @@ ruff check .; pytest                # both must pass before every commit (CI run
 ## Known facts (verified 2026-10-17; re-check before quoting in a report)
 - ML-100K cut-offs t1 = 1998-03-07, t2 = 1998-03-31; train 43,018 positives, 745 users, 932 items;
   val 66 users, test 51 users. ML-1M test has 952 users.
-- MovieLens timestamps are rating-entry times: 78% of ML-100K ratings (72% of ML-1M) fall within 24 h
+- MovieLens timestamps are *assumed* to be rating-entry times (the GroupLens READMEs only say "seconds since the epoch"; the
+  assumption is the team's, decision 0008): 78% of ML-100K ratings (72% of ML-1M) fall within 24 h
   of the user's first rating (calendar-day UTC: 73.5% / 66.0%). Δt between one user's edges is often ~0,
   so the timestamp-permutation control is mandatory for every time-aware variant
   (`notebooks/01_eda.ipynb`, section 3b: 53% of users have all train edges within one hour, while an

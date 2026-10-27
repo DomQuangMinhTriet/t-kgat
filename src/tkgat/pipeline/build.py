@@ -12,6 +12,7 @@ from tkgat.data.clean import clean
 from tkgat.data.leakage import check_split
 from tkgat.data.loaders import load
 from tkgat.data.split import SplitConfig, TemporalSplit, temporal_split
+from tkgat.data.subsample import subsample_users
 from tkgat.registry import sha256_file
 
 PARTS = ("train", "val", "test", "seen_before_val", "seen_before_test")
@@ -27,6 +28,10 @@ def build_split(cfg: dict) -> tuple[TemporalSplit, dict]:
     clean_report = {}
     if cfg.get("clean"):
         inter, items, clean_report = clean(inter, items)
+    if cfg.get("user_fraction") is not None:
+        # a random user subset (decision 0008): taken before the split, which then runs unchanged on the subset
+        inter, subsample_report = subsample_users(inter, float(cfg["user_fraction"]), int(cfg.get("user_seed", 0)))
+        clean_report = {**clean_report, "user_subsample": subsample_report}
     s = temporal_split(inter, SplitConfig(**cfg["split"]))
     problems = check_split(s)
     if problems:

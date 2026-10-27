@@ -54,6 +54,21 @@ comparable across variants; in `default` and `drop_undated` some entities have n
 | `dropped.csv` | freebase_id, item, relation, tail, tail_label, point_in_time, start_time, tail_publication, tail_inception, tail_birth, reason, cutoff | Facts removed at each cut-off; `reason` = `future_statement`, `future_tail` or `undated` (empty for `static`) |
 | `kg_meta.json` | — | Cut-offs, `time_consistent`, known limitations, md5 of inputs, counts per relation and reason, date kind per relation, entities only in the t2 KG |
 
+## Subsets and the KGAT export
+`configs/data/ml1m_u10.yaml` and `ml1m_u05.yaml` take a seeded random 10% / 5% of the ML-1M users with all their
+ratings (`user_fraction`, `user_seed`; recorded in `meta.json` under `clean.user_subsample`) and then run the normal
+pipeline (decision 0008). `scripts/08_export_kgat.py --data <config> --variant <default|drop_undated|static>
+[--timestamps]` writes `data/export/kgat/<run_name>-<variant>[-timestamp]/`:
+
+| File | Content |
+|---|---|
+| `train.txt`, `val.txt`, `test.txt` | `user item item ...`, positives (rating >= 4), items in time order |
+| `val_mask.txt`, `test_mask.txt` | every interaction before t1 / t2, any rating: exclude them when ranking |
+| `<split>_rating.txt`, `<split>_timestamp.txt` | `user item:label ...`; timestamps only with `--timestamps` |
+| `kg_final.txt`, `kg_test.txt` | integer triples `h r t` of the KG at t1 (train, val) and at t2 (test) |
+| `user_list.txt`, `item_list.txt`, `entity_list.txt`, `entity_metadata.tsv`, `relation_list.txt` | id maps; items are the first entities; `item_list.txt` has the Freebase id (`NA` if unlinked) |
+| `interactions_chronological.tsv`, `dataset_meta.json` | all interactions in time order; cut-offs, counts, split hash |
+
 ## Results
 `results/registry.csv`: run_at, git_commit, dataset, split_sha256, model, config, seed, phase (val/test),
 best_epoch, recall@10, recall@20, ndcg@10, ndcg@20, n_users, seconds, device (`cpu` or `cuda:<GPU name>`).
