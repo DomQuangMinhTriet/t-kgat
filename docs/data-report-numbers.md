@@ -304,24 +304,32 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 
 | Khóa | Giá trị | Nguồn |
 |---|---|---|
-| `ml100k.mostpop.selected` | chưa có | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k |
-| `ml100k.mostpop.test_recall20` | chưa có | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k |
-| `ml100k.mostpop.test_ndcg20` | chưa có | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k |
-| `ml100k.mostpop.n_seeds` | chưa có | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k |
-| `ml100k.mostpop.val_users` | chưa có | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k |
-| `ml100k.mostpop.test_users` | chưa có | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k |
-| `ml100k.mostpop_recent.selected` | chưa có | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k |
-| `ml100k.mostpop_recent.test_recall20` | chưa có | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k |
-| `ml100k.mostpop_recent.test_ndcg20` | chưa có | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k |
-| `ml100k.mostpop_recent.n_seeds` | chưa có | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k |
-| `ml100k.mostpop_recent.val_users` | chưa có | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k |
-| `ml100k.mostpop_recent.test_users` | chưa có | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k |
-| `ml100k.bprmf.selected` | chưa có | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k |
-| `ml100k.bprmf.test_recall20` | chưa có | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k |
-| `ml100k.bprmf.test_ndcg20` | chưa có | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k |
-| `ml100k.bprmf.n_seeds` | chưa có | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k |
-| `ml100k.bprmf.val_users` | chưa có | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k |
-| `ml100k.bprmf.test_users` | chưa có | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k |
+| `ml100k.mostpop.selected` | toàn bộ train (không giới hạn cửa sổ) | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.mostpop.test_recall20` | 0,1555 | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) (sample std, ddof=1) |
+| `ml100k.mostpop.test_ndcg20` | 0,1451 | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) (sample std, ddof=1) |
+| `ml100k.mostpop.n_seeds` | 1 | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.mostpop.val_users` | 66 | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.mostpop.test_users` | 51 | results/registry.csv qua registry.load(), mostpop, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.mostpop_recent.selected` | window_days = 14 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.mostpop_recent.test_recall20` | 0,3372 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) (sample std, ddof=1) |
+| `ml100k.mostpop_recent.test_ndcg20` | 0,2870 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) (sample std, ddof=1) |
+| `ml100k.mostpop_recent.n_seeds` | 1 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.mostpop_recent.val_users` | 66 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.mostpop_recent.test_users` | 51 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.mostpop_recent.grid` | 1, 3, 5, 7, 14, 30 ngày | configs/model/mostpop_recent.yaml |
+| `ml100k.mostpop_recent.val_recall20.w1` | 0,1366 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k (phase val) |
+| `ml100k.mostpop_recent.val_recall20.w3` | 0,2818 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k (phase val) |
+| `ml100k.mostpop_recent.val_recall20.w5` | 0,2374 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k (phase val) |
+| `ml100k.mostpop_recent.val_recall20.w7` | 0,2730 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k (phase val) |
+| `ml100k.mostpop_recent.val_recall20.w14` | 0,2828 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k (phase val) |
+| `ml100k.mostpop_recent.val_recall20.w30` | 0,2441 | results/registry.csv qua registry.load(), mostpop_recent, dataset = ml-100k (phase val) |
+| `ml100k.mostpop_recent.on_grid_edge` | không | so selected với configs/model/mostpop_recent.yaml |
+| `ml100k.bprmf.selected` | dim = 32, l2 = 0,0001, lr = 0,001 | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.bprmf.test_recall20` | 0,1471 ± 0,0295 | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) (sample std, ddof=1) |
+| `ml100k.bprmf.test_ndcg20` | 0,1549 ± 0,0170 | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) (sample std, ddof=1) |
+| `ml100k.bprmf.n_seeds` | 5 | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.bprmf.val_users` | 66 | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.bprmf.test_users` | 51 | results/registry.csv qua registry.load(), bprmf, dataset = ml-100k; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.mostpop.selected` | toàn bộ train (không giới hạn cửa sổ) | results/registry.csv qua registry.load(), mostpop, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.mostpop.test_recall20` | 0,0902 | results/registry.csv qua registry.load(), mostpop, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) (sample std, ddof=1) |
 | `ml1m.mostpop.test_ndcg20` | 0,1942 | results/registry.csv qua registry.load(), mostpop, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) (sample std, ddof=1) |
@@ -348,8 +356,8 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml1m.bprmf.n_seeds` | 5 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.bprmf.val_users` | 480 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.bprmf.test_users` | 952 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
-| `registry.rows_all` | 53 | results/registry.csv qua registry.load()(latest=False) |
-| `registry.rows_latest` | 29 | results/registry.csv qua registry.load() |
+| `registry.rows_all` | 82 | results/registry.csv qua registry.load()(latest=False) |
+| `registry.rows_latest` | 58 | results/registry.csv qua registry.load() |
 | `registry.rows_dirty_label` | 19 | results/registry.csv qua registry.load() |
 | `registry.key` | dataset, split_sha256, model, config, seed, phase | registry.RUN_KEY |
-| `registry.splits` | 1 | results/registry.csv qua registry.load() |
+| `registry.splits` | 2 | results/registry.csv qua registry.load() |
