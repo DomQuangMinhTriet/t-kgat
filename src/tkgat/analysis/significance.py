@@ -47,12 +47,13 @@ def warning(n_pairs: int, n_nonzero: int) -> str:
 
 
 def compare_dataset(dataset: str, reg: pd.DataFrame, runs_dir: Path) -> list[dict]:
-    """BPR-MF against each baseline on the per-user test metrics, Holm-corrected within the dataset.
+    """BPR-MF against each baseline, and MostPop against MostPop recent, on the per-user test metrics.
 
     BPR-MF has one score per user and seed, the baselines are deterministic. The test is run on the
     per-user mean over the BPR-MF seeds (one pair per user); the p-values of the single seeds are kept as
-    ``p_raw_seed_min`` / ``p_raw_seed_max`` because averaging seeds hides seed noise. Holm is applied separately
-    for each metric over the comparisons of this dataset.
+    ``p_raw_seed_min`` / ``p_raw_seed_max`` because averaging seeds hides seed noise (NaN for the pair of
+    baselines, which has no seeds). Holm is applied separately for each metric over the three comparisons of this
+    dataset.
     """
     test = reg[(reg["dataset"] == dataset) & (reg["phase"] == "test")]
     seeds = sorted(int(s) for s in test.loc[test["model"] == "bprmf", "seed"])
@@ -93,6 +94,27 @@ def compare_dataset(dataset: str, reg: pd.DataFrame, runs_dir: Path) -> list[dic
                     "p_raw_seed_max": float(max(per_seed)),
                 }
             )
+        # the two deterministic baselines against each other: one pair per user, no seeds
+        a, b = load_per_user(run / "mostpop_seed0.npz", run / "mostpop_recent_seed0.npz", metric)
+        res = paired_wilcoxon(a, b)
+        block.append(
+            {
+                "dataset": dataset,
+                "split_sha256": next(iter(shas)),
+                "metric": metric,
+                "model_a": "mostpop",
+                "model_b": "mostpop_recent",
+                "n_seeds_a": 1,
+                "n_pairs": res["n_pairs"],
+                "n_nonzero": res["n_nonzero"],
+                "mean_a": float(a.mean()),
+                "mean_b": float(b.mean()),
+                "mean_diff": res["mean_diff"],
+                "p_raw": res["p_value"],
+                "p_raw_seed_min": float("nan"),
+                "p_raw_seed_max": float("nan"),
+            }
+        )
         corrected = holm([r["p_raw"] for r in block])
         for r, p_adj, rej in zip(block, corrected["p_adjusted"], corrected["reject"], strict=True):
             r["p_holm"], r["reject_holm_05"] = p_adj, rej
