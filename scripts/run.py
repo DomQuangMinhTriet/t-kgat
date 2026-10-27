@@ -15,6 +15,10 @@ Protocol
    (loss, and val metrics on evaluated epochs) with its config to
    ``results/runs/<run_name>/<tag>_<grid index>_seed<seed>_history.csv``.
 
+With ``--val-only`` only steps 1, 2 and 5 happen: the test files are not opened, no test row reaches the registry and no
+per-user test file is saved; the selection goes to ``<tag>_val_summary.json``. Use it for sensitivity checks, where
+choosing a split by its test scores would be leakage.
+
 ``run_name`` (optional in the data config, default ``name``) identifies the split in the registry
 ``dataset`` column and in ``results/runs/``; ``name`` only selects the loader. Two configs of the same
 dataset (e.g. 5-core and 10-core) must have different run names so their results never overwrite each other.
@@ -52,11 +56,17 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--registry", default="results/registry.csv")
     ap.add_argument("--runs-dir", default="results/runs")
     ap.add_argument("--device", default="auto", help='"auto" (CUDA if available), "cuda", "cuda:1" or "cpu"')
+    ap.add_argument(
+        "--val-only",
+        action="store_true",
+        help="train and select on validation only: the test files are not read, no test row is written to the "
+        "registry and no per-user test file is saved (sensitivity checks: never look at test to choose a split)",
+    )
     args = ap.parse_args(argv)
 
     dcfg = load_config(args.data)
     mcfg = yaml.safe_load(Path(args.model).read_text(encoding="utf-8"))
-    split, meta = load_saved(dcfg)
+    split, meta = load_saved(dcfg, with_test=not args.val_only)
     data = encode(split)
     split_sha = registry.sha256_file(Path(dcfg["processed_dir"]) / "meta.json")
     seeds = mcfg.get("seeds", [0])
@@ -68,7 +78,7 @@ def main(argv: list[str] | None = None) -> None:
 
     fitted: dict[int, dict[int, object]] = {}
     devices: dict[int, dict[int, str]] = {}
-    val_means = []
+    val_means, val_stds = [], []
     for g, point in enumerate(mcfg["grid"]):
         fitted[g], devices[g] = {}, {}
         scores = []
@@ -120,9 +130,25 @@ def main(argv: list[str] | None = None) -> None:
                 + " ".join(f"{k}={val[k]:.4f}" for k in METRICS)
             )
         val_means.append(float(np.mean(scores)))
+        val_stds.append(seed_std(scores))
 
     best = int(np.argmax(val_means))
     print(f"selected grid point {mcfg['grid'][best]} (mean val recall@20 = {val_means[best]:.4f})")
+
+    if args.val_only:
+        # a separate file: <tag>_summary.json (with test scores) of the same run_name is never overwritten
+        (out_dir / f"{tag}_val_summary.json").write_text(
+            json.dumps(
+                {
+                    "val_only": True,
+                    "selected": mcfg["grid"][best],
+                    "val_means_recall@20": val_means,
+                    "val_stds_recall@20": val_stds,
+                },
+                indent=2,
+            )
+        )
+        return
 
     summary = []
     for seed, model in fitted[best].items():
