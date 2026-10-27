@@ -1,6 +1,6 @@
 # 0008 — Random user subsets of ML-1M and the KGAT export of the official split
 
-- Status: proposed (2026-10-27, Triết); becomes accepted when Phôn approves the pull request
+- Status: accepted (2026-10-27); Phôn xác nhận qua chat
 - Clarifies decision 0005 on one point (timestamps, below); supersedes nothing. Implemented in
   `src/tkgat/data/subsample.py`, `scripts/08_export_kgat.py` and `src/tkgat/export/kgat.py`.
 - Context: Phôn's machine cannot run the full datasets with the KGAT code. PR #20 made a 10,000-interaction set
