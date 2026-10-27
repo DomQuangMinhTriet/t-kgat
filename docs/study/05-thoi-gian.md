@@ -36,14 +36,14 @@ rồi mới softmax như KGAT gốc.
 
 **Vì sao trừ trước softmax lại là "suy giảm mũ":**
 $$\text{softmax}(\pi - \gamma\Delta t)_t = \frac{e^{\pi_t}\,e^{-\gamma\Delta t_t}}{\sum_{t'} e^{\pi_{t'}}\,e^{-\gamma\Delta t_{t'}}}$$
-Tức trọng số attention gốc được nhân với $e^{-\gamma\Delta t}$ rồi chuẩn hóa lại. Tương tác cũ hơn bị giảm theo hàm mũ **so với các hàng xóm khác của cùng node**. Hệ quả: nếu mọi tương tác của một user có cùng $\Delta t$, suy giảm triệt tiêu, không có tác dụng gì.
+Tức trọng số attention gốc được nhân với $e^{-\gamma\Delta t}$ rồi chuẩn hóa lại. Tương tác cũ hơn bị giảm theo hàm mũ **so với các hàng xóm khác của cùng node**. Hệ quả: nếu mọi tương tác của một user có cùng $\Delta t$, suy giảm triệt tiêu **ở phía user** (softmax của node user), không có tác dụng gì. Phía item thì khác: các cạnh vào một item đến từ nhiều user, ở nhiều thời điểm khác nhau (độ trải thời gian của cạnh train theo item có trung vị 45 ngày ở ML-100K, 67 ngày ở ML-1M), nên suy giảm vẫn có thể có tác dụng ở đó. Điều này chỉ đúng nếu cạnh ngược của Interact (item → user) cũng bị suy giảm; điểm này sẽ chốt khi viết `models/kgat.py`.
 
 **Biến thể so sánh — thời gian trên triple KG (quyết định 0004):** KG cho train/val được dựng ở $t_1$, KG cho test ở $t_2$; chỉ giữ fact đã đúng trước mốc. Đây là cách giải quyết rò rỉ tri thức tương lai, đồng thời là thí nghiệm "thời gian của tri thức có giúp ích không".
 
 ## 4. Cảnh báo về dữ liệu MovieLens (phải nói rõ khi báo cáo)
-- Timestamp trong MovieLens là **thời điểm nhập rating**, không phải thời điểm xem phim. User mới thường chấm hàng loạt phim đã xem từ trước ngay khi đăng ký.
-- Số liệu nhóm đo: **78%** rating của ML-100K (72% với ML-1M) nằm trong ngày đầu tiên của user; 62% trong giờ đầu; trung vị khoảng 45 phút.
-- Hệ quả: với nhiều user, $\Delta t$ giữa các cạnh của họ gần bằng 0, nên suy giảm (mục 3) gần như không có tác dụng. Một kết quả "không cải thiện" trên 100K **là kết quả hợp lệ** và phải giải thích được bằng số liệu này.
+- Timestamp trong MovieLens, nhóm hiểu là **lúc ghi rating**, không phải lúc xem phim. Đây là giả định của nhóm: README của GroupLens chỉ nói đó là số giây tính từ epoch (quyết định 0008). Giả định này khớp với dữ liệu, vì nhiều user chấm hàng loạt trong một lần ngồi nhập.
+- Số liệu nhóm đo (`docs/data-report-numbers.md`): **77,9%** rating của ML-100K (72,4% với ML-1M) nằm trong 24 giờ đầu kể từ rating đầu tiên của user; **53,0%** user của ML-100K có toàn bộ cạnh train trải trong chưa đầy 1 giờ; một phiên nhập rating (nghỉ quá 60 phút thì kết thúc) có độ dài trung vị 13,4 phút ở ML-100K.
+- Hệ quả: với nhiều user, $\Delta t$ giữa các cạnh của họ gần bằng 0, nên suy giảm ở phía user (mục 3) gần như không có tác dụng; phía item vẫn có thể có. Một kết quả "không cải thiện" trên 100K **là kết quả hợp lệ** và phải giải thích được bằng số liệu này.
 - **Thí nghiệm đối chứng bắt buộc — hoán vị timestamp:** xáo trộn timestamp giữa các tương tác của cùng user rồi chạy lại. Nếu T-KGAT vẫn tốt như cũ, cải thiện **không đến từ thông tin thời gian** (có thể chỉ do thêm tham số hoặc do regularization).
 - ML-1M kéo dài gần 3 năm nên có nhiều khả năng có tín hiệu thời gian hơn. Đó là lý do chạy song song.
 
@@ -51,7 +51,7 @@ Tức trọng số attention gốc được nhân với $e^{-\gamma\Delta t}$ r�
 | Phần | Vị trí |
 |---|---|
 | Mốc $t_1$, $t_2$ | `src/tkgat/data/split.py` (`t1`, `t2` trong `TemporalSplit`) |
-| Phân tích phiên nhập rating | `notebooks/` (sẽ làm tuần 2), số liệu ở `docs/plan.md` |
+| Phân tích phiên nhập rating | `notebooks/01_eda.ipynb` (mục 3b), số liệu ở `docs/data-report-numbers.md` |
 | Thiết kế suy giảm | `docs/decisions/0005-time-in-attention.md` |
 | KG theo mốc | `docs/decisions/0004-kg-temporal-rules.md`, `data/raw/wikidata/facts.tsv` |
 | Baseline thời gian đơn giản | `MostPop(window_days=...)` trong `src/tkgat/models/baselines.py` |
