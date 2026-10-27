@@ -42,7 +42,6 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-
 WIKIDATA_RELATIONS = (
     "director",
     "screenwriter",
@@ -208,9 +207,7 @@ def match_movie(source: Movie, target: list[Movie]) -> tuple[int | None, str]:
     if hit is not None:
         return hit, "title+year"
     if source.year is not None:
-        hit = unique_item(
-            [movie for movie in by_key if movie.year is not None and abs(movie.year - source.year) <= 1]
-        )
+        hit = unique_item([movie for movie in by_key if movie.year is not None and abs(movie.year - source.year) <= 1])
         if hit is not None:
             return hit, "title+year±1"
     by_full = [movie for movie in target if movie.key_full == source.key_full and movie.year == source.year]
@@ -272,9 +269,7 @@ def build_links(dataset: Path, ml1m_path: Path, kb4rec_path: Path) -> list[Link]
         freebase_id = freebase_by_item.get(ml1m_item, "") if ml1m_item is not None else ""
         if ml1m_item is not None and not freebase_id:
             rule = f"{rule};no_kb4rec"
-        links.append(
-            Link(raw_item, item, source.title, source.year, ml1m_item, freebase_id, rule)
-        )
+        links.append(Link(raw_item, item, source.title, source.year, ml1m_item, freebase_id, rule))
     return links
 
 
@@ -502,9 +497,7 @@ def enrich(
     train_facts = [fact for fact in train_facts if fact.relation in train_relation_names]
     train_tails = {fact.tail for fact in train_facts}
     test_facts = [
-        fact
-        for fact in test_candidates
-        if fact.relation in train_relation_names and fact.tail in train_tails
+        fact for fact in test_candidates if fact.relation in train_relation_names and fact.tail in train_tails
     ]
 
     entities = read_space_table(source / "entity_list.txt", ["org_id", "remap_id"])
@@ -607,8 +600,7 @@ def enrich(
         "wikidata_train_triples": len(wiki_train),
         "wikidata_test_triples": len(wiki_test),
         "test_facts_with_unseen_tail_dropped": sum(
-            fact.relation in train_relation_names and fact.tail not in train_tails
-            for fact in test_candidates
+            fact.relation in train_relation_names and fact.tail not in train_tails for fact in test_candidates
         ),
         "local_triples": len(local_triples),
         "kg_final_triples": len(local_triples | wiki_train),

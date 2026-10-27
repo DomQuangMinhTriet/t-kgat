@@ -66,7 +66,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-
 GENRE_COLUMN_START = 5
 SPLIT_NAMES = ("train", "val", "test")
 EVAL_MIN_RATING = 4
@@ -240,9 +239,7 @@ def safe_key(value: str) -> str:
     return key or "unknown"
 
 
-def split_rows(
-    rows: list[Interaction], n_train: int, n_val: int
-) -> dict[str, list[Interaction]]:
+def split_rows(rows: list[Interaction], n_train: int, n_val: int) -> dict[str, list[Interaction]]:
     train_end = n_train
     val_end = n_train + n_val
     return {
@@ -258,7 +255,8 @@ def check_chronology(parts: dict[str, list[Interaction]]) -> None:
     if timestamps != sorted(timestamps):
         raise AssertionError("interactions are not globally ordered by non-decreasing timestamp")
     if not (
-        parts["train"][-1].timestamp <= parts["val"][0].timestamp
+        parts["train"][-1].timestamp
+        <= parts["val"][0].timestamp
         <= parts["val"][-1].timestamp
         <= parts["test"][0].timestamp
     ):
@@ -463,9 +461,7 @@ def write_value_sidecars(
     for split in SPLIT_NAMES:
         grouped: dict[int, list[tuple[int, int, int]]] = defaultdict(list)
         for row in parts[split]:
-            grouped[user_map[row.raw_user]].append(
-                (row.timestamp, item_map[row.raw_item], getattr(row, field))
-            )
+            grouped[user_map[row.raw_user]].append((row.timestamp, item_map[row.raw_item], getattr(row, field)))
         path = output / f"{split}_{field}.txt"
         with path.open("w", encoding="utf-8", newline="\n") as handle:
             for user in sorted(grouped):
@@ -576,12 +572,8 @@ def cold_start_stats(parts: dict[str, list[Interaction]]) -> dict[str, int]:
     for split in ("val", "test"):
         result[f"{split}_cold_users"] = len({row.raw_user for row in parts[split]} - train_users)
         result[f"{split}_cold_items"] = len({row.raw_item for row in parts[split]} - train_items)
-        result[f"{split}_cold_user_interactions"] = sum(
-            row.raw_user not in train_users for row in parts[split]
-        )
-        result[f"{split}_cold_item_interactions"] = sum(
-            row.raw_item not in train_items for row in parts[split]
-        )
+        result[f"{split}_cold_user_interactions"] = sum(row.raw_user not in train_users for row in parts[split])
+        result[f"{split}_cold_item_interactions"] = sum(row.raw_item not in train_items for row in parts[split])
     return result
 
 
@@ -601,9 +593,7 @@ def build_meta(
         rows = parts[split]
         split_meta[split] = {
             "interactions": len(rows),
-            "kgat_interactions": sum(
-                row.rating >= (1 if split == "train" else EVAL_MIN_RATING) for row in rows
-            ),
+            "kgat_interactions": sum(row.rating >= (1 if split == "train" else EVAL_MIN_RATING) for row in rows),
             "first_timestamp": rows[0].timestamp,
             "last_timestamp": rows[-1].timestamp,
             "users": len({row.raw_user for row in rows}),
@@ -792,9 +782,7 @@ def check_paired_outputs(chrono: Path, timestamped: Path) -> None:
 
     with (chrono / "interactions_chronological.tsv").open(encoding="utf-8", newline="") as plain_handle:
         plain_rows = list(csv.DictReader(plain_handle, delimiter="\t"))
-    with (timestamped / "interactions_chronological.tsv").open(
-        encoding="utf-8", newline=""
-    ) as timestamped_handle:
+    with (timestamped / "interactions_chronological.tsv").open(encoding="utf-8", newline="") as timestamped_handle:
         timestamped_rows = list(csv.DictReader(timestamped_handle, delimiter="\t"))
 
     if len(plain_rows) != len(timestamped_rows):

@@ -1,3 +1,10 @@
+> **Legacy / exploratory.** These two scripts (PR #20) build a 10,000-interaction KGAT dataset from ML-100K with a
+> positional 8,000/1,000/1,000 split. They do **not** follow the project protocol (quantile cut-offs t1/t2, rating >= 4
+> as the positive, 5-core on train, no unknown users/items in val/test, masks of earlier interactions) and copy the date
+> and linking logic of `tkgat.kg.temporal` / `tkgat.kg.linking`. Do not report numbers computed on their output.
+> The supported path is `scripts/08_export_kgat.py`, which exports the official split and KG to the same KGAT format
+> (see decision 0008). Kept here for reference; formatting-only changes (ruff 0.6.9) were made when it was moved.
+
 # Build MovieLens-100K data for KGAT
 
 ## Requirements
