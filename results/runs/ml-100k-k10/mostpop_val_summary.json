@@ -1,0 +1,12 @@
+{
+  "val_only": true,
+  "selected": {
+    "window_days": null
+  },
+  "val_means_recall@20": [
+    0.17433589443187938
+  ],
+  "val_stds_recall@20": [
+    null
+  ]
+}

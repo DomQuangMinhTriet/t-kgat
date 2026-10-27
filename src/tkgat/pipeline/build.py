@@ -54,10 +54,20 @@ def save_split(s: TemporalSplit, cfg: dict, clean_report: dict) -> Path:
     return out
 
 
-def load_saved(cfg: dict) -> tuple[TemporalSplit, dict]:
+TEST_PARTS = {"test": ["user", "item", "rating", "ts"], "seen_before_test": ["user", "item", "ts"]}
+
+
+def load_saved(cfg: dict, with_test: bool = True) -> tuple[TemporalSplit, dict]:
+    """Read a saved split. With ``with_test=False`` the test files are not opened and the test parts are empty
+    (for runs that only train and select on validation, ``scripts/run.py --val-only``)."""
     out = Path(cfg["processed_dir"])
     meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
-    frames = {p: pd.read_csv(out / f"{p}.csv") for p in PARTS}
+    frames = {
+        p: pd.DataFrame({c: pd.Series(dtype="int64") for c in TEST_PARTS[p]})
+        if p in TEST_PARTS and not with_test
+        else pd.read_csv(out / f"{p}.csv")
+        for p in PARTS
+    }
     s = TemporalSplit(SplitConfig(**meta["config"]), meta["t1"], meta["t2"], **frames)
     s.stats = {k: v for k, v in meta.items() if k not in {"config", "t1", "t2"}}
     return s, meta
