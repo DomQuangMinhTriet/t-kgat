@@ -356,8 +356,8 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml1m.bprmf.n_seeds` | 5 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.bprmf.val_users` | 480 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.bprmf.test_users` | 952 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
-| `registry.rows_all` | 82 | results/registry.csv qua registry.load()(latest=False) |
-| `registry.rows_latest` | 58 | results/registry.csv qua registry.load() |
-| `registry.rows_dirty_label` | 19 | results/registry.csv qua registry.load() |
+| `registry.rows_all` | 148 | results/registry.csv qua registry.load()(latest=False) |
+| `registry.rows_latest` | 124 | results/registry.csv qua registry.load() |
+| `registry.rows_dirty_label` | 78 | results/registry.csv qua registry.load() |
 | `registry.key` | dataset, split_sha256, model, config, seed, phase | registry.RUN_KEY |
-| `registry.splits` | 2 | results/registry.csv qua registry.load() |
+| `registry.splits` | 5 | results/registry.csv qua registry.load() |
