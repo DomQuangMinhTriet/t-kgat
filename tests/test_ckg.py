@@ -228,6 +228,44 @@ def test_guard_rejects_split_files_changed_after_they_were_saved(world):
         kg_at(w, "t1")
 
 
+def test_without_test_the_test_files_are_not_needed(world):
+    w = world
+    (w.dir / "test.csv").unlink()
+    (w.dir / "seen_before_test.csv").unlink()
+    kg1 = load_kg(w.dir, "default", "t1", w.enc, w.meta, with_test=False)
+    assert len(kg1) == 4 and kg1.cutoff == "t1"
+    with pytest.raises(ValueError, match=r"test\.csv is missing"):  # a report, not a FileNotFoundError
+        load_kg(w.dir, "default", "t1", w.enc, w.meta)
+
+
+def test_without_test_the_test_files_are_not_hashed(world):
+    w = world
+    with (w.dir / "test.csv").open("a", encoding="utf-8") as f:
+        f.write("\n")
+    load_kg(w.dir, "default", "t1", w.enc, w.meta, with_test=False)
+    with pytest.raises(ValueError, match=r"test\.csv changed"):
+        load_kg(w.dir, "default", "t1", w.enc, w.meta)
+
+
+def test_without_test_the_other_parts_are_still_checked(world):
+    w = world
+    (w.dir / "test.csv").unlink()
+    (w.dir / "seen_before_test.csv").unlink()
+    with (w.dir / "train.csv").open("a", encoding="utf-8") as f:
+        f.write("\n")
+    with pytest.raises(ValueError, match=r"train\.csv changed"):
+        load_kg(w.dir, "default", "t1", w.enc, w.meta, with_test=False)
+    (w.dir / "val.csv").unlink()
+    with pytest.raises(ValueError, match=r"val\.csv is missing"):
+        load_kg(w.dir, "default", "t1", w.enc, w.meta, with_test=False)
+
+
+def test_the_t2_kg_needs_the_test_flag(world):
+    w = world
+    with pytest.raises(ValueError, match="with_test=True"):
+        load_kg(w.dir, "default", "t2", w.enc, w.meta, with_test=False)
+
+
 def test_guard_rejects_another_item_order(world):
     w = world
     ent = pd.read_csv(w.kg_dir / "entities.csv", dtype={"key": str})

@@ -32,6 +32,7 @@ from tkgat.registry import sha256_file
 
 INTERACT = 0
 CUTOFFS = ("t1", "t2")
+TEST_PARTS = ("test", "seen_before_test")  # split files that only the test score reads
 
 
 def relation_id(r: int) -> int:
@@ -109,7 +110,14 @@ def used_tails(kg: KGTriples) -> np.ndarray:
     return np.unique(kg.triples[:, 2])
 
 
-def load_kg(processed_dir: str | Path, variant: str, cutoff: str, enc: EncodedSplit, split_meta: dict) -> KGTriples:
+def load_kg(
+    processed_dir: str | Path,
+    variant: str,
+    cutoff: str,
+    enc: EncodedSplit,
+    split_meta: dict,
+    with_test: bool = True,
+) -> KGTriples:
     """Read ``<processed_dir>/kg/<variant>/kg_<cutoff>.tsv`` and check that it belongs to this split.
 
     This is the only function that reads the KG triple files. ``enc`` and ``split_meta`` must be the encoded split and
@@ -117,9 +125,15 @@ def load_kg(processed_dir: str | Path, variant: str, cutoff: str, enc: EncodedSp
     listing every problem: the KG was built from another split (hashes of the split files in ``kg_meta.json`` differ
     from ``meta.json`` or from the files on disk), the item order differs, the id spaces are not contiguous, or the
     triple count differs from ``kg_meta.json``.
+
+    ``with_test=False`` is for training and validation: ``test.csv`` and ``seen_before_test.csv`` are neither opened nor
+    required (they may be absent), and the t2 KG, which only the test score uses, is refused. The hashes of the other
+    parts are still checked, and a missing or changed part is reported as a problem.
     """
     if cutoff not in CUTOFFS:
         raise ValueError(f"cutoff must be one of {CUTOFFS}, got {cutoff!r}")
+    if cutoff == "t2" and not with_test:
+        raise ValueError("the KG at t2 is only for the test score: pass with_test=True")
     processed_dir = Path(processed_dir)
     kg_dir = processed_dir / "kg" / variant
     info = json.loads((kg_dir / "kg_meta.json").read_text(encoding="utf-8"))
@@ -134,7 +148,12 @@ def load_kg(processed_dir: str | Path, variant: str, cutoff: str, enc: EncodedSp
     if built_from != split_meta["sha256"]:
         problems.append("the KG was built from another split (split hashes in kg_meta.json differ from meta.json)")
     for part, digest in split_meta["sha256"].items():
-        if sha256_file(processed_dir / f"{part}.csv") != digest:
+        if part in TEST_PARTS and not with_test:
+            continue
+        path = processed_dir / f"{part}.csv"
+        if not path.exists():
+            problems.append(f"{part}.csv is missing")
+        elif sha256_file(path) != digest:
             problems.append(f"{part}.csv changed after the split was saved")
     if info["n_items"] != enc.n_items:
         problems.append(f"the KG has {info['n_items']} items, the split has {enc.n_items}")
