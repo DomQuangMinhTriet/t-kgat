@@ -13,6 +13,7 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `conv.session_gap` | phiên kết thúc khi nghỉ quá 60 phút | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.session_gap_alt` | ngưỡng nhạy: 30 phút | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.spread_thresholds` | 1 giờ, 1 ngày, 30 ngày | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
+| `conv.wilson_level` | khoảng tin cậy Wilson 95% (hai phía) | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.top_item_fractions` | 10% và 20% | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.positive_rating` | rating ≥ 4 | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.seeds` | 5 seed (2019–2023) | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
@@ -200,9 +201,13 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.link_rule.aka_title_year` | 13 | data/processed/links/linking_report.json (match_rules) |
 | `ml100k.link_rule.contains_year` | 4 | data/processed/links/linking_report.json (match_rules) |
 | `ml100k.link_rule.title_year_pm1` | 2 | data/processed/links/linking_report.json (match_rules) |
-| `link_check.n_checked` | chưa có | results/linking_manual_check.json (việc 15) |
-| `link_check.n_wrong` | chưa có | results/linking_manual_check.json (việc 15) |
-| `link_check.error_rate` | chưa có | results/linking_manual_check.json (việc 15) |
+| `link_check.n_checked` | 50 | results/linking_manual_check.json (việc 15) |
+| `link_check.n_wrong` | 0 | results/linking_manual_check.json (việc 15) |
+| `link_check.error_rate` | 0,0% | results/linking_manual_check.json (việc 15) |
+| `link_check.wilson_low` | 0,0% | results/linking_manual_check.json (việc 15), khoảng tin cậy Wilson 95% của tỉ lệ sai |
+| `link_check.wilson_high` | 7,1% | results/linking_manual_check.json (việc 15), khoảng tin cậy Wilson 95% của tỉ lệ sai |
+| `link_check.n_human` | 10 | results/linking_manual_check_sample.csv (cột needs_human_check) |
+| `link_check.n_auto` | 40 | results/linking_manual_check_sample.csv (cột needs_human_check) |
 
 ## 6. KG theo thời gian
 

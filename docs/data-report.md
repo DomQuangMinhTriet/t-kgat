@@ -10,7 +10,7 @@ Mọi ngày tính theo UTC. Mọi con số do `scripts/07_report_numbers.py` sin
 - **Timestamp.** Nhóm hiểu timestamp là lúc user ghi rating (README của GroupLens chỉ nói số giây kể từ epoch). 77,9% rating của ML-100K và 72,4% của ML-1M nằm trong 24 giờ đầu của user, nên các cạnh của một user gần như trùng thời điểm, còn các cạnh của một item trải trên nhiều tháng (mục 3). Báo cáo chưa kiểm tra nguyên nhân.
 - **Chia theo mốc t1/t2** giữ lại 12,6% (val) và 13,3% (test) positive của ML-100K, tức chỉ 66 và 51 user; ML-1M giữ lại 21,0% và 75,7% với 480 và 952 user (mục 4).
 - **KG theo thời gian** chỉ bỏ 1,5% (ML-100K) và 1,3% (ML-1M) số fact tại t1, nhưng các item mất fact nhận 53,1% và 48,1% positive val/test của ML-100K, 40,6% và 42,6% của ML-1M (mục 6).
-- **Baseline trên ML-1M** (Recall@20 trên test): MostPop 0,0902; MostPop recent (cửa sổ 7 ngày) 0,1060; BPR-MF 0,1194 ± 0,0031. Baseline ML-100K: chưa có (mục 7).
+- **Baseline** (Recall@20 trên test). ML-1M: MostPop 0,0902; MostPop recent (cửa sổ 7 ngày) 0,1060; BPR-MF 0,1194 ± 0,0031. ML-100K (51 user test): MostPop 0,1555; MostPop recent (cửa sổ 14 ngày) 0,3372; BPR-MF 0,1471 ± 0,0295 (mục 7).
 
 ## 1. Hai bộ dữ liệu
 
@@ -89,7 +89,7 @@ Trong một user, các Δt gần như bằng nhau, nên phép trừ phụ thuộ
 
 KB4Rec liên kết MovieLens-20M với Freebase và YAGO. ML-1M dùng chung không gian id với MovieLens-20M; ML-100K được ánh xạ sang ML-1M theo tiêu đề và năm (quyết định 0003, quy tắc ở Phụ lục C), rồi sang Freebase; phim được tìm trên Wikidata qua mã Freebase. Cơ sở: item trong danh mục sau làm sạch. ML-100K: 1.617 trong 1.663 item (97,2%) có liên kết Freebase, 99,5% rating thuộc các item đó, 83,1% item có liên kết YAGO. ML-1M: 3.811 trong 3.883 item (98,2%), 99,7% rating, 84,1% item có liên kết YAGO.
 
-**Tỷ lệ lỗi liên kết:** kiểm tay một mẫu ngẫu nhiên là việc 15 của Phôn. Số item đã kiểm: chưa có. Số liên kết sai: chưa có. Tỷ lệ lỗi: chưa có. Các số trên là độ phủ chứ chưa phải độ chính xác.
+**Tỷ lệ lỗi liên kết:** 0/50 sai trong mẫu ngẫu nhiên 50 phim ML-100K (40 xác nhận tự động bằng hai nguồn, 10 kiểm tay); khoảng tin cậy Wilson 95% của tỉ lệ sai là [0,0%; 7,1%]. Mẫu nhỏ nên chưa loại trừ được tỉ lệ sai đến 7,1%. 97,2% (1.617/1.663) là độ phủ, không phải độ đúng.
 
 ## 6. KG theo thời gian
 
@@ -116,18 +116,20 @@ KB4Rec liên kết MovieLens-20M với Freebase và YAGO. ML-1M dùng chung khô
 
 ## 7. Baseline
 
-Baseline chính thức hiện chỉ có trên ML-1M (val 480 user, test 952 user). Cấu hình chọn trên val; chỉ điểm test của cấu hình đã chọn được ghi lại. MostPop không ngẫu nhiên nên chạy một lần (không có độ lệch chuẩn); BPR-MF chạy 5 seed (2019–2023), báo cáo trung bình ± độ lệch chuẩn mẫu.
+Baseline chính thức trên ML-1M (val 480 user, test 952 user) và ML-100K (val 66 user, test 51 user). Cấu hình chọn trên val; chỉ điểm test của cấu hình đã chọn được ghi lại. MostPop không ngẫu nhiên nên chạy một lần (không có độ lệch chuẩn); BPR-MF chạy 5 seed (2019–2023), báo cáo trung bình ± độ lệch chuẩn mẫu.
 
-| Mô hình (ML-1M) | Cấu hình chọn trên val | Recall@20 (test) | NDCG@20 (test) | Số seed |
+| Mô hình (bộ dữ liệu) | Cấu hình chọn trên val | Recall@20 (test) | NDCG@20 (test) | Số seed |
 |---|---|---|---|---|
-| MostPop | toàn bộ train | 0,0902 | 0,1942 | 1 |
-| MostPop recent | cửa sổ 7 ngày | 0,1060 | 0,2034 | 1 |
-| BPR-MF | dim = 64, l2 = 0,0001, lr = 0,001 | 0,1194 ± 0,0031 | 0,2208 ± 0,0069 | 5 |
-| Cả ba mô hình trên ML-100K | chưa có | chưa có | chưa có | chưa có |
+| MostPop (ML-1M) | toàn bộ train | 0,0902 | 0,1942 | 1 |
+| MostPop recent (ML-1M) | cửa sổ 7 ngày | 0,1060 | 0,2034 | 1 |
+| BPR-MF (ML-1M) | dim = 64, l2 = 0,0001, lr = 0,001 | 0,1194 ± 0,0031 | 0,2208 ± 0,0069 | 5 |
+| MostPop (ML-100K) | toàn bộ train | 0,1555 | 0,1451 | 1 |
+| MostPop recent (ML-100K) | cửa sổ 14 ngày | 0,3372 | 0,2870 | 1 |
+| BPR-MF (ML-100K) | dim = 32, l2 = 0,0001, lr = 0,001 | 0,1471 ± 0,0295 | 0,1549 ± 0,0170 | 5 |
 
-*Bảng 5. Baseline trên ML-1M; ML-100K chưa chạy (việc 17).*
+*Bảng 5. Baseline trên ML-1M và ML-100K (ML-100K chỉ có 51 user test).*
 
-Về điểm trung bình, MostPop recent cao hơn MostPop và BPR-MF cao hơn cả hai ở Recall@20 và NDCG@20. Chưa có kiểm định thống kê giữa các baseline (Wilcoxon theo từng user, việc 19), và MostPop chỉ có một lần chạy nên chưa nói được về độ ổn định. Cửa sổ 7 ngày của MostPop recent nằm giữa lưới tìm kiếm {1, 3, 5, 7, 14, 30} ngày, nên biên của lưới không còn là vấn đề (Phụ lục E). Sau này mô hình có yếu tố thời gian phải vượt được MostPop recent, không chỉ MostPop.
+Trên ML-1M, MostPop recent cao hơn MostPop và BPR-MF cao hơn cả hai ở Recall@20 và NDCG@20. Trên ML-100K, MostPop recent cao hơn hẳn (Recall@20 0,3372 so với 0,1555 của MostPop), còn BPR-MF (0,1471 ± 0,0295) không cao hơn MostPop: chênh lệch nhỏ hơn độ lệch chuẩn của BPR-MF qua seed, và test chỉ có 51 user nên kết quả nhiễu. Kiểm định Wilcoxon theo từng user (việc 19) nằm ở `results/significance.csv`, chưa đưa vào báo cáo này; MostPop chỉ có một lần chạy nên chưa nói được về độ ổn định. Cửa sổ 7 ngày của MostPop recent ở ML-1M nằm giữa lưới tìm kiếm {1, 3, 5, 7, 14, 30} ngày, nên biên của lưới không còn là vấn đề (Phụ lục E); ở ML-100K cửa sổ được chọn là 14 ngày, cũng không nằm ở biên của lưới. Sau này mô hình có yếu tố thời gian phải vượt được MostPop recent, không chỉ MostPop.
 
 ## 8. Hạn chế và việc tiếp theo
 
@@ -137,7 +139,7 @@ Về điểm trung bình, MostPop recent cao hơn MostPop và BPR-MF cao hơn c�
 3. Fact không có ngày nào (18,1%) được giữ theo mặc định; biến thể drop_undated đo ảnh hưởng của giả định này.
 4. ML-100K chỉ còn 66 user val và 51 user test; val của ML-1M chỉ dài 27 ngày.
 5. Timestamp được hiểu là lúc user ghi rating (README của GroupLens chỉ nói số giây kể từ epoch), nên các suy luận về Δt mới là giả thuyết.
-6. Độ chính xác liên kết: chưa có (kiểm tay chưa xong); baseline ML-100K: chưa có.
+6. Độ chính xác liên kết mới đo trên mẫu 50 phim (0/50 sai, khoảng Wilson 95% của tỉ lệ sai [0,0%; 7,1%]); trong 50 phim đó 40 phim chỉ được máy xác nhận bằng hai nguồn, 10 phim được kiểm tay.
 7. Chưa đo ảnh hưởng của rò rỉ qua KG lên Recall@20, vì KGAT chưa được chạy.
 
 **Câu hỏi xin ý kiến cô**
@@ -146,7 +148,7 @@ Về điểm trung bình, MostPop recent cao hơn MostPop và BPR-MF cao hơn c�
 3. Cô có chấp nhận biến thể static làm tham chiếu để đo rò rỉ qua KG, không đưa vào kết quả chính?
 4. Với fact không có ngày nào, cô muốn giữ mặc định (default) hay bỏ (drop_undated) làm cấu hình chính?
 
-**Việc tiếp theo.** Phôn hoàn tất kiểm tay liên kết và baseline ML-100K (rồi chạy lại script 07 để các chỗ "chưa có" tự được điền); kiểm định Wilcoxon giữa các baseline và phân tích độ nhạy theo mốc cắt; sau khi cô duyệt quy trình, chạy KGAT và T-KGAT với các biến thể KG ở trên.
+**Việc tiếp theo.** Đưa kiểm định Wilcoxon giữa các baseline (`results/significance.csv`) và phân tích độ nhạy theo cách chia (`docs/sensitivity-val.md`) vào báo cáo; mở rộng mẫu kiểm tay liên kết nếu cần khoảng tin cậy hẹp hơn; sau khi cô duyệt quy trình, chạy KGAT và T-KGAT với các biến thể KG ở trên.
 
 ## Phụ lục
 
