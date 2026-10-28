@@ -198,3 +198,77 @@ def test_link_check_json_and_sample_must_agree(tmp_path):
     write_sample(tmp_path / "linking_manual_check_sample.csv", [(0, 1)] * 40 + [(1, 0)] * 10)  # 10 wrong in the csv
     with pytest.raises(SystemExit, match="disagree"):
         load_script().add_link_check(Numbers(), tmp_path / "linking_manual_check.json")
+
+
+@pytest.mark.parametrize("bad", ["", " ", "2", "x", "yes"])
+@pytest.mark.parametrize("column", ["correct", "human"])
+def test_sample_counts_rejects_cells_that_are_not_zero_or_one(tmp_path, column, bad):
+    rows = [(0, 1)] * 3
+    write_sample(tmp_path / "s.csv", rows)
+    lines = (tmp_path / "s.csv").read_text(encoding="utf-8-sig").splitlines()
+    cells = lines[2].split(",")  # the second data row: id, title, human, correct
+    cells[2 if column == "human" else 3] = bad
+    lines[2] = ",".join(cells)
+    (tmp_path / "s.csv").write_text("\n".join(lines) + "\n", encoding="utf-8-sig")
+    with pytest.raises(ValueError, match="must be 0 or 1"):
+        report.sample_counts(tmp_path / "s.csv")
+
+
+@pytest.mark.parametrize(
+    "p, text",
+    [(0.512758, "0,513"), (0.029206, "0,029"), (0.007087, "0,0071"), (0.0004, "< 0,001"), (0.01, "0,010")],
+)
+def test_vn_p_formats_by_size(p, text):
+    assert report.vn_p(p) == text
+
+
+def significance_csv(path, rows):
+    import pandas as pd
+
+    cols = ["dataset", "metric", "model_a", "model_b", "n_pairs", "p_holm"]
+    pd.DataFrame(rows, columns=cols).to_csv(path, index=False)
+
+
+def test_significance_numbers_come_from_the_csv(tmp_path):
+    rows = [
+        ("ml-100k", "recall@20", "bprmf", "mostpop", 51, 0.512758),
+        ("ml-100k", "recall@20", "bprmf", "mostpop_recent", 51, 0.029206),
+        ("ml-100k", "recall@20", "mostpop", "mostpop_recent", 51, 0.007087),
+        ("ml-100k", "ndcg@20", "bprmf", "mostpop", 51, 0.4915),  # another metric: ignored
+        ("ml-1m", "recall@20", "bprmf", "mostpop", 952, 1e-16),  # another dataset: ignored
+    ]
+    significance_csv(tmp_path / "significance.csv", rows)
+    n = Numbers()
+    load_script().add_significance(n, tmp_path / "significance.csv")
+    got = {k: v for _, k, v, _ in n.rows}
+    assert got == {
+        "ml100k.sig.n_pairs": "51",
+        "ml100k.sig.bprmf_vs_mostpop.p_holm": "0,513",
+        "ml100k.sig.bprmf_vs_mostpop_recent.p_holm": "0,029",
+        "ml100k.sig.mostpop_vs_mostpop_recent.p_holm": "0,0071",
+    }
+
+
+def test_significance_is_missing_without_the_csv_or_a_row(tmp_path):
+    n = Numbers()
+    load_script().add_significance(n, tmp_path / "nothing.csv")
+    assert {v for _, _, v, _ in n.rows} == {report.MISSING}
+    significance_csv(tmp_path / "s.csv", [("ml-100k", "recall@20", "bprmf", "mostpop", 51, 0.5)])
+    m = Numbers()
+    load_script().add_significance(m, tmp_path / "s.csv")
+    got = {k: v for _, k, v, _ in m.rows}
+    assert got["ml100k.sig.bprmf_vs_mostpop.p_holm"] == "0,500"
+    assert got["ml100k.sig.bprmf_vs_mostpop_recent.p_holm"] == report.MISSING
+
+
+def test_dirty_commit_labels_are_counted_one_by_one():
+    import pandas as pd
+
+    reg_all = pd.DataFrame({"git_commit": ["aaa1111", "08f5e63-dirty", "08f5e63-dirty", "0231c86-dirty", "bbb2222"]})
+    reg = reg_all.assign(split_sha256="x")
+    n = Numbers()
+    load_script().add_registry_notes(n, reg_all, reg)
+    got = {k: v for _, k, v, _ in n.rows}
+    assert got["registry.rows_dirty_label"] == "3"
+    assert got["registry.dirty_rows.08f5e63-dirty"] == "2" and got["registry.dirty_rows.0231c86-dirty"] == "1"
+    assert not any("aaa1111" in k for k in got)

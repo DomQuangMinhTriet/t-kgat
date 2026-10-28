@@ -13,6 +13,7 @@ every number here is computed from files written by the pipeline:
   results/registry.csv                  baseline scores, only through ``registry.load()``; for each model only the
                                         test rows of the grid point that the latest run selected (``selected`` in
                                         results/runs/<dataset>/<model>_summary.json, decision 0007)
+  results/significance.csv              p-values of the selected baselines (written by scripts/09_significance.py)
   results/linking_manual_check.json     optional: {"n_checked": int, "n_wrong": int}, written by item 15
   results/linking_manual_check_sample.csv  optional: the sampled films; its counts must agree with the json
 
@@ -53,6 +54,7 @@ from tkgat.analysis.report import (  # noqa: E402
     vn_date,
     vn_dec,
     vn_int,
+    vn_p,
     vn_pct,
     vn_pm,
     wilson_interval,
@@ -599,8 +601,27 @@ def add_registry_notes(n: Numbers, reg_all: pd.DataFrame, reg: pd.DataFrame) -> 
     n.add(S7, "registry.rows_all", vn_int(len(reg_all)), src + "(latest=False)")
     n.add(S7, "registry.rows_latest", vn_int(len(reg)), src)
     n.add(S7, "registry.rows_dirty_label", vn_int(reg_all["git_commit"].astype(str).str.endswith("-dirty").sum()), src)
+    labels = reg_all["git_commit"].astype(str)
+    for label, count in labels[labels.str.endswith("-dirty")].value_counts().sort_index().items():
+        n.add(S7, f"registry.dirty_rows.{label}", vn_int(count), src + f"(latest=False), nhãn commit {label}")
     n.add(S7, "registry.key", "dataset, split_sha256, model, config, seed, phase", "registry.RUN_KEY")
     n.add(S7, "registry.splits", vn_int(reg["split_sha256"].nunique()), src)
+
+
+def add_significance(n: Numbers, path: Path, run_name: str = "ml-100k", key: str = "ml100k") -> None:
+    """Holm-corrected p-values of the selected baselines (Recall@20 on test), written by scripts/09_significance.py."""
+    src = f"results/significance.csv (scripts/09), {run_name}, Recall@20, Holm trong cùng bộ dữ liệu và metric"
+    pairs = [("bprmf", "mostpop"), ("bprmf", "mostpop_recent"), ("mostpop", "mostpop_recent")]
+    rows = None
+    if path.exists():
+        sig = pd.read_csv(path)
+        rows = sig[(sig["dataset"] == run_name) & (sig["metric"] == "recall@20")]
+    n_pairs = None if rows is None or rows.empty else int(rows["n_pairs"].iloc[0])
+    n.add(S7, f"{key}.sig.n_pairs", MISSING if n_pairs is None else vn_int(n_pairs), src)
+    for a, b in pairs:
+        hit = None if rows is None else rows[(rows["model_a"] == a) & (rows["model_b"] == b)]
+        value = MISSING if hit is None or hit.empty else vn_p(float(hit["p_holm"].iloc[0]))
+        n.add(S7, f"{key}.sig.{a}_vs_{b}.p_holm", value, src)
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -776,6 +797,7 @@ def build(root_registry: Path) -> tuple[Numbers, dict, dict]:
     reg = registry.load(root_registry)
     for key, d in data.items():
         add_baselines(n, reg, key, d, d["run_name"])
+    add_significance(n, ROOT / "results" / "significance.csv")
     add_registry_notes(n, reg_all, reg)
     return n, data, ctx
 

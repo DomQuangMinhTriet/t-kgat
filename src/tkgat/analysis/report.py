@@ -36,6 +36,13 @@ def vn_date(d: dt.date | str) -> str:
     return dt.date.fromisoformat(str(d)[:10]).strftime("%d/%m/%Y")
 
 
+def vn_p(p: float) -> str:
+    """A p-value: 3 decimals from 0,01, 4 decimals from 0,001, "< 0,001" below."""
+    if p < 0.001:
+        return "< 0,001"
+    return vn_dec(p, 3 if p >= 0.01 else 4)
+
+
 def vn_pm(mean: float, std: float | None, digits: int = 4) -> str:
     """``mean ± sample std``; a single seed has no sample std."""
     return f"{vn_dec(mean, digits)} ± {vn_dec(std, digits)}" if std is not None else vn_dec(mean, digits)
@@ -116,6 +123,10 @@ def sample_counts(path: str | Path) -> dict[str, int]:
     correct = next((c for c in rows[0] if c.startswith("correct")), None)
     if human is None or correct is None:
         raise ValueError(f"{path} needs columns starting with 'needs_human_check' and 'correct'")
+    for column in (human, correct):
+        bad = [i for i, r in enumerate(rows, start=2) if r[column].strip() not in ("0", "1")]
+        if bad:  # a blank or other cell would silently count as "not wrong" / "not checked by hand"
+            raise ValueError(f"{path}: column {column!r} must be 0 or 1 in every row; bad file lines {bad[:5]}")
     return {
         "n": len(rows),
         "n_human": sum(r[human].strip() == "1" for r in rows),
