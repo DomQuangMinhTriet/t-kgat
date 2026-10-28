@@ -122,3 +122,79 @@ def test_committed_numbers_file_matches_a_fresh_run(tmp_path):
     msg = "docs/data-report-numbers.md is out of date: run `python scripts/07_report_numbers.py` and commit it"
     assert fresh == committed, msg
     assert report.parse_numbers(fresh)  # the file parses back into keys
+
+
+# --- manual check of the entity links (item 15) -------------------------------------------------------------------
+
+SAMPLE_HEADER = 'item_100k,title,needs_human_check (1 = Triết mở link xem),"correct (1 = đúng, 0 = sai)"\n'
+
+
+def write_sample(path, rows):
+    """``rows`` are ``(needs_human_check, correct)``; written with a BOM as the real sample file is."""
+    lines = [f"{i},film {i},{h},{c}\n" for i, (h, c) in enumerate(rows)]
+    path.write_text(SAMPLE_HEADER + "".join(lines), encoding="utf-8-sig")
+
+
+@pytest.mark.parametrize("k, n", [(0, 50), (1, 50), (10, 50), (50, 50), (3, 7)])
+def test_wilson_interval_matches_scipy(k, n):
+    from scipy.stats import binomtest
+
+    ci = binomtest(k, n).proportion_ci(confidence_level=0.95, method="wilson")
+    low, high = report.wilson_interval(k, n)
+    assert (low, high) == pytest.approx((ci.low, ci.high), abs=1e-6)
+    assert 0 <= low <= k / n <= high <= 1
+
+
+def test_wilson_interval_of_zero_wrong_in_fifty():
+    low, high = report.wilson_interval(0, 50)
+    assert report.vn_pct(low) == "0,0%" and report.vn_pct(high) == "7,1%"
+    with pytest.raises(ValueError):
+        report.wilson_interval(0, 0)
+
+
+def test_sample_counts_reads_columns_by_prefix(tmp_path):
+    write_sample(tmp_path / "s.csv", [(0, 1)] * 40 + [(1, 1)] * 9 + [(1, 0)])
+    assert report.sample_counts(tmp_path / "s.csv") == {"n": 50, "n_human": 10, "n_wrong": 1}
+    (tmp_path / "bad.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="needs_human_check"):
+        report.sample_counts(tmp_path / "bad.csv")
+
+
+def test_link_check_is_missing_without_the_json(tmp_path):
+    n = Numbers()
+    load_script().add_link_check(n, tmp_path / "linking_manual_check.json")
+    keys = {"n_checked", "n_wrong", "error_rate", "wilson_low", "wilson_high", "n_human", "n_auto"}
+    assert {k.removeprefix("link_check.") for _, k, _, _ in n.rows} == keys
+    assert all(v == report.MISSING for _, _, v, _ in n.rows)
+
+
+def test_link_check_with_json_and_sample(tmp_path):
+    (tmp_path / "linking_manual_check.json").write_text('{"n_checked": 50, "n_wrong": 0}\n')
+    write_sample(tmp_path / "linking_manual_check_sample.csv", [(0, 1)] * 40 + [(1, 1)] * 10)
+    n = Numbers()
+    load_script().add_link_check(n, tmp_path / "linking_manual_check.json")
+    got = {k.removeprefix("link_check."): v for _, k, v, _ in n.rows}
+    assert got == {
+        "n_checked": "50",
+        "n_wrong": "0",
+        "error_rate": "0,0%",
+        "wilson_low": "0,0%",
+        "wilson_high": "7,1%",
+        "n_human": "10",
+        "n_auto": "40",
+    }
+
+
+def test_link_check_without_the_sample_still_reports_the_json(tmp_path):
+    (tmp_path / "linking_manual_check.json").write_text('{"n_checked": 20, "n_wrong": 2}\n')
+    n = Numbers()
+    load_script().add_link_check(n, tmp_path / "linking_manual_check.json")
+    got = {k.removeprefix("link_check."): v for _, k, v, _ in n.rows}
+    assert got["error_rate"] == "10,0%" and got["n_human"] == report.MISSING == got["n_auto"]
+
+
+def test_link_check_json_and_sample_must_agree(tmp_path):
+    (tmp_path / "linking_manual_check.json").write_text('{"n_checked": 50, "n_wrong": 0}\n')
+    write_sample(tmp_path / "linking_manual_check_sample.csv", [(0, 1)] * 40 + [(1, 0)] * 10)  # 10 wrong in the csv
+    with pytest.raises(SystemExit, match="disagree"):
+        load_script().add_link_check(Numbers(), tmp_path / "linking_manual_check.json")

@@ -14,6 +14,7 @@ every number here is computed from files written by the pipeline:
                                         test rows of the grid point that the latest run selected (``selected`` in
                                         results/runs/<dataset>/<model>_summary.json, decision 0007)
   results/linking_manual_check.json     optional: {"n_checked": int, "n_wrong": int}, written by item 15
+  results/linking_manual_check_sample.csv  optional: the sampled films; its counts must agree with the json
 
 Nothing else is read from results/: no per-user test file and no test row of a grid point that was not selected.
 A source that does not exist yet gives "chưa có" and is filled in on the next run. The figures only show
@@ -27,6 +28,7 @@ import csv
 import json
 import sys
 from pathlib import Path
+from statistics import NormalDist
 
 import matplotlib
 
@@ -45,12 +47,15 @@ from tkgat.analysis.eda import DAY, HOUR  # noqa: E402
 from tkgat.analysis.report import (  # noqa: E402
     CONVENTIONS,
     MISSING,
+    Z95,
     Numbers,
+    sample_counts,
     vn_date,
     vn_dec,
     vn_int,
     vn_pct,
     vn_pm,
+    wilson_interval,
 )
 from tkgat.data.clean import clean  # noqa: E402
 from tkgat.data.leakage import check_split  # noqa: E402
@@ -138,6 +143,8 @@ def add_conventions(n: Numbers) -> None:
     n.add(S_CONV, "conv.session_gap", f"phiên kết thúc khi nghỉ quá {SESSION_GAP_S // 60} phút", src)
     n.add(S_CONV, "conv.session_gap_alt", f"ngưỡng nhạy: {SESSION_GAP_ALT_S // 60} phút", src)
     n.add(S_CONV, "conv.spread_thresholds", ", ".join(label for label, _ in SPREADS.values()), src)
+    level = 2 * NormalDist().cdf(Z95) - 1  # the two-sided level that Z95 stands for
+    n.add(S_CONV, "conv.wilson_level", f"khoảng tin cậy Wilson {round(100 * level)}% (hai phía)", src)
     n.add(S_CONV, "conv.top_item_fractions", " và ".join(f"{round(100 * f)}%" for f in TOP_FRACS), src)
     n.add(S_CONV, "conv.positive_rating", f"rating ≥ {POSITIVE_RATING}", src)
     n.add(S_CONV, "conv.seeds", f"5 seed ({SEEDS})", src)
@@ -363,15 +370,34 @@ def add_linking(n: Numbers) -> None:
     }
     for rule, count in rules.items():
         n.add(S5, f"ml100k.link_rule.{names.get(rule, rule)}", vn_int(count), src + " (match_rules)")
-    check = ROOT / "results" / "linking_manual_check.json"
+    add_link_check(n, ROOT / "results" / "linking_manual_check.json")
+
+
+def add_link_check(n: Numbers, check: Path) -> None:
+    """Manual check of the entity links (item 15): the json, and the sample csv next to it when it exists."""
     csrc = "results/linking_manual_check.json (việc 15)"
     if check.exists():
         c = json.loads(check.read_text(encoding="utf-8"))
         n.add(S5, "link_check.n_checked", vn_int(c["n_checked"]), csrc)
         n.add(S5, "link_check.n_wrong", vn_int(c["n_wrong"]), csrc)
         n.add(S5, "link_check.error_rate", vn_pct(c["n_wrong"] / c["n_checked"]), csrc)
+        low, high = wilson_interval(c["n_wrong"], c["n_checked"])
+        wsrc = csrc + ", khoảng tin cậy Wilson 95% của tỉ lệ sai"
+        n.add(S5, "link_check.wilson_low", vn_pct(low), wsrc)
+        n.add(S5, "link_check.wilson_high", vn_pct(high), wsrc)
+        sample = check.with_name("linking_manual_check_sample.csv")
+        if sample.exists():
+            counts = sample_counts(sample)
+            if (counts["n"], counts["n_wrong"]) != (c["n_checked"], c["n_wrong"]):
+                raise SystemExit(f"{check} and {sample} disagree: {c} against {counts}")
+            ssrc = "results/linking_manual_check_sample.csv (cột needs_human_check)"
+            n.add(S5, "link_check.n_human", vn_int(counts["n_human"]), ssrc)
+            n.add(S5, "link_check.n_auto", vn_int(counts["n"] - counts["n_human"]), ssrc)
+        else:
+            for k in ("n_human", "n_auto"):
+                n.add(S5, f"link_check.{k}", MISSING, "results/linking_manual_check_sample.csv")
     else:
-        for k in ("n_checked", "n_wrong", "error_rate"):
+        for k in ("n_checked", "n_wrong", "error_rate", "wilson_low", "wilson_high", "n_human", "n_auto"):
             n.add(S5, f"link_check.{k}", MISSING, csrc)
 
 

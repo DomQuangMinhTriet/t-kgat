@@ -7,9 +7,12 @@
 
 from __future__ import annotations
 
+import csv
 import datetime as dt
+import math
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 MISSING = "chưa có"
 CONVENTIONS = "Quy ước cố định"
@@ -81,6 +84,43 @@ _ROW = re.compile(r"^\|\s*`([^`]+)`\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$")
 def parse_numbers(text: str) -> dict[str, tuple[str, str]]:
     """``{key: (value, source)}`` from a rendered numbers file."""
     return {m.group(1): (m.group(2), m.group(3)) for line in text.splitlines() if (m := _ROW.match(line))}
+
+
+# --- manual check of the entity links (item 15) -------------------------------------------------------------------
+
+Z95 = 1.959963984540054  # two-sided 95% normal quantile
+
+
+def wilson_interval(k: int, n: int, z: float = Z95) -> tuple[float, float]:
+    """Wilson score interval of a proportion ``k / n`` (here: the share of wrong links in a random sample)."""
+    if n <= 0 or not 0 <= k <= n:
+        raise ValueError(f"need 0 <= k <= n and n > 0, got k={k}, n={n}")
+    p = k / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    # the bounds are exactly 0 for k = 0 and exactly 1 for k = n; floating point leaves ~1e-17 otherwise
+    return (0.0 if k == 0 else max(0.0, centre - half)), (1.0 if k == n else min(1.0, centre + half))
+
+
+def sample_counts(path: str | Path) -> dict[str, int]:
+    """Rows, rows checked by hand and wrong links of ``results/linking_manual_check_sample.csv``.
+
+    The columns are found by prefix (``needs_human_check``, ``correct``), because their headers carry a note.
+    """
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        raise ValueError(f"{path} has no rows")
+    human = next((c for c in rows[0] if c.startswith("needs_human_check")), None)
+    correct = next((c for c in rows[0] if c.startswith("correct")), None)
+    if human is None or correct is None:
+        raise ValueError(f"{path} needs columns starting with 'needs_human_check' and 'correct'")
+    return {
+        "n": len(rows),
+        "n_human": sum(r[human].strip() == "1" for r in rows),
+        "n_wrong": sum(r[correct].strip() == "0" for r in rows),
+    }
 
 
 # --- finding numbers in prose ---------------------------------------------------------------------------------
