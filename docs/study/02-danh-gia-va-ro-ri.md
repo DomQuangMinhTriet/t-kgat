@@ -79,7 +79,7 @@ $$\text{DCG@}K(u) = \sum_{k=1}^{K} \frac{\mathbb{1}[\text{item hạng } k \in T_
 5. Vì sao test của 100K chỉ còn 51 user? Có cách nào tăng lên mà không rò rỉ?
 6. Tính tay Recall@3 và NDCG@3 cho xếp hạng [4, 7, 1, 9], đúng {7, 9}.
 7. Vì sao phải loại khỏi xếp hạng những item user đã tương tác trước mốc?
-8. Nêu 7 nguồn rò rỉ và kiểm tra tương ứng trong `check_split`.
+8. `check_split` có đúng 6 kiểm tra: thứ tự thời gian; không có cặp (user, item) ở hai phần; val/test chỉ có user và item đã biết; tính chất k-core trên train; mask chỉ chứa quá khứ; đáp án không trùng mask. Ghép 7 nguồn rò rỉ ở mục 4 với các kiểm tra đó. Nguồn 1, 3 và 6 không do `check_split` bắt: mỗi nguồn được chặn bằng cơ chế nào?
 9. Vì sao xếp hạng trên mẫu 100 item âm có thể cho kết luận sai?
 10. Một fact trong KG có thể gây rò rỉ như thế nào? Cho ví dụ với Titanic.
 

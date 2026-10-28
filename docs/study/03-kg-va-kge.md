@@ -21,7 +21,7 @@ Vì sao KG giúp gợi ý: hai phim **không có user chung** vẫn có thể "g
 
 | Nguồn | Vai trò | Ghi chú |
 |---|---|---|
-| Freebase (qua KB4Rec) | Bảng ánh xạ MovieLens id → Freebase id | Freebase đã đóng năm 2016. Paper KGAT dùng KG từ KB4Rec/Freebase |
+| Freebase (qua KB4Rec) | Bảng ánh xạ id MovieLens → Freebase id | KB4Rec chỉ liên kết **MovieLens-20M**. ML-1M dùng chung id với ML-20M nên dùng thẳng được; ML-100K có id riêng, được ánh xạ sang ML-1M theo tiêu đề và năm (quyết định 0003). Freebase đã đóng năm 2016. Paper KGAT dùng KG từ KB4Rec/Freebase |
 | Wikidata | KG chính để lấy triple **có ngày tháng** | Liên kết qua thuộc tính P646 (Freebase ID) |
 
 ## 2. Collaborative Knowledge Graph (CKG)
@@ -63,7 +63,7 @@ $$\mathcal{L}_{\text{KG}} = \sum_{(h,r,t,t')} -\ln\sigma\big(g(h,r,t') - g(h,r,t
 CKE là baseline chính khi so với KGAT (paper KGAT có so). Hiểu CKE trước sẽ giúp hiểu KGAT dễ hơn: KGAT = CKE + lan truyền có attention.
 
 ## 5. Chất lượng KG — phải kiểm tra, không giả định
-- **Liên kết sai:** KB4Rec ánh xạ "Clubland" (1998) với *Cloudland Canyon State Park*. Repo kiểm tra bằng cách đối chiếu tên và năm (`kg/linking.py`), loại liên kết nghi ngờ.
+- **Liên kết sai:** KB4Rec ánh xạ "Clubland" (1998) với *Cloudland Canyon State Park*. Repo đối chiếu tên và năm khi ánh xạ ML-100K sang ML-1M (`kg/linking.py`, quyết định 0003). **97,2%** item của ML-100K có liên kết Freebase là **độ phủ** (có liên kết), không phải độ chính xác (liên kết đúng). Tỷ lệ liên kết sai chưa đo: việc kiểm tay một mẫu ngẫu nhiên (việc 15) chưa xong, nên chưa được nói "liên kết đúng 97,2%".
 - **Thiếu dữ liệu:** không phải phim nào cũng có đủ 18 quan hệ. Phải báo cáo độ phủ theo từng quan hệ.
 - **Entity quá phổ biến:** "English language" hay "United States of America" nối với gần hết phim, nên mang ít thông tin. Có thể lọc entity có bậc quá cao hoặc quá thấp, nhưng **chỉ dựa trên thông tin trước mốc** (chủ đề 6).
 - **Ngày tháng:** Wikidata có nhiều mức chính xác (năm, tháng, ngày). Xem chủ đề 6.

@@ -94,17 +94,23 @@ def test_script_writes_counts_holm_curves_and_table(results):
         ]
     )  # fmt: skip
     sig = pd.read_csv(out / "sig.csv")
-    assert len(sig) == 4 and set(sig["model_b"]) == {"mostpop", "mostpop_recent"}  # 2 baselines x 2 metrics
+    # 3 comparisons x 2 metrics: BPR-MF against each baseline, and MostPop against MostPop recent
+    assert len(sig) == 6 and set(zip(sig["model_a"], sig["model_b"], strict=True)) == {
+        ("bprmf", "mostpop"),
+        ("bprmf", "mostpop_recent"),
+        ("mostpop", "mostpop_recent"),
+    }
     assert (sig["n_pairs"] == N_USERS).all()
     for _, row in sig.iterrows():
         base = np.load(runs / f"{row['model_b']}_seed0.npz")[row["metric"]]
-        diff = mean[row["metric"]] - base
+        first = mean[row["metric"]] if row["model_a"] == "bprmf" else np.load(runs / "mostpop_seed0.npz")[row["metric"]]
+        diff = first - base
         assert row["n_nonzero"] == np.count_nonzero(diff) <= N_USERS - 5  # the five tied users are not ranked
         assert row["p_raw"] <= row["p_holm"] <= 1  # Holm never lowers a p-value
         assert "only 30 evaluation users" in row["warning"]
-    for _, g in sig.groupby("metric"):  # the smaller raw p is multiplied by the number of comparisons (2)
+    for _, g in sig.groupby("metric"):  # the smaller raw p is multiplied by the number of comparisons (3)
         small = g.loc[g["p_raw"].idxmin()]
-        assert small["p_holm"] == pytest.approx(min(1.0, 2 * small["p_raw"]))
+        assert small["p_holm"] == pytest.approx(min(1.0, 3 * small["p_raw"]))
 
     curves = pd.read_csv(out / "curves.csv")
     assert curves["n_seeds"].tolist() == [2, 2, 2, 2, 1, 1]  # the second seed stopped after epoch 4

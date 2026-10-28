@@ -16,7 +16,6 @@ from tkgat.data.subsample import subsample_users
 from tkgat.registry import sha256_file
 
 PARTS = ("train", "val", "test", "seen_before_val", "seen_before_test")
-TEST_PARTS = ("test", "seen_before_test")  # read only by the test score
 
 
 def load_config(path: str | Path) -> dict:
@@ -55,16 +54,20 @@ def save_split(s: TemporalSplit, cfg: dict, clean_report: dict) -> Path:
     return out
 
 
+TEST_PARTS = {"test": ["user", "item", "rating", "ts"], "seen_before_test": ["user", "item", "ts"]}
+
+
 def load_saved(cfg: dict, with_test: bool = True) -> tuple[TemporalSplit, dict]:
-    """Load a saved split. ``with_test=False`` (training, validation) never opens ``test.csv`` or
-    ``seen_before_test.csv``: those parts come back as empty frames with the schema of their val counterparts, so an
-    encoded split built from it has no test truth and an empty test mask."""
+    """Read a saved split. With ``with_test=False`` the test files are not opened and the test parts are empty
+    (for runs that only train and select on validation, ``scripts/run.py --val-only``)."""
     out = Path(cfg["processed_dir"])
     meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
-    frames = {p: pd.read_csv(out / f"{p}.csv") for p in PARTS if with_test or p not in TEST_PARTS}
-    if not with_test:
-        frames["test"] = frames["val"].iloc[0:0]
-        frames["seen_before_test"] = frames["seen_before_val"].iloc[0:0]
+    frames = {
+        p: pd.DataFrame({c: pd.Series(dtype="int64") for c in TEST_PARTS[p]})
+        if p in TEST_PARTS and not with_test
+        else pd.read_csv(out / f"{p}.csv")
+        for p in PARTS
+    }
     s = TemporalSplit(SplitConfig(**meta["config"]), meta["t1"], meta["t2"], **frames)
     s.stats = {k: v for k, v in meta.items() if k not in {"config", "t1", "t2"}}
     return s, meta

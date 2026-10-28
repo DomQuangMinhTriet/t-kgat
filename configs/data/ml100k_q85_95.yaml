@@ -1,0 +1,12 @@
+# Sensitivity check: later cut-offs (t1 = 85th, t2 = 95th percentile), 5-core as ml100k.yaml.
+# Chosen from the number of users and positives of val/test only, never from scores. Val has few users: weak evidence.
+name: ml-100k          # selects the loader
+run_name: ml-100k-q85-95
+raw_dir: data/raw/ml-100k
+processed_dir: data/processed/ml-100k-q85-95
+clean: true
+split:
+  q_val: 0.85
+  q_test: 0.95
+  min_rating: 4
+  kcore: 5

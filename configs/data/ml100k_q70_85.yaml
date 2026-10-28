@@ -1,0 +1,12 @@
+# Sensitivity check: earlier cut-offs (t1 = 70th, t2 = 85th percentile), 5-core as ml100k.yaml.
+# Chosen from the number of users and positives of val/test only, never from scores. Compare val order only.
+name: ml-100k          # selects the loader
+run_name: ml-100k-q70-85
+raw_dir: data/raw/ml-100k
+processed_dir: data/processed/ml-100k-q70-85
+clean: true
+split:
+  q_val: 0.7
+  q_test: 0.85
+  min_rating: 4
+  kcore: 5
