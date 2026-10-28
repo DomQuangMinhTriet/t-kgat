@@ -129,7 +129,7 @@ Baseline chính thức trên ML-1M (val 480 user, test 952 user) và ML-100K (va
 
 *Bảng 5. Baseline trên ML-1M và ML-100K (ML-100K chỉ có 51 user test).*
 
-Trên ML-1M, MostPop recent cao hơn MostPop và BPR-MF cao hơn cả hai ở Recall@20 và NDCG@20. Trên ML-100K, MostPop recent cao hơn hẳn (Recall@20 0,3372 so với 0,1555 của MostPop), còn BPR-MF (0,1471 ± 0,0295) không cao hơn MostPop: chênh lệch nhỏ hơn độ lệch chuẩn của BPR-MF qua seed, và test chỉ có 51 user nên kết quả nhiễu. Kiểm định Wilcoxon theo từng user (việc 19) nằm ở `results/significance.csv`, chưa đưa vào báo cáo này; MostPop chỉ có một lần chạy nên chưa nói được về độ ổn định. Cửa sổ 7 ngày của MostPop recent ở ML-1M nằm giữa lưới tìm kiếm {1, 3, 5, 7, 14, 30} ngày, nên biên của lưới không còn là vấn đề (Phụ lục E); ở ML-100K cửa sổ được chọn là 14 ngày, cũng không nằm ở biên của lưới. Sau này mô hình có yếu tố thời gian phải vượt được MostPop recent, không chỉ MostPop.
+Trên ML-1M, MostPop recent cao hơn MostPop và BPR-MF cao hơn cả hai ở Recall@20 và NDCG@20. Trên ML-100K, MostPop recent cao hơn hẳn (Recall@20 0,3372 so với 0,1555 của MostPop). Kiểm định Wilcoxon theo từng user trên 51 user test (Recall@20, hiệu chỉnh Holm trong cùng bộ dữ liệu và metric; `results/significance.csv`): BPR-MF so với MostPop có p = 0,513, chưa có bằng chứng hai mô hình khác nhau; BPR-MF so với MostPop recent có p = 0,029, BPR-MF thấp hơn; MostPop recent so với MostPop có p = 0,0071. Mẫu chỉ 51 user nên các p này nhạy với nhiễu. Kiểm định cho ML-1M cũng nằm ở file đó, chưa đưa vào báo cáo này; MostPop chỉ có một lần chạy nên chưa nói được về độ ổn định. Cửa sổ 7 ngày của MostPop recent ở ML-1M nằm giữa lưới tìm kiếm {1, 3, 5, 7, 14, 30} ngày, nên biên của lưới không còn là vấn đề (Phụ lục E); ở ML-100K cửa sổ được chọn là 14 ngày, cũng không nằm ở biên của lưới. Sau này mô hình có yếu tố thời gian phải vượt được MostPop recent, không chỉ MostPop.
 
 ## 8. Hạn chế và việc tiếp theo
 
@@ -192,4 +192,4 @@ Lưới ban đầu {7, 14, 30} ngày chọn 7 ngày, tức giá trị nhỏ nh�
 
 ### F. Ghi chú về registry
 
-Khóa của một lần chạy trong `results/registry.csv` nay gồm cả `split_sha256`. 19 dòng gắn nhãn `-dirty` thật ra là commit sạch `08f5e63` bị gắn nhãn sai do một lỗi đã sửa; các dòng cũ không bị sửa.
+Khóa của một lần chạy trong `results/registry.csv` nay gồm cả `split_sha256`. Registry có 78 dòng gắn nhãn `-dirty`, thuộc hai nhóm. 19 dòng nhãn `08f5e63-dirty` thật ra là commit sạch `08f5e63` bị gắn nhãn sai do một lỗi đã sửa. 59 dòng nhãn `0231c86-dirty` được chạy khi một file code phân tích bị sửa trong lúc chạy nền; code huấn luyện đã được commit và không đổi. Các dòng cũ không bị sửa.

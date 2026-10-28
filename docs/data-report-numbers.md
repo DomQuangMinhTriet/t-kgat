@@ -361,8 +361,14 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml1m.bprmf.n_seeds` | 5 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.bprmf.val_users` | 480 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.bprmf.test_users` | 952 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.sig.n_pairs` | 51 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
+| `ml100k.sig.bprmf_vs_mostpop.p_holm` | 0,513 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
+| `ml100k.sig.bprmf_vs_mostpop_recent.p_holm` | 0,029 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
+| `ml100k.sig.mostpop_vs_mostpop_recent.p_holm` | 0,0071 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
 | `registry.rows_all` | 148 | results/registry.csv qua registry.load()(latest=False) |
 | `registry.rows_latest` | 124 | results/registry.csv qua registry.load() |
 | `registry.rows_dirty_label` | 78 | results/registry.csv qua registry.load() |
+| `registry.dirty_rows.0231c86-dirty` | 59 | results/registry.csv qua registry.load()(latest=False), nhãn commit 0231c86-dirty |
+| `registry.dirty_rows.08f5e63-dirty` | 19 | results/registry.csv qua registry.load()(latest=False), nhãn commit 08f5e63-dirty |
 | `registry.key` | dataset, split_sha256, model, config, seed, phase | registry.RUN_KEY |
 | `registry.splits` | 5 | results/registry.csv qua registry.load() |
