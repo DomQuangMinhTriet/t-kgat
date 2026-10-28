@@ -13,7 +13,9 @@ every number here is computed from files written by the pipeline:
   results/registry.csv                  baseline scores, only through ``registry.load()``; for each model only the
                                         test rows of the grid point that the latest run selected (``selected`` in
                                         results/runs/<dataset>/<model>_summary.json, decision 0007)
+  results/significance.csv              p-values of the selected baselines (written by scripts/09_significance.py)
   results/linking_manual_check.json     optional: {"n_checked": int, "n_wrong": int}, written by item 15
+  results/linking_manual_check_sample.csv  optional: the sampled films; its counts must agree with the json
 
 Nothing else is read from results/: no per-user test file and no test row of a grid point that was not selected.
 A source that does not exist yet gives "chưa có" and is filled in on the next run. The figures only show
@@ -27,6 +29,7 @@ import csv
 import json
 import sys
 from pathlib import Path
+from statistics import NormalDist
 
 import matplotlib
 
@@ -45,12 +48,16 @@ from tkgat.analysis.eda import DAY, HOUR  # noqa: E402
 from tkgat.analysis.report import (  # noqa: E402
     CONVENTIONS,
     MISSING,
+    Z95,
     Numbers,
+    sample_counts,
     vn_date,
     vn_dec,
     vn_int,
+    vn_p,
     vn_pct,
     vn_pm,
+    wilson_interval,
 )
 from tkgat.data.clean import clean  # noqa: E402
 from tkgat.data.leakage import check_split  # noqa: E402
@@ -138,6 +145,8 @@ def add_conventions(n: Numbers) -> None:
     n.add(S_CONV, "conv.session_gap", f"phiên kết thúc khi nghỉ quá {SESSION_GAP_S // 60} phút", src)
     n.add(S_CONV, "conv.session_gap_alt", f"ngưỡng nhạy: {SESSION_GAP_ALT_S // 60} phút", src)
     n.add(S_CONV, "conv.spread_thresholds", ", ".join(label for label, _ in SPREADS.values()), src)
+    level = 2 * NormalDist().cdf(Z95) - 1  # the two-sided level that Z95 stands for
+    n.add(S_CONV, "conv.wilson_level", f"khoảng tin cậy Wilson {round(100 * level)}% (hai phía)", src)
     n.add(S_CONV, "conv.top_item_fractions", " và ".join(f"{round(100 * f)}%" for f in TOP_FRACS), src)
     n.add(S_CONV, "conv.positive_rating", f"rating ≥ {POSITIVE_RATING}", src)
     n.add(S_CONV, "conv.seeds", f"5 seed ({SEEDS})", src)
@@ -363,15 +372,34 @@ def add_linking(n: Numbers) -> None:
     }
     for rule, count in rules.items():
         n.add(S5, f"ml100k.link_rule.{names.get(rule, rule)}", vn_int(count), src + " (match_rules)")
-    check = ROOT / "results" / "linking_manual_check.json"
+    add_link_check(n, ROOT / "results" / "linking_manual_check.json")
+
+
+def add_link_check(n: Numbers, check: Path) -> None:
+    """Manual check of the entity links (item 15): the json, and the sample csv next to it when it exists."""
     csrc = "results/linking_manual_check.json (việc 15)"
     if check.exists():
         c = json.loads(check.read_text(encoding="utf-8"))
         n.add(S5, "link_check.n_checked", vn_int(c["n_checked"]), csrc)
         n.add(S5, "link_check.n_wrong", vn_int(c["n_wrong"]), csrc)
         n.add(S5, "link_check.error_rate", vn_pct(c["n_wrong"] / c["n_checked"]), csrc)
+        low, high = wilson_interval(c["n_wrong"], c["n_checked"])
+        wsrc = csrc + ", khoảng tin cậy Wilson 95% của tỉ lệ sai"
+        n.add(S5, "link_check.wilson_low", vn_pct(low), wsrc)
+        n.add(S5, "link_check.wilson_high", vn_pct(high), wsrc)
+        sample = check.with_name("linking_manual_check_sample.csv")
+        if sample.exists():
+            counts = sample_counts(sample)
+            if (counts["n"], counts["n_wrong"]) != (c["n_checked"], c["n_wrong"]):
+                raise SystemExit(f"{check} and {sample} disagree: {c} against {counts}")
+            ssrc = "results/linking_manual_check_sample.csv (cột needs_human_check)"
+            n.add(S5, "link_check.n_human", vn_int(counts["n_human"]), ssrc)
+            n.add(S5, "link_check.n_auto", vn_int(counts["n"] - counts["n_human"]), ssrc)
+        else:
+            for k in ("n_human", "n_auto"):
+                n.add(S5, f"link_check.{k}", MISSING, "results/linking_manual_check_sample.csv")
     else:
-        for k in ("n_checked", "n_wrong", "error_rate"):
+        for k in ("n_checked", "n_wrong", "error_rate", "wilson_low", "wilson_high", "n_human", "n_auto"):
             n.add(S5, f"link_check.{k}", MISSING, csrc)
 
 
@@ -573,8 +601,27 @@ def add_registry_notes(n: Numbers, reg_all: pd.DataFrame, reg: pd.DataFrame) -> 
     n.add(S7, "registry.rows_all", vn_int(len(reg_all)), src + "(latest=False)")
     n.add(S7, "registry.rows_latest", vn_int(len(reg)), src)
     n.add(S7, "registry.rows_dirty_label", vn_int(reg_all["git_commit"].astype(str).str.endswith("-dirty").sum()), src)
+    labels = reg_all["git_commit"].astype(str)
+    for label, count in labels[labels.str.endswith("-dirty")].value_counts().sort_index().items():
+        n.add(S7, f"registry.dirty_rows.{label}", vn_int(count), src + f"(latest=False), nhãn commit {label}")
     n.add(S7, "registry.key", "dataset, split_sha256, model, config, seed, phase", "registry.RUN_KEY")
     n.add(S7, "registry.splits", vn_int(reg["split_sha256"].nunique()), src)
+
+
+def add_significance(n: Numbers, path: Path, run_name: str = "ml-100k", key: str = "ml100k") -> None:
+    """Holm-corrected p-values of the selected baselines (Recall@20 on test), written by scripts/09_significance.py."""
+    src = f"results/significance.csv (scripts/09), {run_name}, Recall@20, Holm trong cùng bộ dữ liệu và metric"
+    pairs = [("bprmf", "mostpop"), ("bprmf", "mostpop_recent"), ("mostpop", "mostpop_recent")]
+    rows = None
+    if path.exists():
+        sig = pd.read_csv(path)
+        rows = sig[(sig["dataset"] == run_name) & (sig["metric"] == "recall@20")]
+    n_pairs = None if rows is None or rows.empty else int(rows["n_pairs"].iloc[0])
+    n.add(S7, f"{key}.sig.n_pairs", MISSING if n_pairs is None else vn_int(n_pairs), src)
+    for a, b in pairs:
+        hit = None if rows is None else rows[(rows["model_a"] == a) & (rows["model_b"] == b)]
+        value = MISSING if hit is None or hit.empty else vn_p(float(hit["p_holm"].iloc[0]))
+        n.add(S7, f"{key}.sig.{a}_vs_{b}.p_holm", value, src)
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -750,6 +797,7 @@ def build(root_registry: Path) -> tuple[Numbers, dict, dict]:
     reg = registry.load(root_registry)
     for key, d in data.items():
         add_baselines(n, reg, key, d, d["run_name"])
+    add_significance(n, ROOT / "results" / "significance.csv")
     add_registry_notes(n, reg_all, reg)
     return n, data, ctx
 

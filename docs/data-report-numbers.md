@@ -13,6 +13,7 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `conv.session_gap` | phiên kết thúc khi nghỉ quá 60 phút | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.session_gap_alt` | ngưỡng nhạy: 30 phút | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.spread_thresholds` | 1 giờ, 1 ngày, 30 ngày | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
+| `conv.wilson_level` | khoảng tin cậy Wilson 95% (hai phía) | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.top_item_fractions` | 10% và 20% | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.positive_rating` | rating ≥ 4 | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
 | `conv.seeds` | 5 seed (2019–2023) | hằng số trong scripts/07_report_numbers.py (dùng chính chúng khi tính) |
@@ -200,9 +201,13 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.link_rule.aka_title_year` | 13 | data/processed/links/linking_report.json (match_rules) |
 | `ml100k.link_rule.contains_year` | 4 | data/processed/links/linking_report.json (match_rules) |
 | `ml100k.link_rule.title_year_pm1` | 2 | data/processed/links/linking_report.json (match_rules) |
-| `link_check.n_checked` | chưa có | results/linking_manual_check.json (việc 15) |
-| `link_check.n_wrong` | chưa có | results/linking_manual_check.json (việc 15) |
-| `link_check.error_rate` | chưa có | results/linking_manual_check.json (việc 15) |
+| `link_check.n_checked` | 50 | results/linking_manual_check.json (việc 15) |
+| `link_check.n_wrong` | 0 | results/linking_manual_check.json (việc 15) |
+| `link_check.error_rate` | 0,0% | results/linking_manual_check.json (việc 15) |
+| `link_check.wilson_low` | 0,0% | results/linking_manual_check.json (việc 15), khoảng tin cậy Wilson 95% của tỉ lệ sai |
+| `link_check.wilson_high` | 7,1% | results/linking_manual_check.json (việc 15), khoảng tin cậy Wilson 95% của tỉ lệ sai |
+| `link_check.n_human` | 10 | results/linking_manual_check_sample.csv (cột needs_human_check) |
+| `link_check.n_auto` | 40 | results/linking_manual_check_sample.csv (cột needs_human_check) |
 
 ## 6. KG theo thời gian
 
@@ -356,8 +361,14 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml1m.bprmf.n_seeds` | 5 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.bprmf.val_users` | 480 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
 | `ml1m.bprmf.test_users` | 952 | results/registry.csv qua registry.load(), bprmf, dataset = ml-1m; cấu hình chọn = trường selected của summary (decision 0007) |
+| `ml100k.sig.n_pairs` | 51 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
+| `ml100k.sig.bprmf_vs_mostpop.p_holm` | 0,513 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
+| `ml100k.sig.bprmf_vs_mostpop_recent.p_holm` | 0,029 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
+| `ml100k.sig.mostpop_vs_mostpop_recent.p_holm` | 0,0071 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
 | `registry.rows_all` | 148 | results/registry.csv qua registry.load()(latest=False) |
 | `registry.rows_latest` | 124 | results/registry.csv qua registry.load() |
 | `registry.rows_dirty_label` | 78 | results/registry.csv qua registry.load() |
+| `registry.dirty_rows.0231c86-dirty` | 59 | results/registry.csv qua registry.load()(latest=False), nhãn commit 0231c86-dirty |
+| `registry.dirty_rows.08f5e63-dirty` | 19 | results/registry.csv qua registry.load()(latest=False), nhãn commit 08f5e63-dirty |
 | `registry.key` | dataset, split_sha256, model, config, seed, phase | registry.RUN_KEY |
 | `registry.splits` | 5 | results/registry.csv qua registry.load() |

@@ -124,13 +124,20 @@ def load(path: str | Path = "results/registry.csv", latest: bool = True) -> pd.D
     """
     # identifiers stay strings: a hash such as "347285991e48" would otherwise be read as the float 3.47e+56
     df = pd.read_csv(path, dtype={"git_commit": str, "config": str, "device": str, "dataset": str, "split_sha256": str})
-    if latest:
-        df = (
-            df.reset_index(names="_line")
-            .sort_values(["run_at", "_line"], kind="stable")
-            .drop_duplicates(RUN_KEY, keep="last")
-            .sort_values("_line")
-            .drop(columns="_line")
-            .reset_index(drop=True)
-        )
-    return df
+    return newest(df) if latest else df
+
+
+def newest(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep the newest row of each ``RUN_KEY`` (largest ``run_at``, ties: the later line), in file order.
+
+    ``load(latest=True)`` is ``newest`` of the whole file; a reader that first drops some rows (say the ``-dirty``
+    ones) applies it afterwards, so that a dropped newer row does not hide an older row that is kept.
+    """
+    return (
+        df.reset_index(names="_line")
+        .sort_values(["run_at", "_line"], kind="stable")
+        .drop_duplicates(RUN_KEY, keep="last")
+        .sort_values("_line")
+        .drop(columns="_line")
+        .reset_index(drop=True)
+    )

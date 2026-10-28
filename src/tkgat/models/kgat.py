@@ -14,11 +14,13 @@ Model only: the samplers, the alternating training loop and early stopping belon
 * Losses and regularisers follow the TF1 code (Q9): ``l2`` on the propagated vectors of the CF batch, ``l2_kg`` on the
   projected vectors of the KG batch (2.1, 2.4).
 
-Time interface (Q12, decisions 0005 and 0009 pending): the graph's ``edge_ts`` (parallel to the edges) and a
-per-relation ``delta_r`` are kept, and ``gamma`` is a config field. Delta-t is **not implemented**: ``gamma`` must be 0,
-which is plain KGAT, and any other value raises ``NotImplementedError``. When it is written, the term
-``- gamma * delta_r[r] * dt`` is subtracted from ``pi`` before the softmax, and ``gamma = 0`` must keep giving the
-tensors of plain KGAT.
+T-KGAT (decisions 0005 and 0009, Stage 1): the term ``gamma * delta_r[r] * dt_norm`` is subtracted from ``pi`` before
+the per-head softmax. ``delta_r`` is 1 for Interact and Interact^-1 and 0 for every KG relation; ``dt_norm = max(0,
+t_ref - ts) / dt_den`` from the graph's ``edge_ts`` (train timestamps only, NaN on KG edges), with ``t_ref`` and
+``dt_den`` taken from the CKG (``tkgat.kg.ckg``): the same two numbers for the t1 and the t2 graph. ``gamma`` and
+``delta_r`` are hyper-parameters: no gradient reaches them. With ``gamma = 0`` the term is skipped, so the tensors are
+exactly those of plain KGAT; ``dt_den = 0`` (every train timestamp equal) gives ``dt_norm = 0``. The NaN of a KG edge
+is masked, never multiplied: it cannot reach ``pi`` whatever ``delta_r`` is.
 
 Graph tensors, ``A`` and ``edge_ts`` are non-persistent buffers: ``state_dict`` holds the parameters only, so one set
 of weights can be loaded and then scored on the graph of another cut-off (``set_graph``, which recomputes ``A``).
@@ -35,7 +37,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from tkgat.device import resolve_device
-from tkgat.kg.ckg import CKG
+from tkgat.kg.ckg import CKG, INTERACT, inverse_relation_id
 
 LEAKY_SLOPE = 0.2  # tf.nn.leaky_relu default; torch's default is 0.01
 
@@ -48,11 +50,13 @@ class KGATConfig:
     mess_dropout: float = 0.1  # drop probability of the messages (not a keep probability)
     l2: float = 1e-5  # regulariser of the CF loss
     l2_kg: float = 1e-5  # regulariser of the KG loss
-    gamma: float = 0.0  # time decay of the attention; 0 = plain KGAT (Delta-t not implemented yet)
+    gamma: float = 0.0  # time decay of the attention, >= 0; 0 = plain KGAT
     attention_chunk: int = 65536  # edges per block when the attention scores are computed
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "layers", tuple(int(x) for x in self.layers))
+        if not self.gamma >= 0.0:  # also rejects NaN
+            raise ValueError(f"gamma must be >= 0 (older edges are never favoured), got {self.gamma}")
 
 
 class BiInteraction(nn.Module):
@@ -78,8 +82,6 @@ class KGAT(nn.Module):
     def __init__(self, ckg: CKG, cfg: KGATConfig | None = None, device: str | torch.device = "auto"):
         super().__init__()
         cfg = cfg or KGATConfig()
-        if cfg.gamma != 0.0:
-            raise NotImplementedError("Delta-t attention is not implemented (decision 0009 pending): use gamma = 0")
         self.cfg = cfg
         self.n_users, self.n_items, self.n_entities = ckg.n_users, ckg.n_items, ckg.n_entities
         self.n_relations, self.n_rel = ckg.n_relations, ckg.n_rel
@@ -99,7 +101,10 @@ class KGAT(nn.Module):
             BiInteraction(sizes[i], sizes[i + 1], cfg.mess_dropout) for i in range(len(cfg.layers))
         )
         self.to(resolve_device(device))
-        self.register_buffer("delta_r", torch.zeros(self.n_rel, device=self.user_embed.device), persistent=False)
+        delta_r = torch.zeros(self.n_rel, device=self.user_embed.device)
+        delta_r[INTERACT] = 1.0  # the edges that carry a timestamp: Interact and its inverse (decision 0009, item 1)
+        delta_r[inverse_relation_id(INTERACT, self.n_relations)] = 1.0
+        self.register_buffer("delta_r", delta_r, persistent=False)
         self.set_graph(ckg)
 
     # ------------------------------------------------------------------ graph and attention
@@ -127,7 +132,10 @@ class KGAT(nn.Module):
         self._buffer("head", head)
         self._buffer("relation", relation)
         self._buffer("tail", torch.tensor(ckg.tail, device=dev))
-        self._buffer("edge_ts", torch.tensor(ckg.edge_ts, device=dev))  # reserved for Delta-t, not read yet
+        self._buffer("edge_ts", torch.tensor(ckg.edge_ts, device=dev))  # float64: a float32 rounds to ~1 minute
+        self._t_ref, self._dt_den = ckg.t_ref, ckg.dt_den
+        if self.cfg.gamma > 0.0:
+            self._check_time_inputs()
         _, counts = torch.unique_consecutive(head, return_counts=True)
         self._buffer("_segments", counts)  # edges per non-empty head; the edges of a head are contiguous
         self._buffer("_degree", torch.bincount(head, minlength=self.n_nodes))
@@ -158,7 +166,25 @@ class KGAT(nn.Module):
         """Recompute ``A`` from the current embeddings (no gradient: the CF steps treat it as a constant)."""
         self._set_attention(self._segment_softmax(self._edge_scores()))
 
-    def _edge_scores(self) -> torch.Tensor:
+    def _check_time_inputs(self) -> None:
+        """Delta-t needs the anchor, and a timestamp on every edge it applies to (a NaN there would poison ``pi``)."""
+        if self._t_ref is None or self._dt_den is None:
+            raise ValueError("gamma > 0 needs t_ref and dt_den in the graph (build it with tkgat.kg.ckg.build_ckg)")
+        timed = self.delta_r[self.relation] > 0
+        if bool(torch.isnan(self.edge_ts[timed]).any()):
+            raise ValueError("an edge with delta_r > 0 has no timestamp (NaN edge_ts)")
+
+    def _time_penalty(self, dtype: torch.dtype) -> torch.Tensor:
+        """``gamma * delta_r[relation] * dt_norm`` per edge: 0 on KG edges, whose NaN ``edge_ts`` is masked out."""
+        if self.edge_ts.dtype != torch.float64:
+            raise TypeError("edge_ts must stay float64 (do not cast the model with .float() when gamma > 0)")
+        weight = self.delta_r[self.relation].to(torch.float64)
+        dt = (self._t_ref - self.edge_ts).clamp_min(0.0)  # dt = max(0, t_ref - ts); NaN on KG edges
+        dt_norm = dt / self._dt_den if self._dt_den > 0 else torch.zeros_like(dt)
+        timed = torch.where(weight > 0, dt_norm, torch.zeros_like(dt_norm))  # NaN only in the unselected branch
+        return (self.cfg.gamma * weight * timed).to(dtype)
+
+    def _raw_scores(self) -> torch.Tensor:
         """``pi(h, r, t)`` of every edge, relation by relation and in chunks (never one ``W_r`` per edge)."""
         emb = self.node_embed()
         pi = torch.empty(len(self.head), dtype=emb.dtype, device=emb.device)
@@ -169,8 +195,14 @@ class KGAT(nn.Module):
                 e_h = emb[self.head[idx]] @ w
                 e_t = emb[self.tail[idx]] @ w
                 pi[idx] = (e_t * torch.tanh(e_h + e_r)).sum(-1)
-        # T-KGAT (decisions 0005, 0009): pi -= gamma * delta_r[relation] * dt goes here, before the softmax
         return pi
+
+    def _edge_scores(self) -> torch.Tensor:
+        """``pi_time = pi - gamma * delta_r * dt_norm``, the softmax logits (``pi`` itself at gamma = 0)."""
+        pi = self._raw_scores()
+        if self.cfg.gamma == 0.0:
+            return pi  # plain KGAT: the very same tensor, nothing is subtracted
+        return pi - self._time_penalty(pi.dtype)
 
     def _segment_softmax(self, pi: torch.Tensor) -> torch.Tensor:
         """Softmax of ``pi`` inside each head's contiguous block of edges (shifted by the block maximum)."""

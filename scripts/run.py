@@ -28,6 +28,14 @@ the checkpoints of finished (grid point, seed) pairs and does not score a seed o
 already holds its test row. The file name selects the KG variant in the registry, so a variant is never mixed with
 another; ``static`` is a leakage reference, flagged ``time_consistent: false`` in the summary.
 
+T-KGAT Stage 1 (decision 0009; ``configs/model/tkgat.yaml``, ``name: tkgat``): the same run with Delta-t in the
+attention. ``from_kgat: kgat`` takes (lr, l2, l2_kg, mess_dropout) from the point that ``kgat`` selected on validation
+for this same ``run_name`` (``kgat_summary.json`` or ``kgat_val_summary.json``), and the grid only holds ``gamma``;
+``fixed``, ``kg`` and ``seeds`` must equal those of ``kgat.yaml``. Its registry rows hold gamma, ``t_ref`` and
+``dt_den`` in ``config``. ``configs/model/tkgat_perm.yaml`` (``control: permute_train_ts``, ``from_tkgat: tkgat``)
+re-runs the point that ``tkgat`` selected with ``train_ts`` permuted over all train edges, one permutation per seed
+(``perm_seed`` in ``config``).
+
 ``run_name`` (optional in the data config, default ``name``) identifies the split in the registry
 ``dataset`` column and in ``results/runs/``; ``name`` only selects the loader. Two configs of the same
 dataset (e.g. 5-core and 10-core) must have different run names so their results never overwrite each other.
@@ -47,7 +55,7 @@ import yaml
 from tkgat import registry
 from tkgat.data.encode import encode
 from tkgat.eval.metrics import evaluate
-from tkgat.kg.ckg import build_ckg, load_kg, no_kg, used_tails
+from tkgat.kg.ckg import build_ckg, load_kg, no_kg, permute_train_ts, used_tails
 from tkgat.models.baselines import MostPop
 from tkgat.models.kgat import KGAT
 from tkgat.pipeline.build import load_config, load_saved
@@ -83,6 +91,69 @@ def kgat_test_graph(dcfg: dict, data, meta: dict, kg_t1, ckg_t1):
     return build_ckg(data, kg_t2, known_tails=used_tails(kg_t1))
 
 
+TKGAT_CONTROLS = ("permute_train_ts",)
+
+
+def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = False) -> tuple[list[dict], dict]:
+    """The grid points of a T-KGAT config (decision 0009, items 4 and 5) and the point they extend.
+
+    A gamma grid (``from_kgat``): every point is the (lr, l2, l2_kg, mess_dropout) that KGAT selected on validation
+    plus a ``gamma > 0`` (``gamma = 0`` is the KGAT run itself). A control (``control: permute_train_ts``,
+    ``from_tkgat``): the single point that T-KGAT selected, gamma included. Either way ``fixed``, ``kg`` and ``seeds``
+    must equal those of the config it extends, and the selected point is read from this run_name's summary: nothing
+    is copied by hand. An official run (not ``val_only``) needs ``<tag>_summary.json``, the run that was scored on
+    test; ``<tag>_val_summary.json`` (a ``--val-only`` run) is only accepted by a ``--val-only`` run.
+    """
+    control = mcfg.get("control")
+    if control not in (None, *TKGAT_CONTROLS):
+        raise ValueError(f"control must be one of {TKGAT_CONTROLS}, got {control!r}")
+    source, expected = ("from_tkgat", "tkgat") if control else ("from_kgat", "kgat")
+    other = "from_kgat" if control else "from_tkgat"
+    if not mcfg.get(source) or mcfg.get(other):
+        raise ValueError(f"a {'control' if control else 'T-KGAT'} config needs {source} (and not {other})")
+    tag = mcfg[source]
+    ref = yaml.safe_load(Path(model_path).with_name(f"{tag}.yaml").read_text(encoding="utf-8"))
+    if ref["name"] != expected or (not control and ref.get("control")) or (control and not ref.get("from_kgat")):
+        raise ValueError(f"{source}: {tag}.yaml is not a {expected} config")
+    for key in ("fixed", "kg", "seeds"):
+        if mcfg.get(key) != ref.get(key):
+            raise ValueError(f"{key} differs from {tag}.yaml: the registry key holds the file name and the point only")
+    names = [f"{tag}_summary.json"] + ([f"{tag}_val_summary.json"] if val_only else [])
+    for name in names:
+        if (out_dir / name).exists():
+            base = json.loads((out_dir / name).read_text(encoding="utf-8"))["selected"]
+            break
+    else:
+        found = (out_dir / f"{tag}_val_summary.json").exists()
+        raise FileNotFoundError(
+            f"no {' or '.join(names)} in {out_dir}: run {tag} first"
+            + (
+                f". Only {tag}_val_summary.json exists, and an official run (without --val-only) does not use it: "
+                f"it needs the finished {tag} run that was scored on test"
+                if found and not val_only
+                else ""
+            )
+        )
+    if control:
+        if mcfg.get("grid"):
+            raise ValueError("a control run takes its point from the T-KGAT run: remove grid")
+        return [base], base
+    if "gamma" in base:
+        raise ValueError(f"the point selected by {tag} already has a gamma: it is not a KGAT point")
+    for point in mcfg["grid"]:
+        if set(point) != {"gamma"} or not point["gamma"] > 0:
+            raise ValueError(f"a T-KGAT grid point holds gamma > 0 only, got {point}")
+    return [{**base, **point} for point in mcfg["grid"]], base
+
+
+def registry_config(point: dict, ckg, seed: int, perm: bool) -> dict:
+    """``config`` of a T-KGAT registry row: the grid point (gamma inside) and what Delta-t was computed with."""
+    cfg = {**point, "t_ref": round(ckg.t_ref), "dt_den": round(ckg.dt_den)}
+    if perm:
+        cfg["perm_seed"] = seed  # the permutation is drawn from numpy.random.default_rng(seed)
+    return cfg
+
+
 def kgat_checkpoint_path(out_dir: Path, tag: str, g: int, seed: int) -> Path:
     return out_dir / "states" / f"{tag}_{g}_seed{seed}.pt"
 
@@ -98,6 +169,8 @@ def kgat_fingerprint(base: dict, mcfg: dict, g: int, seed: int, ckg) -> str:
         "seed": seed,
         "n_edges": ckg.n_edges,
     }
+    if mcfg["name"] == "tkgat":  # a KGAT fingerprint stays what it was, so older KGAT checkpoints can be resumed
+        fields.update(t_ref=ckg.t_ref, dt_den=ckg.dt_den, control=mcfg.get("control"))
     return json.dumps(fields, sort_keys=True)
 
 
@@ -162,8 +235,8 @@ def main(argv: list[str] | None = None) -> None:
 
     dcfg = load_config(args.data)
     mcfg = yaml.safe_load(Path(args.model).read_text(encoding="utf-8"))
-    if args.resume and mcfg["name"] != "kgat":
-        ap.error("--resume is only implemented for kgat")
+    if args.resume and mcfg["name"] not in ("kgat", "tkgat"):
+        ap.error("--resume is only implemented for kgat and tkgat")
     split, meta = load_saved(dcfg, with_test=not args.val_only)
     data = encode(split)
     split_sha = registry.sha256_file(Path(dcfg["processed_dir"]) / "meta.json")
@@ -174,13 +247,46 @@ def main(argv: list[str] | None = None) -> None:
     out_dir = Path(args.runs_dir) / run_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    kgat = mcfg["name"] == "kgat"
+    kgat = mcfg["name"] in ("kgat", "tkgat")
+    tkgat = mcfg["name"] == "tkgat"
+    base_point = None
+    if tkgat:
+        grid, base_point = tkgat_points(mcfg, Path(args.model), out_dir, args.val_only)
+        mcfg = {**mcfg, "grid": grid}
+    perm = tkgat and mcfg.get("control") == "permute_train_ts"
     kg_t1 = ckg_t1 = None
     if kgat:
         kg_t1, ckg_t1 = kgat_train_graph(mcfg, dcfg, data, meta, args.val_only)
         print(
             f"[kgat] KG {kg_t1.variant} at t1: {len(kg_t1)} triples, CKG {ckg_t1.n_nodes} nodes {ckg_t1.n_edges} edges"
         )
+    train_graphs, test_graphs = {None: (data, ckg_t1)}, {}
+
+    def graph_for(seed: int):
+        """(data, train graph) of a seed: the same for every seed, except that the control shuffles ``train_ts``."""
+        key = seed if perm else None
+        if key not in train_graphs:
+            shuffled = permute_train_ts(data, seed)
+            train_graphs[key] = (shuffled, build_ckg(shuffled, kg_t1))
+        return train_graphs[key]
+
+    def test_graph_for(seed: int):
+        key = seed if perm else None
+        if key not in test_graphs:
+            test_graphs[key] = kgat_test_graph(dcfg, graph_for(seed)[0], meta, kg_t1, graph_for(seed)[1])
+        return test_graphs[key]
+
+    def tkgat_info() -> dict:
+        ckg = graph_for(seeds[0])[1]
+        return {
+            "tkgat": {
+                "from": mcfg.get("from_tkgat") or mcfg.get("from_kgat"),
+                "base_point": base_point,
+                "t_ref": round(ckg.t_ref),
+                "dt_den": round(ckg.dt_den),
+                "control": mcfg.get("control"),
+            }
+        }
 
     fitted: dict[int, dict[int, object]] = {}  # kgat: the best state_dict (CPU tensors), not the model
     devices: dict[int, dict[int, str]] = {}
@@ -215,8 +321,9 @@ def main(argv: list[str] | None = None) -> None:
                 )
             elif kgat:
                 model_cfg, fit_cfg = split_params({**point, **mcfg.get("fixed", {})}, args.device)
+                data_s, ckg_s = graph_for(seed)
                 ck_path = kgat_checkpoint_path(out_dir, tag, g, seed)
-                fingerprint = kgat_fingerprint(base, mcfg, g, seed, ckg_t1)
+                fingerprint = kgat_fingerprint(base, mcfg, g, seed, ckg_s)
                 n_val = len(data.val)
                 if args.resume and ck_path.exists():
                     ck = load_checkpoint(ck_path, fingerprint)
@@ -229,7 +336,7 @@ def main(argv: list[str] | None = None) -> None:
                     )
                     resumed = True
                 else:
-                    fit = fit_kgat(data, ckg_t1, model_cfg, fit_cfg, seed)
+                    fit = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed)
                     save_checkpoint(ck_path, fingerprint, fit)
                     registry.save_history(
                         out_dir / f"{tag}_{g}_seed{seed}_history.csv",
@@ -243,6 +350,16 @@ def main(argv: list[str] | None = None) -> None:
                             "device": fit.device,
                             "best_epoch": fit.best_epoch,
                             "peak_memory_mb": round(fit.peak_memory / 2**20),
+                            **(
+                                {
+                                    "gamma": point["gamma"],
+                                    "t_ref": round(ckg_s.t_ref),
+                                    "dt_den": round(ckg_s.dt_den),
+                                    "perm_seed": seed if perm else None,
+                                }
+                                if tkgat
+                                else {}
+                            ),
                             "git_commit": registry.git_commit(),
                         },
                     )
@@ -255,12 +372,13 @@ def main(argv: list[str] | None = None) -> None:
             fitted[g][seed] = model
             devices[g][seed] = dev
             scores.append(val["recall@20"])
-            if not (resumed and logged_row(args.registry, base, point, seed, "val") is not None):
+            reg_point = registry_config(point, graph_for(seed)[1], seed, perm) if tkgat else point
+            if not (resumed and logged_row(args.registry, base, reg_point, seed, "val") is not None):
                 registry.append(
                     args.registry,
                     {
                         **base,
-                        "config": point,
+                        "config": reg_point,
                         "seed": seed,
                         "phase": "val",
                         "best_epoch": epoch,
@@ -290,18 +408,21 @@ def main(argv: list[str] | None = None) -> None:
                     "val_means_recall@20": val_means,
                     "val_stds_recall@20": val_stds,
                     **({"kg": {"t1": ckg_t1.summary()}} if kgat else {}),
+                    **(tkgat_info() if tkgat else {}),
                 },
                 indent=2,
             )
         )
         return
 
-    ckg_t2 = kgat_test_graph(dcfg, data, meta, kg_t1, ckg_t1) if kgat else None
+    ckg_t2 = test_graph_for(seeds[0]) if kgat else None  # for the summary: the KG counts do not depend on the seed
     best_model_cfg = split_params({**mcfg["grid"][best], **mcfg.get("fixed", {})}, args.device)[0] if kgat else None
     summary = []
     for seed, model in fitted[best].items():
         dev = devices[best][seed]
-        done = logged_row(args.registry, base, mcfg["grid"][best], seed, "test") if args.resume else None
+        point = mcfg["grid"][best]
+        reg_point = registry_config(point, graph_for(seed)[1], seed, perm) if tkgat else point
+        done = logged_row(args.registry, base, reg_point, seed, "test") if args.resume else None
         if done is not None:  # scored before: test is not touched again
             test = {k: float(done[k]) for k in METRICS}
             summary.append(test)
@@ -309,9 +430,9 @@ def main(argv: list[str] | None = None) -> None:
             continue
         if kgat:
             # frozen weights of the best epoch on the test graph; set_graph resets A, so recompute it
-            net = KGAT(ckg_t1, best_model_cfg, device=args.device)
+            net = KGAT(graph_for(seed)[1], best_model_cfg, device=args.device)
             net.load_state_dict(model)
-            net.set_graph(ckg_t2)
+            net.set_graph(test_graph_for(seed))
             net.update_attention()
             net.eval()
             score = net.scorer()
@@ -323,7 +444,7 @@ def main(argv: list[str] | None = None) -> None:
             args.registry,
             {
                 **base,
-                "config": mcfg["grid"][best],
+                "config": reg_point,
                 "seed": seed,
                 "phase": "test",
                 **test,
@@ -342,6 +463,7 @@ def main(argv: list[str] | None = None) -> None:
                 "val_means_recall@20": val_means,
                 "test_mean_std": agg,
                 **({"kg": {"t1": ckg_t1.summary(), "t2": ckg_t2.summary()}} if kgat else {}),
+                **(tkgat_info() if tkgat else {}),
             },
             indent=2,
         )
