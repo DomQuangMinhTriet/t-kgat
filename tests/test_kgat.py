@@ -239,11 +239,6 @@ def test_the_model_copies_the_graph_arrays():
     assert np.array_equal(ckg.head, head) and np.array_equal(ckg.edge_ts, ts, equal_nan=True)
 
 
-def test_delta_t_is_not_implemented_yet():
-    with pytest.raises(NotImplementedError, match="0009"):
-        KGAT(make_ckg(), KGATConfig(**CFG, gamma=0.1), device="cpu")
-
-
 def test_the_graph_can_be_replaced_and_attention_follows_it():
     ckg1, ckg2 = make_ckg(), make_ckg(TRIPLES[:4])
     m = make_model(ckg1)

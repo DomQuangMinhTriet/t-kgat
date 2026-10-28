@@ -1,0 +1,15 @@
+# T-KGAT Stage 1 (decision 0009): KGAT with Delta-t in the attention, pi_time = pi - gamma * delta_r * dt_norm before the
+# per-head softmax. Only gamma is searched: (lr, l2, l2_kg, mess_dropout) are not written here, they are the point that
+# `kgat` selected on validation for the same data config (results/runs/<run_name>/kgat_summary.json), read by
+# scripts/run.py. `fixed`, `kg` and `seeds` must equal those of kgat.yaml (a test checks it). gamma = 0 is the KGAT run.
+# The point with the best mean validation Recall@20 over the 5 seeds is selected; only it is scored on test.
+name: tkgat
+seeds: [2019, 2020, 2021, 2022, 2023]
+kg: {variant: default}
+from_kgat: kgat
+grid:
+  - {gamma: 1}
+  - {gamma: 3}
+  - {gamma: 10}
+fixed: {dim: 64, kge_dim: 64, layers: [64, 32, 16], batch_size: 1024, batch_size_kg: 2048,
+        max_epochs: 300, eval_every: 5, patience: 10, select_metric: recall@20}

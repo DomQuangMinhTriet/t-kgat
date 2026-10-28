@@ -16,10 +16,15 @@ Relation ids (``R`` KG relations, ``n_rel = 2R + 2``): ``0`` Interact (user -> i
 ``R + 1`` Interact^-1 (item -> user), ``r + R + 2`` inverse of KG relation ``r``. ``R`` comes from ``relations.csv``,
 never from the triples seen, so it does not shrink when a relation has no triple at a cut-off.
 Edges are sorted by (head, tail, relation) so that the edges of a head are contiguous.
+
+Time (T-KGAT, decision 0009): ``edge_ts`` is built from ``EncodedSplit.train_ts`` only, and so are the two constants of
+the Delta-t term, ``t_ref`` (the largest train timestamp, the same for the t1 and the t2 graph) and ``dt_den``
+(``t_ref`` minus the smallest train timestamp). Val and test timestamps are never read.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -209,6 +214,8 @@ class CKG:
     n_interactions: int
     n_triples: int  # KG triples used (after the Q2 rule)
     n_triples_dropped_unseen_tail: int
+    t_ref: float | None = None  # largest train timestamp: the anchor of Delta-t, from train_ts only
+    dt_den: float | None = None  # t_ref - smallest train timestamp: the normaliser of Delta-t, from train_ts only
 
     @property
     def n_rel(self) -> int:
@@ -248,6 +255,8 @@ class CKG:
             "n_triples_dropped_unseen_tail": self.n_triples_dropped_unseen_tail,
             "n_edges": self.n_edges,
             "n_isolated_entities": self.n_isolated_entities(),
+            "t_ref": self.t_ref,
+            "dt_den": self.dt_den,
         }
 
 
@@ -289,6 +298,8 @@ def build_ckg(enc: EncodedSplit, kg: KGTriples, known_tails: np.ndarray | None =
     ).astype(np.int64)
     ts = np.asarray(enc.train_ts, dtype=np.float64)
     edge_ts = np.concatenate([ts, ts, np.full(2 * len(tri), np.nan)])
+    t_ref = float(ts.max()) if len(ts) else None
+    dt_den = float(ts.max() - ts.min()) if len(ts) else None
 
     order = np.lexsort((relation, tail, head))  # last key is the primary one: head, then tail, then relation
     return CKG(
@@ -307,4 +318,18 @@ def build_ckg(enc: EncodedSplit, kg: KGTriples, known_tails: np.ndarray | None =
         n_interactions=len(pairs),
         n_triples=len(tri),
         n_triples_dropped_unseen_tail=dropped,
+        t_ref=t_ref,
+        dt_den=dt_den,
     )
+
+
+def permute_train_ts(enc: EncodedSplit, seed: int) -> EncodedSplit:
+    """A copy of ``enc`` whose ``train_ts`` is shuffled across **all** train edges (decision 0009, item 5, the control).
+
+    One permutation per ``seed``, drawn from ``numpy.random.default_rng(seed)``. Only ``train_ts`` changes: the pairs,
+    the validation and test parts and the masks are the same objects, and the multiset of timestamps is untouched, so
+    ``t_ref`` and ``dt_den`` do not change either. ``enc`` itself is not modified.
+    """
+    permuted = copy.copy(enc)
+    permuted.train_ts = np.asarray(enc.train_ts)[np.random.default_rng(seed).permutation(len(enc.train_ts))]
+    return permuted
