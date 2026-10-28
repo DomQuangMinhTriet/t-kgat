@@ -62,10 +62,11 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
 | `src/tkgat/data/subsample.py` | `subsample_users`: all ratings of a seeded random sample of users (`user_fraction`, `user_seed` in a data config) |
 | `src/tkgat/export/kgat.py` | writes the official split and one KG variant in the KGAT file format (`scripts/08_export_kgat.py`, output in `data/export/`, ignored by git) |
 | `experiments/legacy_kgat_data/` | the 10k-interaction scripts of PR #20, reference only: not the project protocol, never report numbers from them |
-| `configs/model/` | `mostpop.yaml`, `mostpop_recent.yaml`, `bprmf.yaml` |
+| `src/tkgat/kg/ckg.py`, `models/kgat.py`, `train/kgat.py` | the collaborative KG (`edge_ts`, `t_ref`, `dt_den`, `permute_train_ts`), KGAT / T-KGAT (Delta-t in the attention, decision 0009 Stage 1) and its trainer |
+| `configs/model/` | `mostpop.yaml`, `mostpop_recent.yaml`, `bprmf.yaml`, `kgat.yaml` (+ `kgat_nokg`, `kgat_drop_undated`, `kgat_static`), `tkgat.yaml` (gamma in {1, 3, 10}; (lr, l2) are read from the point the `kgat` run selected on val), `tkgat_perm.yaml` (the control: `train_ts` permuted over all train edges, one permutation per seed) |
 | `docs/` | `plan.md`, `decisions/`, `data-dictionary.md`, `meetings/`, `study/` (guides), `theory/` (team notes) |
 
-Planned (not written yet): `src/tkgat/models/kgat.py` (+ T-KGAT),
+Planned (not written yet): T-KGAT Stage 2 (Delta-t on KG triples, decision 0009),
 `notebooks/02_entity_linking.ipynb`,
 `00_present_2026-10-31.ipynb`, `docs/data-report.md`.
 
@@ -128,8 +129,12 @@ ruff check .; pytest                # both must pass before every commit (CI run
   per-sample Python loops or `.cpu()` calls inside the training loop; sample negatives with a
   `torch.Generator` on the device (see `NegativeSampler`). Score functions may return torch tensors;
   `evaluate` masks and takes top-K on their device.
-- Call `seed_all(seed)` at the start of each run. Same seed + same device = same numbers; CPU and GPU
-  streams differ, which is why the registry has a `device` column.
+- Call `seed_all(seed)` at the start of each run. Same seed + same device = same numbers **for BPR-MF only**.
+  KGAT and T-KGAT are not bit-reproducible on the GPU: `torch.sparse.mm` (cuSPARSE) is not deterministic even with
+  `use_deterministic_algorithms`, and the 1e-7 difference of epoch 1 is amplified by training (measured in
+  `logs\determinism_report.md` of the `t-kgat-kgat` working copy, not in this repo: two runs of one seed differed by
+  0.02-0.03 in val Recall@20 on ml-1m-u10, which has 41 val users). Treat it as seed noise and say so in reports.
+  CPU and GPU streams differ too, which is why the registry has a `device` column.
 - The laptop GPU has 4 GB: keep full-graph tensors for KGAT in float32 and use sparse adjacency
   (`torch.sparse`) for propagation; check `torch.cuda.max_memory_allocated()` on ML-1M before long runs.
 - Tests must pass on CPU (CI has no GPU); GPU-only checks use `pytest.mark.skipif(not torch.cuda.is_available())`.

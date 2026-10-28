@@ -27,7 +27,7 @@ Triết duyệt ngày 2026-10-27. Không có quyết định nào ở đây đ�
 | Q9 | Regulariser theo TF1 (`l2` và `l2_kg` tách). | Không so sánh được với `l2` của BPR-MF. |
 | Q10 | `batch_size` 1024, patience 10 lần đánh giá. | Ablation số lớp để sau 30/10. |
 | Q11 | Xong: PR #20 đã merge, `ml1m_u10.yaml` có trên `main`. | |
-| Q12 | Giữ giao diện: `edge_ts` song song với cạnh, `delta_r` theo quan hệ, mốc Δt = timestamp train lớn nhất cho cả val và test, `gamma = 0` trùng KGAT. | Chưa cài Δt. |
+| Q12 | Giữ giao diện: `edge_ts` song song với cạnh, `delta_r` theo quan hệ, mốc Δt = timestamp train lớn nhất cho cả val và test, `gamma = 0` trùng KGAT. | Giai đoạn 1 đã cài theo quyết định 0009 (Δt trên cạnh `Interact`/`Interact⁻¹`); Giai đoạn 2 (Δt trên triple KG) chưa. |
 | Q13 | Giữ nguyên "KG 1-hop", ghi trong báo cáo. | |
 | Q14 | `kg/ckg.py` (Triết), `models/kgat.py` và `train/kgat.py` (Phôn); Phôn duyệt từng PR. | |
 
@@ -94,7 +94,7 @@ Tổng `n_rel = 2R + 2 = 38`. Công thức id trùng TF1 (`0`, `r+1`, `n_rel+1`,
 - Hai cạnh cùng `(h, t)` khác quan hệ (ví dụ một người vừa là đạo diễn vừa là biên kịch) **giữ là hai cạnh**, mỗi cạnh có
   điểm attention riêng; khi nhân A với embedding thì giá trị cộng lại (đúng công thức 3 của paper: tổng theo triple).
 - Cạnh `Interact` / `Interact⁻¹` mang thêm `edge_ts` (timestamp train của cặp); cạnh KG có `edge_ts = NaN`. Mảng này chỉ
-  để dành cho T-KGAT (mục 6); KGAT thuần không đọc.
+  T-KGAT đọc (quyết định 0009, `γ > 0`); KGAT thuần (`γ = 0`) không đọc.
 
 ### 1.5 KG nào cho pha nào
 | Pha | Đồ thị | Ai dựng |
@@ -327,7 +327,7 @@ Lệnh dự kiến (sau B2): `python scripts/run.py --data configs/data/ml100k.y
 `test_propagate`: khớp bản dense 2 lớp · `test_transr`: loss đúng với tính tay, tập tham số của `opt_cf`/`opt_kg` đúng · `test_kg_negatives`: không bao giờ là cạnh thật, không bao giờ là nút cô lập ·
 `test_test_blind`: thay `data.test` bằng rác và không đưa `kg_t2` → lịch sử val và `state_dict` y hệt · `test_t2_rule`: bỏ đúng các triple có tail chưa dùng ở t1 ·
 `test_determinism`: cùng seed hai lần → bằng nhau.
-Hai test khoá giao diện cho T-KGAT (chưa viết, đến PR có Δt):
+Hai test khoá giao diện cho T-KGAT (đã viết trong `tests/test_tkgat.py`):
 `test_gamma_zero_is_kgat`: với `γ = 0`, mô hình thời gian và KGAT thuần (cùng seed, cùng đồ thị) cho **cùng tensor** `A` và `e*` (so từng phần tử, không chỉ so Recall) ·
 `test_zero_dt_is_kgat`: đặt Δt = 0 trên mọi cạnh (với `γ > 0`) thì mô hình thời gian vẫn trùng KGAT.
 
@@ -343,7 +343,7 @@ Hai test khoá giao diện cho T-KGAT (chưa viết, đến PR có Δt):
 | L4 | Negative BPR lấy từ val/test | dùng nguyên `NegativeSampler` (chỉ positive train của chính user) | test sẵn có của sampler + dùng lại |
 | L5 | Negative KG chọn entity "tương lai" (tail chỉ có ở fact bị loại ở t1) làm tail giả → embedding bị đẩy về một phía rồi xuất hiện ở KG t2 | tail giả chỉ lấy từ nút có ≥ 1 cạnh trong CKG hiện hành; entity cô lập không bao giờ nhận gradient | `test_kg_negatives` |
 | L6 | Entity chỉ có ở KG t2 mang embedding ngẫu nhiên vào điểm test | bỏ triple có tail chưa dùng ở t1 (Q2), ghi số lượng | `test_t2_rule` |
-| L7 | Δt: dùng timestamp val/test, hoặc chuẩn hoá bằng thống kê toàn bộ dữ liệu | `edge_ts` chỉ lấy từ `train_ts`; mốc tham chiếu = timestamp train lớn nhất (như MostPop recent, decision 0007), **cùng một mốc** cho val và test (cạnh test cũng là cạnh train); hệ số chuẩn hoá tính chỉ trên `train_ts`; đối chứng hoán vị chỉ xáo `train_ts` giữa cạnh train | test T-KGAT (sau) |
+| L7 | Δt: dùng timestamp val/test, hoặc chuẩn hoá bằng thống kê toàn bộ dữ liệu | `edge_ts` chỉ lấy từ `train_ts`; mốc tham chiếu = timestamp train lớn nhất (như MostPop recent, decision 0007), **cùng một mốc** cho val và test (cạnh test cũng là cạnh train); hệ số chuẩn hoá tính chỉ trên `train_ts`; đối chứng hoán vị chỉ xáo `train_ts` giữa cạnh train | `tests/test_tkgat.py` (`test_tkgat_never_reads_test`, `edge_ts` chỉ từ `train_ts`) |
 | L8 | Chọn epoch/tham số bằng test (như `Main.py` gốc) | dừng sớm theo `data.val`; điểm lưới chọn theo trung bình val 5 seed; test chỉ trong `run.py` sau khi chọn; `history` không có cột test | `test_test_blind`, đọc `train/kgat.py` |
 | L9 | Khởi tạo/pretrain dùng dữ liệu ngoài train | không pretrain ở v1 (Q8); nếu sau này dùng thì chỉ BPR-MF huấn luyện trên train, cùng seed | — |
 | L10 | Mô hình hoặc A được chọn theo một đồ thị rồi đánh giá trên đồ thị khác mà không tính lại A | `set_graph` luôn tính lại A từ tham số hiện tại; khi nạp best state cũng tính lại | `test_attention`, `test_determinism` |
@@ -372,7 +372,7 @@ Cảnh báo ngoài danh sách: KG t2 gần như bằng KG t1 ở ML-1M (+0 tripl
 - **Q9. Regulariser:** theo TF1 (trên vector đã lan truyền; `l2`, `l2_kg` tách). Không so sánh được với `l2` của BPR-MF, ghi chú trong báo cáo.
 - **Q10. Lưới và dừng sớm:** 4 điểm như bản nháp; `batch_size` 1024 (mặc định TF1; ML-100K chỉ có 43 bước/epoch nên 2048 là quá thô), `patience` 10 lần đánh giá vì val ồn. Bạn muốn thêm bước `layers` {1, 2, 3} (bảng 3 của paper) làm ablation sau không?
 - **Q11. Dev và phụ thuộc:** phát triển trên ML-100K và ML-1M-u10. Config `ml1m_u10.yaml` chỉ có ở `feat/22-subset-and-kgat-export` (0008 còn "proposed"). Đề xuất: **chỉ tạo `feat/kgat-model` sau khi PR của `feat/22` đã merge** (hoặc rebase lên đó), nếu không Phôn không chạy lại được ML-1M-u10. Số chạy dev đi vào registry nháp.
-- **Q12. Giao diện cho T-KGAT (chỉ chốt giao diện, chưa làm thời gian):** mảng `edge_ts` song song với cạnh, `δ_r` theo quan hệ (chỉ `Interact`/`Interact⁻¹` khác 0), mốc tham chiếu = timestamp train lớn nhất cho cả val/test, `γ = 0` bằng đúng KGAT. Biến thể thời gian trên triple KG cần ngày hiệu lực từng fact, mà `kg_t*.tsv` hiện chỉ lưu `h, r, t` (ngày nằm ở `dropped.csv` và `temporal.annotate`); sẽ phải mở rộng đầu ra script 06 ở giai đoạn đó.
+- **Q12. Giao diện cho T-KGAT (giao diện đã chốt ở PR trước; Δt đã cài ở Giai đoạn 1, quyết định 0009):** mảng `edge_ts` song song với cạnh, `δ_r` theo quan hệ (chỉ `Interact`/`Interact⁻¹` khác 0), mốc tham chiếu = timestamp train lớn nhất cho cả val/test, `γ = 0` bằng đúng KGAT. Biến thể thời gian trên triple KG cần ngày hiệu lực từng fact, mà `kg_t*.tsv` hiện chỉ lưu `h, r, t` (ngày nằm ở `dropped.csv` và `temporal.annotate`); sẽ phải mở rộng đầu ra script 06 ở giai đoạn đó. **Trạng thái:** Giai đoạn 1 (trừ `γ·δ_r·Δt_norm` khỏi `π` trước softmax theo head, `γ ∈ {1, 3, 10}`, đối chứng hoán vị toàn cục `train_ts`) đã cài trong `models/kgat.py`, `kg/ckg.py` (`t_ref`, `dt_den`, `permute_train_ts`) và `scripts/run.py` (`configs/model/tkgat.yaml`, `tkgat_perm.yaml`); test ở `tests/test_tkgat.py`. Giai đoạn 2 (Δt trên triple KG, cần ngày hiệu lực của từng fact) **chưa làm**.
 - **Q13. "KG 2-hop" của decision 0005:** KG hiện có 1-hop (head luôn là item), nên "2-hop" không có trong dữ liệu; hai lớp lan truyền đã nối item → thuộc tính → item. Đề xuất giữ nguyên, ghi rõ trong báo cáo thay vì mở rộng KG.
 - **Q14. Bố cục mã và phân công:** `kg/ckg.py` (đọc KG + dựng CKG; thư mục của Triết), `models/kgat.py` và `train/kgat.py` (thư mục của Phôn). Mỗi PR do người kia duyệt (CONTRIBUTING).
 
