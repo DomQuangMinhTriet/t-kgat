@@ -1,0 +1,13 @@
+# DECLARED, NOT RUN YET (design Q3). LEAKAGE REFERENCE: the static KG keeps facts that are only true after the cut-off
+# (decision 0006 E), so its results are NOT time-consistent and must never be reported as a result of the method.
+# The run summary carries `time_consistent: false`. Same grid and fixed settings as kgat.yaml.
+name: kgat
+seeds: [2019, 2020, 2021, 2022, 2023]
+kg: {variant: static}
+grid:
+  - {lr: 0.001,  l2: 0.00001, l2_kg: 0.00001, mess_dropout: 0.1}
+  - {lr: 0.001,  l2: 0.0001,  l2_kg: 0.00001, mess_dropout: 0.1}
+  - {lr: 0.0001, l2: 0.00001, l2_kg: 0.00001, mess_dropout: 0.1}
+  - {lr: 0.0001, l2: 0.0001,  l2_kg: 0.00001, mess_dropout: 0.1}
+fixed: {dim: 64, kge_dim: 64, layers: [64, 32, 16], batch_size: 1024, batch_size_kg: 2048,
+        max_epochs: 300, eval_every: 5, patience: 10, select_metric: recall@20}

@@ -103,3 +103,10 @@ def test_load_keeps_runs_of_different_splits(tmp_path):
     pd.DataFrame([a, b], columns=registry.FIELDS).to_csv(path, index=False)
     latest = registry.load(path)
     assert sorted(latest["split_sha256"]) == ["aaa5core", "bbb10core"]
+
+
+def test_load_keeps_a_hash_that_looks_like_a_number_as_text(tmp_path):
+    """A hash such as 347285991e48 is a valid float literal: read as one it would be 3.47e+56 and never match."""
+    path = tmp_path / "registry.csv"
+    registry.append(path, _row("2026-10-23T10:00:00Z", 2019, recall=0.18) | {"split_sha256": "347285991e48"})
+    assert registry.load(path)["split_sha256"].tolist() == ["347285991e48"]

@@ -122,7 +122,8 @@ def load(path: str | Path = "results/registry.csv", latest: bool = True) -> pd.D
     counts. "Newest" is the largest ``run_at`` (ties: the later line), not the line order, because a union
     merge of two branches may interleave their rows.
     """
-    df = pd.read_csv(path, dtype={"git_commit": str, "config": str, "device": str})
+    # identifiers stay strings: a hash such as "347285991e48" would otherwise be read as the float 3.47e+56
+    df = pd.read_csv(path, dtype={"git_commit": str, "config": str, "device": str, "dataset": str, "split_sha256": str})
     if latest:
         df = (
             df.reset_index(names="_line")

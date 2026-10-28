@@ -1,0 +1,12 @@
+# DECLARED, NOT RUN YET (design Q3): KGAT on the KG without undated facts. Same grid and fixed settings as kgat.yaml.
+# Run it only after kgat is settled and the team agrees.
+name: kgat
+seeds: [2019, 2020, 2021, 2022, 2023]
+kg: {variant: drop_undated}
+grid:
+  - {lr: 0.001,  l2: 0.00001, l2_kg: 0.00001, mess_dropout: 0.1}
+  - {lr: 0.001,  l2: 0.0001,  l2_kg: 0.00001, mess_dropout: 0.1}
+  - {lr: 0.0001, l2: 0.00001, l2_kg: 0.00001, mess_dropout: 0.1}
+  - {lr: 0.0001, l2: 0.0001,  l2_kg: 0.00001, mess_dropout: 0.1}
+fixed: {dim: 64, kge_dim: 64, layers: [64, 32, 16], batch_size: 1024, batch_size_kg: 2048,
+        max_epochs: 300, eval_every: 5, patience: 10, select_metric: recall@20}
