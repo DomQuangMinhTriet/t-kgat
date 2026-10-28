@@ -392,9 +392,31 @@ def test_t_kgat_needs_a_finished_kgat_run(tsetup):
         run_tag(tsetup, "tkgat", "--val-only")
 
 
-def test_the_val_summary_of_kgat_is_enough(tsetup):
+def test_a_val_only_run_may_use_the_val_summary_of_kgat(tsetup):
     (tsetup.runs / "kgat_summary.json").rename(tsetup.runs / "kgat_val_summary.json")
     run_tag(tsetup, "tkgat", "--val-only")
+
+
+def test_an_official_run_refuses_the_val_summary_of_kgat(tsetup):
+    (tsetup.runs / "kgat_summary.json").rename(tsetup.runs / "kgat_val_summary.json")
+    with pytest.raises(FileNotFoundError, match="official run"):
+        run_tag(tsetup, "tkgat")
+    assert not (tsetup.tmp / "registry.csv").exists()  # it stopped before training anything
+
+
+def test_an_official_run_without_any_kgat_summary_says_to_run_kgat(tsetup):
+    (tsetup.runs / "kgat_summary.json").unlink()
+    with pytest.raises(FileNotFoundError, match="run kgat first") as err:
+        run_tag(tsetup, "tkgat")
+    assert "official run" not in str(err.value)  # nothing to say about a val summary that does not exist
+
+
+def test_an_official_control_refuses_the_val_summary_of_tkgat(tsetup):
+    run_tag(tsetup, "tkgat", "--val-only")  # leaves tkgat_val_summary.json only
+    assert not (tsetup.runs / "tkgat_summary.json").exists()
+    with pytest.raises(FileNotFoundError, match="official run"):
+        run_tag(tsetup, "tkgat_perm")
+    run_tag(tsetup, "tkgat_perm", "--val-only")  # the val-only control may use it
 
 
 @pytest.mark.parametrize(

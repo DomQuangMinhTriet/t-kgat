@@ -94,14 +94,15 @@ def kgat_test_graph(dcfg: dict, data, meta: dict, kg_t1, ckg_t1):
 TKGAT_CONTROLS = ("permute_train_ts",)
 
 
-def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path) -> tuple[list[dict], dict]:
+def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = False) -> tuple[list[dict], dict]:
     """The grid points of a T-KGAT config (decision 0009, items 4 and 5) and the point they extend.
 
     A gamma grid (``from_kgat``): every point is the (lr, l2, l2_kg, mess_dropout) that KGAT selected on validation
     plus a ``gamma > 0`` (``gamma = 0`` is the KGAT run itself). A control (``control: permute_train_ts``,
     ``from_tkgat``): the single point that T-KGAT selected, gamma included. Either way ``fixed``, ``kg`` and ``seeds``
     must equal those of the config it extends, and the selected point is read from this run_name's summary: nothing
-    is copied by hand.
+    is copied by hand. An official run (not ``val_only``) needs ``<tag>_summary.json``, the run that was scored on
+    test; ``<tag>_val_summary.json`` (a ``--val-only`` run) is only accepted by a ``--val-only`` run.
     """
     control = mcfg.get("control")
     if control not in (None, *TKGAT_CONTROLS):
@@ -117,12 +118,22 @@ def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path) -> tuple[list[dict
     for key in ("fixed", "kg", "seeds"):
         if mcfg.get(key) != ref.get(key):
             raise ValueError(f"{key} differs from {tag}.yaml: the registry key holds the file name and the point only")
-    for name in (f"{tag}_summary.json", f"{tag}_val_summary.json"):
+    names = [f"{tag}_summary.json"] + ([f"{tag}_val_summary.json"] if val_only else [])
+    for name in names:
         if (out_dir / name).exists():
             base = json.loads((out_dir / name).read_text(encoding="utf-8"))["selected"]
             break
     else:
-        raise FileNotFoundError(f"no {tag}_summary.json or {tag}_val_summary.json in {out_dir}: run {tag} first")
+        found = (out_dir / f"{tag}_val_summary.json").exists()
+        raise FileNotFoundError(
+            f"no {' or '.join(names)} in {out_dir}: run {tag} first"
+            + (
+                f". Only {tag}_val_summary.json exists, and an official run (without --val-only) does not use it: "
+                f"it needs the finished {tag} run that was scored on test"
+                if found and not val_only
+                else ""
+            )
+        )
     if control:
         if mcfg.get("grid"):
             raise ValueError("a control run takes its point from the T-KGAT run: remove grid")
@@ -240,7 +251,7 @@ def main(argv: list[str] | None = None) -> None:
     tkgat = mcfg["name"] == "tkgat"
     base_point = None
     if tkgat:
-        grid, base_point = tkgat_points(mcfg, Path(args.model), out_dir)
+        grid, base_point = tkgat_points(mcfg, Path(args.model), out_dir, args.val_only)
         mcfg = {**mcfg, "grid": grid}
     perm = tkgat and mcfg.get("control") == "permute_train_ts"
     kg_t1 = ckg_t1 = None
