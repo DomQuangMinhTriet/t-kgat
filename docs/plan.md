@@ -1,3 +1,6 @@
+> **Lưu ý:** đây là bản gốc ngày 17/10/2026, giữ lại để đối chiếu.
+> Kế hoạch đang dùng: https://claude.ai/artifact/5KUTXrnhN5ZA8gR2XJNjXs
+
 # Kế hoạch làm lại KLTN T-KGAT
 
 Oct 17, 2026 · @Dom
