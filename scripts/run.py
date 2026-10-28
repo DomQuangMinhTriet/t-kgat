@@ -19,6 +19,15 @@ With ``--val-only`` only steps 1, 2 and 5 happen: the test files are not opened,
 per-user test file is saved; the selection goes to ``<tag>_val_summary.json``. Use it for sensitivity checks, where
 choosing a split by its test scores would be leakage.
 
+KGAT (``configs/model/kgat*.yaml``, ``name: kgat``, ``kg: {variant: default | drop_undated | static | none}``): train
+and validation use the CKG of the train interactions and the KG at t1. Each (grid point, seed) keeps only its best
+``state_dict`` (CPU tensors, also written to ``<runs-dir>/<run_name>/states/``, which git ignores). Test is scored once
+per seed of the selected point on a *new* graph, ``set_graph`` with the same train edges and the KG at t2 (triples
+whose tail is unseen at t1 dropped), attention recomputed from the frozen weights (design Q1, Q2). ``--resume`` reuses
+the checkpoints of finished (grid point, seed) pairs and does not score a seed on test again when the registry
+already holds its test row. The file name selects the KG variant in the registry, so a variant is never mixed with
+another; ``static`` is a leakage reference, flagged ``time_consistent: false`` in the summary.
+
 ``run_name`` (optional in the data config, default ``name``) identifies the split in the registry
 ``dataset`` column and in ``results/runs/``; ``name`` only selects the loader. Two configs of the same
 dataset (e.g. 5-core and 10-core) must have different run names so their results never overwrite each other.
@@ -32,21 +41,102 @@ import json
 from pathlib import Path
 
 import numpy as np
+import torch
 import yaml
 
 from tkgat import registry
 from tkgat.data.encode import encode
 from tkgat.eval.metrics import evaluate
+from tkgat.kg.ckg import build_ckg, load_kg, no_kg, used_tails
 from tkgat.models.baselines import MostPop
+from tkgat.models.kgat import KGAT
 from tkgat.pipeline.build import load_config, load_saved
 from tkgat.train.bpr import BPRConfig, fit_bpr
+from tkgat.train.kgat import fit_kgat, split_params
 
 METRICS = ("recall@10", "recall@20", "ndcg@10", "ndcg@20")
+KG_VARIANTS = ("default", "drop_undated", "static", "none")
 
 
 def seed_std(values: list[float]) -> float | None:
     """Sample standard deviation over seeds (ddof=1); undefined (None) for a single seed."""
     return float(np.std(values, ddof=1)) if len(values) > 1 else None
+
+
+def kgat_train_graph(mcfg: dict, dcfg: dict, data, meta: dict, val_only: bool):
+    """The KG (``none`` = no KG) and the CKG used for training and validation: train edges + the KG at t1."""
+    variant = mcfg.get("kg", {}).get("variant", "default")
+    if variant not in KG_VARIANTS:
+        raise ValueError(f"kg.variant must be one of {KG_VARIANTS}, got {variant!r}")
+    if variant == "none":
+        kg = no_kg(data)
+    else:
+        kg = load_kg(Path(dcfg["processed_dir"]), variant, "t1", data, meta, with_test=not val_only)
+    return kg, build_ckg(data, kg)
+
+
+def kgat_test_graph(dcfg: dict, data, meta: dict, kg_t1, ckg_t1):
+    """The graph of the test score: the same train edges, the KG at t2 without the triples of tails unseen at t1."""
+    if kg_t1.variant == "none":
+        return ckg_t1
+    kg_t2 = load_kg(Path(dcfg["processed_dir"]), kg_t1.variant, "t2", data, meta)
+    return build_ckg(data, kg_t2, known_tails=used_tails(kg_t1))
+
+
+def kgat_checkpoint_path(out_dir: Path, tag: str, g: int, seed: int) -> Path:
+    return out_dir / "states" / f"{tag}_{g}_seed{seed}.pt"
+
+
+def kgat_fingerprint(base: dict, mcfg: dict, g: int, seed: int, ckg) -> str:
+    """Everything a checkpoint depends on besides the code: a checkpoint is reused only if this is identical."""
+    fields = {
+        **base,
+        "grid_index": g,
+        "point": mcfg["grid"][g],
+        "fixed": mcfg.get("fixed", {}),
+        "kg": mcfg.get("kg", {}),
+        "seed": seed,
+        "n_edges": ckg.n_edges,
+    }
+    return json.dumps(fields, sort_keys=True)
+
+
+def save_checkpoint(path: Path, fingerprint: str, fit) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    payload = {
+        "fingerprint": fingerprint,
+        "state": fit.best_state,
+        "best_epoch": fit.best_epoch,
+        "best_val": fit.best_val,
+        "seconds": fit.seconds,
+        "device": fit.device,
+    }
+    torch.save(payload, tmp)
+    tmp.replace(path)  # a crash never leaves a half-written checkpoint under the final name
+
+
+def load_checkpoint(path: Path, fingerprint: str) -> dict:
+    ck = torch.load(path, map_location="cpu", weights_only=True)
+    if ck["fingerprint"] != fingerprint:
+        raise ValueError(f"{path} was written for another configuration; delete it or run without --resume")
+    return ck
+
+
+def logged_row(path: str, base: dict, config: dict, seed: int, phase: str) -> dict | None:
+    """The newest registry row of this run key, or None (used by ``--resume`` so that nothing is logged twice)."""
+    if not Path(path).exists():
+        return None
+    df = registry.load(path)
+    key = (
+        (df["dataset"] == base["dataset"])
+        & (df["split_sha256"] == base["split_sha256"])
+        & (df["model"] == base["model"])
+        & (df["config"] == json.dumps(config, sort_keys=True))
+        & (df["seed"] == seed)
+        & (df["phase"] == phase)
+    )
+    return df[key].iloc[-1].to_dict() if key.any() else None
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -62,10 +152,18 @@ def main(argv: list[str] | None = None) -> None:
         help="train and select on validation only: the test files are not read, no test row is written to the "
         "registry and no per-user test file is saved (sensitivity checks: never look at test to choose a split)",
     )
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="kgat only: reuse the checkpoints of finished (grid point, seed) pairs and do not score on test a seed "
+        "that already has its test row in the registry",
+    )
     args = ap.parse_args(argv)
 
     dcfg = load_config(args.data)
     mcfg = yaml.safe_load(Path(args.model).read_text(encoding="utf-8"))
+    if args.resume and mcfg["name"] != "kgat":
+        ap.error("--resume is only implemented for kgat")
     split, meta = load_saved(dcfg, with_test=not args.val_only)
     data = encode(split)
     split_sha = registry.sha256_file(Path(dcfg["processed_dir"]) / "meta.json")
@@ -76,13 +174,22 @@ def main(argv: list[str] | None = None) -> None:
     out_dir = Path(args.runs_dir) / run_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    fitted: dict[int, dict[int, object]] = {}
+    kgat = mcfg["name"] == "kgat"
+    kg_t1 = ckg_t1 = None
+    if kgat:
+        kg_t1, ckg_t1 = kgat_train_graph(mcfg, dcfg, data, meta, args.val_only)
+        print(
+            f"[kgat] KG {kg_t1.variant} at t1: {len(kg_t1)} triples, CKG {ckg_t1.n_nodes} nodes {ckg_t1.n_edges} edges"
+        )
+
+    fitted: dict[int, dict[int, object]] = {}  # kgat: the best state_dict (CPU tensors), not the model
     devices: dict[int, dict[int, str]] = {}
     val_means, val_stds = [], []
     for g, point in enumerate(mcfg["grid"]):
         fitted[g], devices[g] = {}, {}
         scores = []
         for seed in seeds:
+            resumed = False
             if mcfg["name"] == "mostpop":
                 model, epoch, secs, dev = MostPop(data, **point), 0, 0.0, "cpu"
                 res = evaluate(model.score, data.val, data.mask_val)
@@ -106,25 +213,63 @@ def main(argv: list[str] | None = None) -> None:
                         "git_commit": registry.git_commit(),
                     },
                 )
+            elif kgat:
+                model_cfg, fit_cfg = split_params({**point, **mcfg.get("fixed", {})}, args.device)
+                ck_path = kgat_checkpoint_path(out_dir, tag, g, seed)
+                fingerprint = kgat_fingerprint(base, mcfg, g, seed, ckg_t1)
+                n_val = len(data.val)
+                if args.resume and ck_path.exists():
+                    ck = load_checkpoint(ck_path, fingerprint)
+                    model, epoch, secs, val, dev = (
+                        ck["state"],
+                        ck["best_epoch"],
+                        ck["seconds"],
+                        ck["best_val"],
+                        ck["device"],
+                    )
+                    resumed = True
+                else:
+                    fit = fit_kgat(data, ckg_t1, model_cfg, fit_cfg, seed)
+                    save_checkpoint(ck_path, fingerprint, fit)
+                    registry.save_history(
+                        out_dir / f"{tag}_{g}_seed{seed}_history.csv",
+                        fit.history,
+                        {
+                            **base,
+                            "grid_index": g,
+                            "seed": seed,
+                            "config": {"model": dataclasses.asdict(model_cfg), "fit": dataclasses.asdict(fit_cfg)},
+                            "kg_variant": kg_t1.variant,
+                            "device": fit.device,
+                            "best_epoch": fit.best_epoch,
+                            "peak_memory_mb": round(fit.peak_memory / 2**20),
+                            "git_commit": registry.git_commit(),
+                        },
+                    )
+                    model, epoch, secs, val, dev = fit.best_state, fit.best_epoch, fit.seconds, fit.best_val, fit.device
+                    del fit  # the GPU model goes; only the CPU state of the best epoch is kept
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
             else:
                 raise ValueError(mcfg["name"])
             fitted[g][seed] = model
             devices[g][seed] = dev
             scores.append(val["recall@20"])
-            registry.append(
-                args.registry,
-                {
-                    **base,
-                    "config": point,
-                    "seed": seed,
-                    "phase": "val",
-                    "best_epoch": epoch,
-                    **val,
-                    "n_users": n_val,
-                    "seconds": round(secs, 1),
-                    "device": dev,
-                },
-            )
+            if not (resumed and logged_row(args.registry, base, point, seed, "val") is not None):
+                registry.append(
+                    args.registry,
+                    {
+                        **base,
+                        "config": point,
+                        "seed": seed,
+                        "phase": "val",
+                        "best_epoch": epoch,
+                        **val,
+                        "n_users": n_val,
+                        "seconds": round(secs, 1),
+                        "device": dev,
+                    },
+                )
             print(
                 f"[val] grid={point} seed={seed} device={dev} epoch={epoch} {secs:.0f}s "
                 + " ".join(f"{k}={val[k]:.4f}" for k in METRICS)
@@ -144,16 +289,35 @@ def main(argv: list[str] | None = None) -> None:
                     "selected": mcfg["grid"][best],
                     "val_means_recall@20": val_means,
                     "val_stds_recall@20": val_stds,
+                    **({"kg": {"t1": ckg_t1.summary()}} if kgat else {}),
                 },
                 indent=2,
             )
         )
         return
 
+    ckg_t2 = kgat_test_graph(dcfg, data, meta, kg_t1, ckg_t1) if kgat else None
+    best_model_cfg = split_params({**mcfg["grid"][best], **mcfg.get("fixed", {})}, args.device)[0] if kgat else None
     summary = []
     for seed, model in fitted[best].items():
         dev = devices[best][seed]
-        res = evaluate(model.score, data.test, data.mask_test)
+        done = logged_row(args.registry, base, mcfg["grid"][best], seed, "test") if args.resume else None
+        if done is not None:  # scored before: test is not touched again
+            test = {k: float(done[k]) for k in METRICS}
+            summary.append(test)
+            print(f"[test] seed={seed} (already in the registry) " + " ".join(f"{k}={test[k]:.4f}" for k in METRICS))
+            continue
+        if kgat:
+            # frozen weights of the best epoch on the test graph; set_graph resets A, so recompute it
+            net = KGAT(ckg_t1, best_model_cfg, device=args.device)
+            net.load_state_dict(model)
+            net.set_graph(ckg_t2)
+            net.update_attention()
+            net.eval()
+            score = net.scorer()
+        else:
+            score = model.score
+        res = evaluate(score, data.test, data.mask_test)
         test = {k: res[k] for k in METRICS}
         registry.append(
             args.registry,
@@ -172,7 +336,15 @@ def main(argv: list[str] | None = None) -> None:
         print(f"[test] seed={seed} " + " ".join(f"{k}={test[k]:.4f}" for k in METRICS))
     agg = {k: (float(np.mean([s[k] for s in summary])), seed_std([s[k] for s in summary])) for k in METRICS}
     (out_dir / f"{tag}_summary.json").write_text(
-        json.dumps({"selected": mcfg["grid"][best], "val_means_recall@20": val_means, "test_mean_std": agg}, indent=2)
+        json.dumps(
+            {
+                "selected": mcfg["grid"][best],
+                "val_means_recall@20": val_means,
+                "test_mean_std": agg,
+                **({"kg": {"t1": ckg_t1.summary(), "t2": ckg_t2.summary()}} if kgat else {}),
+            },
+            indent=2,
+        )
     )
     print(
         "test mean ± sample std over seeds: "
