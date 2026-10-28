@@ -20,6 +20,7 @@ p = 1, so the adjusted p-values of the others do not change with what has been r
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,13 @@ DEFAULT_DATASETS = ("ml-100k", "ml-1m-u10")  # where decision 0009 runs the offi
 FREEZE_TAG = "v0.2-kgat"
 NOT_RUN = "chưa chạy"
 EXTRA_KEYS = ("t_ref", "dt_den", "perm_seed")  # recorded by T-KGAT rows, not part of the grid point shown
+BASELINES = ("mostpop", "mostpop_recent", "bprmf")
+CURVE_MODELS = ("kgat", "tkgat", "tkgat_perm")  # the models of the validation learning-curve figure
+SUBSET_NOTE = {  # random user subsets of ML-1M (decision 0008): never to be read as the full dataset
+    "ml-1m-u10": "ml-1m-u10 là 10% user của ML-1M, không phải ML-1M đầy đủ",
+    "ml-1m-u05": "ml-1m-u05 là 5% user của ML-1M, không phải ML-1M đầy đủ",
+}
+CURVE_COLOR = {"kgat": "#2b6cb0", "tkgat": "#eb6834", "tkgat_perm": "#1baf7a"}
 
 
 def freeze_tag_exists(tag: str = FREEZE_TAG) -> bool:
@@ -187,17 +195,107 @@ def compare(chosen: dict[str, ModelRows], runs_dir: Path, dataset: str) -> list[
     return out
 
 
+# --- validation learning curves -------------------------------------------------------------------------------------
+
+
+def selected_histories(run_dir: Path, tag: str, point: str, split: str) -> list[pd.DataFrame]:
+    """Validation Recall@20 per epoch of the runs of ``tag`` that trained the grid point ``point`` on ``split``.
+
+    Reads ``<run_dir>/<tag>_<grid>_seed<seed>_history.csv`` (the name is matched exactly: ``kgat`` never reads the files
+    of ``kgat_nokg``). A history of another point, of another split or of a ``-dirty`` commit is left out, as the
+    registry rows of such runs are. A model without history files gives an empty list, not an error.
+    """
+    want = {k: v for k, v in json.loads(point).items() if k not in EXTRA_KEYS}
+    frames = []
+    if not run_dir.is_dir():
+        return frames
+    pattern = re.compile(rf"{re.escape(tag)}_\d+_seed\d+_history\.csv")
+    for path in sorted(p for p in run_dir.iterdir() if pattern.fullmatch(p.name)):
+        h = pd.read_csv(path, dtype={"git_commit": str, "split_sha256": str})
+        if h.empty or "recall@20" not in h:
+            continue
+        first = h.iloc[0]
+        if str(first.get("git_commit", "")).endswith("-dirty") or first.get("split_sha256") != split:
+            continue
+        config = json.loads(first["config"])
+        have = {**config.get("model", {}), **config.get("fit", {})}  # the model's and the trainer's settings
+        if all(have.get(k) == v for k, v in want.items()):
+            frames.append(h[["epoch", "recall@20"]].dropna().assign(seed=int(first["seed"])))
+    return frames
+
+
+def curve_table(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    """Per epoch: how many seeds reached it, the mean and the sample std (ddof=1) of their val Recall@20."""
+    g = pd.concat(frames).groupby("epoch")["recall@20"]
+    return pd.DataFrame({"n_seeds": g.count(), "mean": g.mean(), "std": g.std(ddof=1)}).reset_index()
+
+
+def history_curves(run_dir: Path, chosen: dict[str, ModelRows], split: str | None) -> dict[str, pd.DataFrame]:
+    curves = {}
+    for tag in CURVE_MODELS:
+        if tag in chosen:
+            frames = selected_histories(run_dir, tag, chosen[tag].point, split)
+            if frames:
+                curves[tag] = curve_table(frames)
+    return curves
+
+
+def draw_curves(dataset: str, curves: dict[str, pd.DataFrame], path: Path) -> bool:
+    """Val Recall@20 against the epoch, mean over seeds, one line per model; False (nothing written) without a curve.
+
+    A line is solid, with a band of one sample std, while all the seeds of that model still train; after the first
+    one stops early the mean is over fewer seeds, so it is dashed and has no band (it would read as a trend).
+    """
+    if not curves:
+        return False
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(7.2, 3.6))
+    for tag, t in curves.items():
+        color, n_all = CURVE_COLOR[tag], int(t["n_seeds"].max())
+        full, rest = t[t["n_seeds"] == n_all], t[t["n_seeds"] < n_all]
+        ax.plot(full["epoch"], full["mean"], color=color, lw=1.8, label=f"{NAME[tag]} ({n_all} seed)")
+        if n_all > 1:
+            ax.fill_between(
+                full["epoch"], full["mean"] - full["std"], full["mean"] + full["std"], color=color, alpha=0.15, lw=0
+            )
+        if len(rest):
+            tail = pd.concat([full.tail(1), rest])
+            ax.plot(tail["epoch"], tail["mean"], color=color, lw=1.2, ls="--", alpha=0.7)
+    ax.set_title(f"{dataset}: Recall@20 trên val theo epoch (sơ bộ, chưa đóng băng)", fontsize=9)
+    ax.set_xlabel("epoch")
+    ax.set_ylabel("Recall@20 (val)")
+    ax.grid(True, color="#e4e7eb", lw=0.6)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(fontsize=7, frameon=False)
+    fig.text(
+        0.01, 0.005, "nét liền: đủ các seed, dải = ± 1 std mẫu; nét đứt: còn ít seed hơn", fontsize=6, color="#52514e"
+    )
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return True
+
+
 def build(path: str | Path, runs_dir: str | Path, datasets) -> dict:
     """Everything the report prints, per dataset."""
     rows, dirty = official_test_rows(path)
     result = {"datasets": {}, "freeze_tag": freeze_tag_exists()}
     for dataset in datasets:
         chosen, split = choose(rows, dataset)
+        curves = history_curves(Path(runs_dir) / dataset, chosen, split)
         result["datasets"][dataset] = {
             "chosen": chosen,
             "split": split,
             "pairs": compare(chosen, Path(runs_dir), dataset),
             "dirty_ignored": int((dirty["dataset"] == dataset).sum()),
+            "curves": curves,
+            "no_history": [NAME[t] for t in CURVE_MODELS if t not in curves],
+            "figure": None,  # set by the caller to the figure's path, relative to the markdown file, once it is drawn
         }
     return result
 
@@ -222,28 +320,28 @@ def models_frame(result: dict) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
-def preliminary_note(freeze_tag_present: bool) -> str:
+def preliminary_note(freeze_tag_present: bool, subsets=()) -> str:
     if freeze_tag_present:
         status = (
             f"Tag `{FREEZE_TAG}` có trong repo: kiểm tra rằng các dòng KGAT và T-KGAT dưới đây thuộc commit của tag."
         )
     else:
-        status = (
-            f"Chưa có tag `{FREEZE_TAG}`: các số này chưa đóng băng, và là sơ bộ vì cô chưa duyệt quy trình "
-            "(t1/t2, quyết định 0002)."
-        )
-    return (
+        status = f"Chưa có tag `{FREEZE_TAG}`: các số này chưa đóng băng."
+    note = (
         "> **Số của KGAT, KGAT không KG, T-KGAT và T-KGAT hoán vị là kết quả sơ bộ, chưa đóng băng "
-        f"(tag `{FREEZE_TAG}`).** {status} KGAT và T-KGAT không tái lập từng bit trên GPU: coi chênh lệch giữa các "
-        "lần chạy của một seed như nhiễu seed."
+        f"(tag `{FREEZE_TAG}`), chạy trước khi cô duyệt giao thức** (t1/t2, quyết định 0002). {status} KGAT và "
+        "T-KGAT không tái lập từng bit trên GPU: coi chênh lệch giữa các lần chạy của một seed như nhiễu seed."
     )
+    for dataset in subsets:
+        note += f"\n>\n> **{SUBSET_NOTE[dataset]}.**"
+    return note
 
 
 def markdown(result: dict) -> str:
     lines = [
         "# Bảng RQ3 (tự sinh bởi `scripts/10_rq3_table.py`)",
         "",
-        preliminary_note(result["freeze_tag"]),
+        preliminary_note(result["freeze_tag"], [d for d in result["datasets"] if d in SUBSET_NOTE]),
         "",
         "Nguồn: `results/registry.csv` qua `registry.load`, chỉ dòng `phase = test` không mang nhãn `-dirty`; mỗi mô "
         "hình lấy điểm của lần chạy mới nhất trên split mới nhất. Trung bình ± độ lệch chuẩn **mẫu** (`ddof=1`) qua "
@@ -256,6 +354,17 @@ def markdown(result: dict) -> str:
         chosen = info["chosen"]
         users = {int(m.rows["n_users"].iloc[0]) for m in chosen.values()}
         lines += [f"## {dataset}" + (f" (user test: {', '.join(str(u) for u in sorted(users))})" if users else ""), ""]
+        if dataset in SUBSET_NOTE:
+            lines += [f"> {SUBSET_NOTE[dataset]}.", ""]
+        missing = [NAME[t] for t in BASELINES if t not in chosen]
+        if len(missing) == len(BASELINES):
+            lines += [
+                f"> **Baseline của {dataset} chưa chạy:** không có dòng test sạch nào của {', '.join(missing)}; "
+                "chưa có baseline để so với KGAT và T-KGAT trên bộ dữ liệu này.",
+                "",
+            ]
+        elif missing:
+            lines += [f"> Baseline chưa chạy ở {dataset}: {', '.join(missing)}.", ""]
         if not chosen:
             lines += [f"*{NOT_RUN}: không có dòng test sạch nào của các mô hình này trong registry.*", ""]
         lines += [
@@ -286,5 +395,11 @@ def markdown(result: dict) -> str:
             )
         if info["dirty_ignored"]:
             lines += ["", f"*{info['dirty_ignored']} dòng test mang nhãn `-dirty` bị bỏ qua.*"]
+        if info.get("figure"):
+            lines += ["", f"![Learning curve val của KGAT, T-KGAT và T-KGAT hoán vị trên {dataset}]({info['figure']})"]
+            if info["no_history"]:
+                lines += ["", f"*Chưa có history của: {', '.join(info['no_history'])}.*"]
+        else:
+            lines += ["", "*Chưa có file history của KGAT, T-KGAT hay T-KGAT hoán vị: chưa vẽ learning curve val.*"]
         lines.append("")
     return "\n".join(lines)

@@ -64,10 +64,34 @@ class World:
             self.add(tag, SEEDS, config)
         return self
 
-    def build(self):
+    def build(self, datasets=None):
         path = self.tmp / "registry.csv"
         pd.DataFrame(self.rows, columns=FIELDS).to_csv(path, index=False)
-        return rq3.build(path, self.runs, [DS])
+        return rq3.build(path, self.runs, datasets or [DS])
+
+    def history(self, tag, seed, values, point=POINT, g=0, commit="abc1234", sha=SHA, dataset=DS):
+        """A KGAT-style history file: val Recall@20 every 5 epochs (``values``), the settings in ``config``."""
+        epochs = range(1, 5 * len(values) + 1)
+        recall = {5 * (i + 1): v for i, v in enumerate(values)}
+        config = {
+            "model": {"l2": point["l2"], "gamma": point.get("gamma", 0.0), "dim": 4},
+            "fit": {"lr": point["lr"], "patience": 2},
+        }
+        frame = pd.DataFrame(
+            {"epoch": list(epochs), "loss_cf": 0.5, "recall@20": [recall.get(e, np.nan) for e in epochs]}
+        )
+        for name, value in {
+            "dataset": dataset,
+            "split_sha256": sha,
+            "model": tag,
+            "grid_index": g,
+            "seed": seed,
+        }.items():
+            frame[name] = value
+        frame["config"], frame["git_commit"] = json.dumps(config, sort_keys=True), commit
+        (self.runs / dataset).mkdir(parents=True, exist_ok=True)
+        frame.to_csv(self.runs / dataset / f"{tag}_{g}_seed{seed}_history.csv", index=False)
+        return np.array(values)
 
     def mean_of(self, tag, metric, seeds=SEEDS):
         return np.mean([self.arrays[(tag, s)][metric] for s in seeds], axis=0)
@@ -274,3 +298,147 @@ def test_newest_is_what_load_keeps(world):
     pd.DataFrame(world.rows, columns=FIELDS).to_csv(path, index=False)
     pd.testing.assert_frame_equal(registry.load(path), registry.newest(registry.load(path, latest=False)))
     assert len(registry.load(path)) == 5
+
+
+# --- subset note, header note, missing baselines ---------------------------------------------------------------
+
+SUBSET = "ml-1m-u10 là 10% user của ML-1M, không phải ML-1M đầy đủ"
+
+
+def test_a_subset_of_ml_1m_is_never_presented_as_the_full_dataset(world):
+    world.add("kgat", SEEDS, dataset="ml-1m-u10").add("kgat", SEEDS, dataset=DS)
+    text = rq3.markdown(world.build(["ml-1m-u10", DS]))
+    assert text.count(SUBSET) == 2  # once in the note at the top and once under the heading of the dataset
+    assert text.index(SUBSET) < text.index("## ml-1m-u10")
+    assert SUBSET not in rq3.markdown(world.build([DS]))  # a dataset that is not a subset gets no such note
+
+
+@pytest.mark.parametrize("tag_present", [False, True])
+def test_the_header_says_it_ran_before_the_advisor_approved_the_protocol(world, monkeypatch, tag_present):
+    monkeypatch.setattr(rq3, "freeze_tag_exists", lambda tag=rq3.FREEZE_TAG: tag_present)
+    text = rq3.markdown(world.full().build())
+    assert "chạy trước khi cô duyệt giao thức" in text.split("\n## ")[0]  # in the note before the first dataset
+
+
+def test_a_dataset_without_any_clean_baseline_row_says_so(world):
+    world.add("kgat", SEEDS, dataset="ml-1m-u10")  # what ml-1m-u10 looks like today: KGAT, no baseline
+    text = rq3.markdown(world.build(["ml-1m-u10"]))
+    assert "**Baseline của ml-1m-u10 chưa chạy:**" in text and "MostPop, MostPop recent, BPR-MF" in text
+    assert SUBSET in text  # both notes appear for that dataset
+
+
+def test_a_dataset_with_some_baselines_lists_the_missing_ones(world):
+    world.add("bprmf", SEEDS, {"dim": 32, **POINT}).add("kgat", SEEDS)
+    text = rq3.markdown(world.build())
+    assert "Baseline chưa chạy ở fake: MostPop, MostPop recent." in text and "**Baseline của fake" not in text
+
+
+def test_no_baseline_note_when_all_three_baselines_have_run(world):
+    text = rq3.markdown(world.full().build())
+    assert "Baseline của" not in text and "Baseline chưa chạy ở" not in text
+
+
+def test_dirty_baseline_rows_do_not_count_as_a_baseline_that_ran(world):
+    for tag in rq3.BASELINES:
+        world.add(tag, [0], {"window_days": None}, commit="abc1234-dirty")
+    world.add("kgat", SEEDS)
+    assert "**Baseline của fake chưa chạy:**" in rq3.markdown(world.build())
+
+
+# --- validation learning curves ---------------------------------------------------------------------------------------
+
+
+def curve_world(world, tags=("kgat", "tkgat", "tkgat_perm"), n_points=6):
+    expected = {}
+    for tag in tags:
+        point = POINT if tag == "kgat" else TKGAT_POINT
+        world.add(tag, SEEDS, point)
+        expected[tag] = np.array([world.history(tag, seed, world.rng.random(n_points), point) for seed in SEEDS])
+    return expected
+
+
+def test_the_curve_is_the_mean_over_seeds_per_epoch_with_the_sample_std(world):
+    expected = curve_world(world)
+    curves = info(world.build())["curves"]
+    assert set(curves) == {"kgat", "tkgat", "tkgat_perm"}
+    for tag, values in expected.items():  # values: seeds x evaluations
+        t = curves[tag]
+        assert t["epoch"].tolist() == [5, 10, 15, 20, 25, 30] and (t["n_seeds"] == 5).all()
+        assert t["mean"].to_numpy() == pytest.approx(values.mean(axis=0))
+        assert t["std"].to_numpy() == pytest.approx(values.std(axis=0, ddof=1))  # sample std over seeds
+
+
+def test_a_model_without_history_is_left_out_not_an_error(world):
+    curve_world(world, tags=("kgat",))
+    world.add("tkgat", SEEDS, TKGAT_POINT).add("tkgat_perm", SEEDS, TKGAT_POINT)  # run, but no history files
+    result = world.build()
+    assert set(info(result)["curves"]) == {"kgat"}
+    assert info(result)["no_history"] == ["T-KGAT", "T-KGAT (đối chứng hoán vị)"]
+
+
+def test_a_model_that_has_not_run_has_no_curve(world):
+    world.history("kgat", 2019, [0.1, 0.2])  # a history file, but no clean test row: the point is unknown
+    assert info(world.build())["curves"] == {}
+
+
+def test_histories_of_another_point_split_or_dirty_commit_are_ignored(world):
+    world.add("kgat", SEEDS)
+    keep = [world.history("kgat", seed, world.rng.random(4)) for seed in SEEDS[:3]]
+    world.history("kgat", 2022, [0.9] * 4, {"lr": 0.5, "l2": 0.0001}, g=1)  # another grid point
+    world.history("kgat", 2023, [0.9] * 4, g=2, sha="oldsplit00000")  # another split
+    world.history("kgat", 2023, [0.9] * 4, g=3, commit="abc1234-dirty")  # a dirty run
+    t = info(world.build())["curves"]["kgat"]
+    assert (t["n_seeds"] == 3).all() and t["mean"].to_numpy() == pytest.approx(np.mean(keep, axis=0))
+
+
+def test_kgat_never_reads_the_history_of_kgat_nokg(world):
+    world.add("kgat", SEEDS)
+    keep = [world.history("kgat", seed, world.rng.random(4)) for seed in SEEDS[:2]]
+    for seed in SEEDS:
+        world.history("kgat_nokg", seed, [0.99] * 4)  # same settings, other model: its name starts with "kgat_"
+    t = info(world.build())["curves"]["kgat"]
+    assert (t["n_seeds"] == 2).all() and t["mean"].to_numpy() == pytest.approx(np.mean(keep, axis=0))
+
+
+def test_a_seed_that_stops_early_leaves_fewer_seeds_at_the_late_epochs(world):
+    world.add("kgat", SEEDS[:2])
+    world.history("kgat", 2019, [0.1, 0.2, 0.3, 0.4])
+    world.history("kgat", 2020, [0.3, 0.4])
+    t = info(world.build())["curves"]["kgat"]
+    assert t["n_seeds"].tolist() == [2, 2, 1, 1] and np.isnan(t["std"].iloc[-1]) and t["std"].iloc[0] > 0
+
+
+def test_draw_curves_writes_a_png_or_nothing(world, tmp_path):
+    path = tmp_path / "figs" / "c.png"
+    assert rq3.draw_curves(DS, {}, path) is False and not path.exists()  # nothing to draw: no file
+    curve_world(world, tags=("kgat", "tkgat"))
+    assert rq3.draw_curves(DS, info(world.build())["curves"], path) is True
+    assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def run_script(world, out):
+    pd.DataFrame(world.rows, columns=FIELDS).to_csv(world.tmp / "registry.csv", index=False)
+    load_script().main(
+        ["--registry", str(world.tmp / "registry.csv"), "--runs-dir", str(world.runs), "--datasets", DS]
+        + ["--out-md", str(out / "t.md"), "--out-models", str(out / "m.csv"), "--out-pairs", str(out / "p.csv")]
+        + ["--figures-dir", str(out / "figures")]
+    )
+    return (out / "t.md").read_text(encoding="utf-8")
+
+
+def test_the_script_draws_the_figure_and_the_table_links_to_it(world):
+    curve_world(world, tags=("kgat", "tkgat"))
+    world.add("tkgat_perm", SEEDS, TKGAT_POINT)  # run but no history
+    out = world.tmp / "out"
+    text = run_script(world, out)
+    assert (out / f"figures/rq3_curves_{DS}.png").exists()
+    assert f"](figures/rq3_curves_{DS}.png)" in text  # the path is relative to the markdown file
+    assert "Chưa có history của: T-KGAT (đối chứng hoán vị)" in text
+
+
+def test_the_script_draws_no_figure_without_any_history(world):
+    world.full()
+    out = world.tmp / "out"
+    text = run_script(world, out)
+    assert not (out / "figures").exists() and "![" not in text
+    assert "Chưa có file history" in text and "chưa vẽ learning curve" in text
