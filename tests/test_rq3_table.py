@@ -461,3 +461,32 @@ def test_kg_models_run_before_0011_go_to_the_appendix_not_the_table(world):
 
 def test_no_appendix_without_rows_before_0011(world):
     assert "Phụ lục" not in rq3.markdown(world.full().build())
+
+
+def stage2(world):
+    kg_point = {**TKGAT_POINT, "time_on": "kg"}
+    world.add("tkgat_kg", SEEDS, kg_point).add("tkgat_kg_perm", SEEDS, kg_point)
+    return world
+
+
+def test_stage_2_is_its_own_holm_family_and_leaves_stage_1_untouched(world):
+    before = [p for p in world.full().build()["datasets"][DS]["pairs"]]
+    result = stage2(world).build()
+    pairs = result["datasets"][DS]["pairs"]
+    assert len(pairs) == 6 + 4 and all(p["status"] == "ok" for p in pairs)
+    stage1 = [p for p in pairs if p["model_a"] in ("tkgat", "kgat")]
+    assert [(p["pair"], p["p_holm"]) for p in stage1] == [(p["pair"], p["p_holm"]) for p in before]
+    recall = [p for p in pairs if p["metric"] == "recall@20" and p["model_a"] == "tkgat_kg"]
+    assert [p["pair"] for p in recall] == [label for _, _, label in rq3.PAIRS_STAGE2]
+    assert [p["p_holm"] for p in recall] == pytest.approx(holm([p["p_raw"] for p in recall])["p_adjusted"])
+
+
+def test_stage_2_rows_are_in_the_table_and_marked_preliminary(world):
+    text = rq3.markdown(stage2(world.full()).build())
+    assert "T-KGAT giai đoạn 2 (Δt trên KG)" in text and "đối chứng hoán vị ngày fact" in text
+    assert text.count("[sơ bộ]") >= 6
+
+
+def test_without_stage_2_models_there_are_no_stage_2_rows(world):
+    pairs = world.full().build()["datasets"][DS]["pairs"]
+    assert len(pairs) == 6 and not any(p["model_a"] == "tkgat_kg" for p in pairs)

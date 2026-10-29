@@ -41,13 +41,21 @@ MODELS = (
     ("kgat_nokg", "KGAT không KG"),
     ("tkgat", "T-KGAT"),
     ("tkgat_perm", "T-KGAT (đối chứng hoán vị)"),
+    ("tkgat_kg", "T-KGAT giai đoạn 2 (Δt trên KG)"),
+    ("tkgat_kg_perm", "T-KGAT giai đoạn 2 (đối chứng hoán vị ngày fact)"),
 )
 NAME = dict(MODELS)
-PRELIMINARY = ("kgat", "kgat_nokg", "tkgat", "tkgat_perm")
+PRELIMINARY = ("kgat", "kgat_nokg", "tkgat", "tkgat_perm", "tkgat_kg", "tkgat_kg_perm")
 PAIRS = (
     ("tkgat", "kgat", "T-KGAT so với KGAT"),
     ("tkgat", "tkgat_perm", "T-KGAT thật so với hoán vị"),
     ("kgat", "kgat_nokg", "KGAT so với KGAT không KG"),
+)
+# Stage 2 (decision 0009 items 7-10) is its own Holm family; it appears only for a dataset where its models have run
+OPTIONAL_MODELS = ("tkgat_kg", "tkgat_kg_perm")  # Stage 2: a row only where the model has run
+PAIRS_STAGE2 = (
+    ("tkgat_kg", "kgat", "T-KGAT giai đoạn 2 so với KGAT"),
+    ("tkgat_kg", "tkgat_kg_perm", "T-KGAT giai đoạn 2 thật so với hoán vị"),
 )
 METRICS = ("recall@20", "ndcg@20")
 METRIC_NAME = {"recall@20": "Recall@20", "ndcg@20": "NDCG@20"}
@@ -171,42 +179,53 @@ def per_user_means(
 
 
 def compare(chosen: dict[str, ModelRows], runs_dir: Path, dataset: str) -> list[dict]:
-    """Paired Wilcoxon of the three planned pairs, per metric, Holm-corrected over the family of three."""
+    """Paired Wilcoxon of the planned pairs, per metric, Holm-corrected within a family.
+
+    The family of Stage 1 has three pairs. The two pairs of Stage 2 form a second family, shown only if a Stage 2 model
+    has a clean test row, so the table and the adjusted p-values of Stage 1 do not depend on whether Stage 2 has run.
+    """
+    families = [PAIRS]
+    if any(t in chosen for t in ("tkgat_kg", "tkgat_kg_perm")):
+        families.append(PAIRS_STAGE2)
     out = []
     for metric in METRICS:
-        block = []
-        for a, b, label in PAIRS:
-            row = {"dataset": dataset, "metric": metric, "pair": label, "model_a": a, "model_b": b}
-            missing = [NAME[t] for t in (a, b) if t not in chosen]
-            if missing:
-                row["status"] = f"{NOT_RUN}: {' và '.join(missing)}"
-            else:
-                try:
-                    x, y, n_seeds = per_user_means(chosen[a], chosen[b], metric, runs_dir, dataset)
-                except (PerUserMismatch, ValueError, KeyError) as err:
-                    row["status"] = f"không so sánh được: {err}"
-                else:
-                    res = paired_wilcoxon(x, y)
-                    row.update(
-                        status="ok",
-                        n_seeds=n_seeds,
-                        n_pairs=res["n_pairs"],
-                        n_nonzero=res["n_nonzero"],
-                        mean_a=float(np.nanmean(x)),
-                        mean_b=float(np.nanmean(y)),
-                        mean_diff=res["mean_diff"],
-                        p_raw=res["p_value"],
-                        warning=warning(res["n_pairs"], res["n_nonzero"]),
-                    )
-            block.append(row)
-        padded = [
-            r["p_raw"] if r["status"] == "ok" else 1.0 for r in block
-        ]  # a missing comparison is never significant
-        for r, p_adj in zip(block, holm(padded)["p_adjusted"], strict=True):
-            if r["status"] == "ok":
-                r["p_holm"] = p_adj
-        out.extend(block)
+        for family in families:
+            out.extend(compare_family(chosen, runs_dir, dataset, metric, family))
     return out
+
+
+def compare_family(chosen: dict[str, ModelRows], runs_dir: Path, dataset: str, metric: str, family) -> list[dict]:
+    """One metric, one Holm family: the rows of its pairs with ``p_holm`` set where the pair could be computed."""
+    block = []
+    for a, b, label in family:
+        row = {"dataset": dataset, "metric": metric, "pair": label, "model_a": a, "model_b": b}
+        missing = [NAME[t] for t in (a, b) if t not in chosen]
+        if missing:
+            row["status"] = f"{NOT_RUN}: {' và '.join(missing)}"
+        else:
+            try:
+                x, y, n_seeds = per_user_means(chosen[a], chosen[b], metric, runs_dir, dataset)
+            except (PerUserMismatch, ValueError, KeyError) as err:
+                row["status"] = f"không so sánh được: {err}"
+            else:
+                res = paired_wilcoxon(x, y)
+                row.update(
+                    status="ok",
+                    n_seeds=n_seeds,
+                    n_pairs=res["n_pairs"],
+                    n_nonzero=res["n_nonzero"],
+                    mean_a=float(np.nanmean(x)),
+                    mean_b=float(np.nanmean(y)),
+                    mean_diff=res["mean_diff"],
+                    p_raw=res["p_value"],
+                    warning=warning(res["n_pairs"], res["n_nonzero"]),
+                )
+        block.append(row)
+    padded = [r["p_raw"] if r["status"] == "ok" else 1.0 for r in block]  # a missing comparison is never significant
+    for r, p_adj in zip(block, holm(padded)["p_adjusted"], strict=True):
+        if r["status"] == "ok":
+            r["p_holm"] = p_adj
+    return block
 
 
 # --- validation learning curves -------------------------------------------------------------------------------------
@@ -324,6 +343,8 @@ def models_frame(result: dict) -> pd.DataFrame:
     for dataset, info in result["datasets"].items():
         for tag, label in MODELS:
             m = info["chosen"].get(tag)
+            if m is None and tag in OPTIONAL_MODELS:
+                continue
             row = {"dataset": dataset, "model": tag, "label": label, "split_sha256": info["split"], "status": NOT_RUN}
             if m is not None:
                 row.update(
@@ -363,7 +384,8 @@ def markdown(result: dict) -> str:
         "hình lấy điểm của lần chạy mới nhất trên split mới nhất. Trung bình ± độ lệch chuẩn **mẫu** (`ddof=1`) qua "
         "các "
         "seed; một seed thì không có độ lệch chuẩn. Kiểm định: Wilcoxon cặp theo từng user (`tkgat.eval.stats`) trên "
-        "trung bình các seed chung, Holm trong cùng bộ dữ liệu và metric, họ cố định gồm ba phép so sánh. "
+        "trung bình các seed chung, Holm trong cùng bộ dữ liệu và metric, họ cố định gồm ba phép so sánh; hai phép của "
+        "giai đoạn 2 (nếu có) là một họ riêng. "
         "KG gồm fact Wikidata (bản chụp 2026) và metadata MovieLens (quyết định 0011).",
         "",
     ]
@@ -390,6 +412,8 @@ def markdown(result: dict) -> str:
         ]
         for tag, label in MODELS:
             m = chosen.get(tag)
+            if m is None and tag in OPTIONAL_MODELS:
+                continue
             star = " [sơ bộ]" if tag in PRELIMINARY else ""
             if m is None:
                 lines.append(f"| {label}{star} | — | {NOT_RUN} | {NOT_RUN} | — |")
