@@ -6,9 +6,6 @@
 Needs the saved split (script 02), the links (script 03) and data/raw/wikidata/facts.tsv (script 04).
 Output, one folder per variant (default, drop_undated, static) in <processed_dir>/kg/<variant>/:
   kg_t1.tsv, kg_t2.tsv   integer triples h, r, t (no inverse relations; the model adds them)
-  kg_t1_dates.tsv, kg_t2_dates.tsv
-                         the same triples in the same order plus ts, the Unix time (UTC midnight) from which the
-                         fact holds, empty when undated (T-KGAT Stage 2, decision 0009 item 9); kg_t*.tsv are unchanged
   entities.csv           entity, kind (item | wikidata | movielens_metadata), key, label
                          entities 0..n_items-1 are the train items in tkgat.data.encode order
   relations.csv          relation, name
@@ -41,7 +38,6 @@ from tkgat.kg.temporal import (
     item_entities,
     movielens_facts,
     relation_stats,
-    triple_dates,
 )
 from tkgat.pipeline.build import load_config, load_saved
 
@@ -128,14 +124,8 @@ def main() -> None:
 
         out = Path(cfg["processed_dir"]) / "kg" / variant
         out.mkdir(parents=True, exist_ok=True)
-        n_dated = {}
         for cut, t in tri.items():
             t.to_csv(out / f"kg_{cut}.tsv", sep="\t", index=False)
-            dates = triple_dates(kept[cut], ent, rel)
-            if not dates[["h", "r", "t"]].equals(t[["h", "r", "t"]]):
-                raise RuntimeError(f"kg_{cut}_dates.tsv would not follow the triples of kg_{cut}.tsv ({variant})")
-            dates.to_csv(out / f"kg_{cut}_dates.tsv", sep="\t", index=False)
-            n_dated[cut] = int(dates["ts"].notna().sum())
         ent.to_csv(out / "entities.csv", index=False)
         rel.to_csv(out / "relations.csv", index=False)
         cols = [
@@ -189,7 +179,6 @@ def main() -> None:
             "n_entities": len(ent),
             "n_relations": len(rel),
             "n_triples": {c: len(t) for c, t in tri.items()},
-            "n_dated_triples": n_dated,
             "n_tail_entities_used": {c: len(t) for c, t in tails.items()},
             "n_entities_only_in_t2": len(tails["t2"] - tails["t1"]),
             "n_dropped": {c: d["reason"].value_counts().to_dict() for c, d in dropped.items()},

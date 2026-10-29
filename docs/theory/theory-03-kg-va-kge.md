@@ -24,7 +24,7 @@ Loss KGE: L = Σ −ln σ(g(h, r, t') − g(h, r, t)), triple hỏng (h, r, t') 
 ## Dữ liệu của nhóm
 - Đường liên kết cho ML-100K: ML-100K → ML-1M theo tiêu đề và năm (quyết định 0003; 1.647 trong 1.663 item khớp, 16 item không khớp, các khớp không chính xác đều kiểm tay) → ML-1M dùng chung id với ML-20M nên tra KB4Rec ra Freebase → tìm phim trên Wikidata qua thuộc tính P646. KB4Rec chỉ liên kết ML-20M, không có ML-100K.
 - Wikidata (bản chụp 17/10/2026): 119.748 fact, 18 quan hệ, 3.725 phim.
-- Độ phủ liên kết ML-100K: 1.617 trong 1.663 item (97,2%) có liên kết Freebase. Đây là độ phủ, chưa phải độ chính xác. Độ chính xác được đo bằng kiểm tay mẫu 50 phim ngẫu nhiên (việc 15): 0/50 sai, khoảng Wilson 95% là [0,0%; 7,1%], nên tỷ lệ lỗi thật có thể đến khoảng 7% (`notebooks/02_entity_linking.ipynb`).
+- Độ phủ liên kết ML-100K: 1.617 trong 1.663 item (97,2%) có liên kết Freebase. Đây là độ phủ, chưa phải độ chính xác: tỷ lệ liên kết sai chưa đo vì kiểm tay một mẫu ngẫu nhiên (việc 15 của Phôn) chưa xong.
 - Lỗi đã biết của KB4Rec: *Clubland* bị nối sang *Cloudland Canyon State Park* (phát hiện khi kiểm tay).
 - Entity quá phổ biến ("English language", "United States of America") nối với gần hết phim nên ít thông tin; chỉ được lọc theo thông tin trước mốc.
 - Tri thức tương lai: *Toy Story* có `followed_by → Toy Story 2` (24/11/1999), sau toàn bộ dữ liệu ML-100K. KG tĩnh sẽ cho mô hình biết trước; vì vậy KG được dựng theo mốc (quyết định 0004).
@@ -37,7 +37,7 @@ Loss KGE: L = Σ −ln σ(g(h, r, t') − g(h, r, t)), triple hỏng (h, r, t') 
 ## 3 câu tự kiểm tra
 1. TransR sửa điểm yếu 1-N của TransE thế nào? Mỗi quan hệ có không gian riêng qua W_r; các tail xa nhau trong không gian chung vẫn gần nhau sau khi chiếu.
 2. Loss KGE nhỏ khi nào? Khi g(sai) lớn hơn nhiều g(đúng), vì g nhỏ nghĩa là đúng; hiệu bằng 0 cho loss ln 2.
-3. 97,2% item có liên kết Freebase có phải độ chính xác không? Không, đó là độ phủ. Độ chính xác đo bằng kiểm tay một mẫu 50 phim: 0/50 sai, nhưng khoảng Wilson 95% vẫn lên đến khoảng 7%.
+3. 97,2% item có liên kết Freebase có phải độ chính xác không? Không, đó là độ phủ; số liên kết sai chưa đo vì kiểm tay một mẫu (việc 15) chưa xong.
 
 ## Teach-back với Triết (điền sau buổi giảng)
 Ngày: ..; 3 câu Triết hỏi vặn: ..; trả lời thế nào: ..

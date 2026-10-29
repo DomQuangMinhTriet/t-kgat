@@ -68,7 +68,7 @@ Hệ quả: con số trong paper **không so trực tiếp** được với con 
 T-KGAT trả lời (1) bằng suy giảm theo $\Delta t$ trong attention và (2) bằng KG theo mốc.
 
 ## 8. Liên hệ với repo
-KGAT đã được viết lại bằng PyTorch trong `src/tkgat/models/kgat.py` theo đúng các phương trình ở trên (code TensorFlow 1.x của tác giả chỉ là tài liệu tham chiếu, không chạy được trên môi trường của nhóm). Những phần dùng chung với phần còn lại của repo:
+Code KGAT chưa có trong repo; tuần 2 nhóm sẽ viết `src/tkgat/models/kgat.py` theo đúng các phương trình ở trên, rồi đối chiếu với code gốc. Những phần đã có và được tái sử dụng:
 
 | Phần | Vị trí |
 |---|---|
