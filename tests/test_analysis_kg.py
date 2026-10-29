@@ -58,6 +58,20 @@ def test_relation_date_kinds_sorted_by_facts():
     assert list(t.index) == ["award_received", "genre"] and t.loc["genre", "no_date"] == 1.0
 
 
+def test_relation_date_kinds_splits_wikidata_and_movielens():
+    meta = {
+        "date_kind_per_relation": [
+            *META["date_kind_per_relation"],
+            {"relation": "movielens.genre", "facts": 9, "statement_dated": 1.0, "tail_date_only": 0.0, "no_date": 0.0},
+        ]
+    }
+    assert list(kg.relation_date_kinds(meta, "wikidata").index) == ["award_received", "genre"]
+    assert list(kg.relation_date_kinds(meta, "movielens").index) == ["movielens.genre"]
+    assert kg.relation_date_kinds(meta)["facts"].sum() == 22
+    with pytest.raises(ValueError):
+        kg.relation_date_kinds(meta, "freebase")
+
+
 def test_dropped_by_relation_wide():
     t = kg.dropped_by_relation(META)
     assert t.loc["award_received", "future_statement_t1"] == 3

@@ -22,6 +22,12 @@ t_ref - ts) / dt_den`` from the graph's ``edge_ts`` (train timestamps only, NaN 
 exactly those of plain KGAT; ``dt_den = 0`` (every train timestamp equal) gives ``dt_norm = 0``. The NaN of a KG edge
 is masked, never multiplied: it cannot reach ``pi`` whatever ``delta_r`` is.
 
+T-KGAT Stage 2 (decision 0009, items 8-10; ``time_on = "kg"``): the same term on the KG edges instead. ``delta_r`` is 1
+for every KG relation and its inverse and 0 for Interact, so the variant compares time on triples with time on
+interactions (Stage 1) rather than adding the two. ``edge_ts`` of a KG edge is the date from which its fact holds;
+an undated fact (NaN) gets ``Delta-t = 0``, and ``dt_norm`` is capped at 1 because fact dates often lie decades before
+``t_ref``, on another time scale than the interactions (item 10).
+
 Graph tensors, ``A`` and ``edge_ts`` are non-persistent buffers: ``state_dict`` holds the parameters only, so one set
 of weights can be loaded and then scored on the graph of another cut-off (``set_graph``, which recomputes ``A``).
 """
@@ -40,6 +46,7 @@ from tkgat.device import resolve_device
 from tkgat.kg.ckg import CKG, INTERACT, inverse_relation_id
 
 LEAKY_SLOPE = 0.2  # tf.nn.leaky_relu default; torch's default is 0.01
+TIME_ON = ("interact", "kg")
 
 
 @dataclass(frozen=True)
@@ -51,12 +58,15 @@ class KGATConfig:
     l2: float = 1e-5  # regulariser of the CF loss
     l2_kg: float = 1e-5  # regulariser of the KG loss
     gamma: float = 0.0  # time decay of the attention, >= 0; 0 = plain KGAT
+    time_on: str = "interact"  # edges that carry Delta-t: "interact" (Stage 1) or "kg" (Stage 2, fact dates)
     attention_chunk: int = 65536  # edges per block when the attention scores are computed
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "layers", tuple(int(x) for x in self.layers))
         if not self.gamma >= 0.0:  # also rejects NaN
             raise ValueError(f"gamma must be >= 0 (older edges are never favoured), got {self.gamma}")
+        if self.time_on not in TIME_ON:
+            raise ValueError(f"time_on must be one of {TIME_ON}, got {self.time_on!r}")
 
 
 class BiInteraction(nn.Module):
@@ -102,8 +112,13 @@ class KGAT(nn.Module):
         )
         self.to(resolve_device(device))
         delta_r = torch.zeros(self.n_rel, device=self.user_embed.device)
-        delta_r[INTERACT] = 1.0  # the edges that carry a timestamp: Interact and its inverse (decision 0009, item 1)
-        delta_r[inverse_relation_id(INTERACT, self.n_relations)] = 1.0
+        if cfg.time_on == "interact":  # Stage 1: Interact and its inverse carry Delta-t (decision 0009, item 1)
+            delta_r[INTERACT] = 1.0
+            delta_r[inverse_relation_id(INTERACT, self.n_relations)] = 1.0
+        else:  # Stage 2: every KG relation and its inverse (item 8), Interact not
+            delta_r.fill_(1.0)
+            delta_r[INTERACT] = 0.0
+            delta_r[inverse_relation_id(INTERACT, self.n_relations)] = 0.0
         self.register_buffer("delta_r", delta_r, persistent=False)
         self.set_graph(ckg)
 
@@ -170,6 +185,8 @@ class KGAT(nn.Module):
         """Delta-t needs the anchor, and a timestamp on every edge it applies to (a NaN there would poison ``pi``)."""
         if self._t_ref is None or self._dt_den is None:
             raise ValueError("gamma > 0 needs t_ref and dt_den in the graph (build it with tkgat.kg.ckg.build_ckg)")
+        if self.cfg.time_on == "kg":  # NaN on a KG edge is an undated fact: Delta-t = 0 (item 8), not an error
+            return
         timed = self.delta_r[self.relation] > 0
         if bool(torch.isnan(self.edge_ts[timed]).any()):
             raise ValueError("an edge with delta_r > 0 has no timestamp (NaN edge_ts)")
@@ -181,7 +198,11 @@ class KGAT(nn.Module):
         weight = self.delta_r[self.relation].to(torch.float64)
         dt = (self._t_ref - self.edge_ts).clamp_min(0.0)  # dt = max(0, t_ref - ts); NaN on KG edges
         dt_norm = dt / self._dt_den if self._dt_den > 0 else torch.zeros_like(dt)
-        timed = torch.where(weight > 0, dt_norm, torch.zeros_like(dt_norm))  # NaN only in the unselected branch
+        use = weight > 0
+        if self.cfg.time_on == "kg":
+            dt_norm = dt_norm.clamp_max(1.0)  # fact dates live on another time scale (item 10)
+            use = use & ~torch.isnan(self.edge_ts)  # undated fact: Delta-t = 0 (item 8)
+        timed = torch.where(use, dt_norm, torch.zeros_like(dt_norm))  # NaN only in the unselected branch
         return (self.cfg.gamma * weight * timed).to(dtype)
 
     def _raw_scores(self) -> torch.Tensor:

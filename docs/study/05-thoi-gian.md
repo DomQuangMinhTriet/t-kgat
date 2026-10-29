@@ -32,7 +32,7 @@ $$\pi_{\text{time}}(h,r,t) = \pi(h,r,t) - \gamma\,\delta_r\,\Delta t_{\text{norm
 rồi mới softmax như KGAT gốc.
 - $\delta_r = 1$ nếu $r$ là Interact, 0 nếu là quan hệ KG. Chỉ cạnh tương tác bị suy giảm.
 - $\Delta t$ = mốc dự đoán ($t_1$ cho train/val, $t_2$ cho test) trừ thời điểm tương tác, chuẩn hóa về khoảng hợp lý.
-- $\gamma \geq 0$ học được hoặc chọn theo val. **$\gamma = 0$ thì quay về đúng KGAT**, nên so sánh với KGAT là so sánh lồng nhau, rất sạch.
+- $\gamma \geq 0$ là siêu tham số chọn theo val (lưới {1, 3, 10}), không học bằng gradient (quyết định 0009). **$\gamma = 0$ thì quay về đúng KGAT**, nên so sánh với KGAT là so sánh lồng nhau, rất sạch.
 
 **Vì sao trừ trước softmax lại là "suy giảm mũ":**
 $$\text{softmax}(\pi - \gamma\Delta t)_t = \frac{e^{\pi_t}\,e^{-\gamma\Delta t_t}}{\sum_{t'} e^{\pi_{t'}}\,e^{-\gamma\Delta t_{t'}}}$$
