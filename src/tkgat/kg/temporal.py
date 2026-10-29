@@ -300,7 +300,11 @@ def assign_ids(
         labels.update(dict(zip(k["tail"], k["tail_label"], strict=True)))
         if "tail_kind" in k:
             kinds.update(
-                {tail: kind for tail, kind in zip(k["tail"], k["tail_kind"], strict=True) if pd.notna(kind) and kind}
+                {
+                    tail: kind
+                    for tail, kind in zip(k["tail"], k["tail_kind"], strict=True)
+                    if pd.notna(kind) and kind
+                }
             )
     missing = set().union(*(set(k["tail"]) for k in kgs.values())) - set(tails)
     if missing:
@@ -340,43 +344,6 @@ def assign_ids(
         )
         out[name] = tri.sort_values(["h", "r", "t"]).reset_index(drop=True)
     return ent, rel, out
-
-
-def fact_valid_from(facts: pd.DataFrame) -> pd.Series:
-    """Unix seconds (UTC midnight) of the first day on which an annotated fact holds under 0004/0006.
-
-    That is the later of its statement date and its target's existence date, both read as ``end_of_period`` (a
-    year-only date is 31 Dec). NaN for an undated fact. Used by T-KGAT Stage 2 (decision 0009, item 8) as the
-    timestamp of a KG edge.
-    """
-
-    def seconds(*days) -> float:
-        known = [d for d in days if d is not None and not pd.isna(d)]
-        if not known:
-            return np.nan
-        return dt.datetime.combine(max(known), dt.time(), tzinfo=dt.timezone.utc).timestamp()
-
-    return pd.Series(
-        [seconds(a, b) for a, b in zip(facts["statement_date"], facts["tail_date"], strict=True)],
-        index=facts.index,
-        dtype="float64",
-    )
-
-
-def triple_dates(kept: pd.DataFrame, entities: pd.DataFrame, relations: pd.DataFrame) -> pd.DataFrame:
-    """``h, r, t, ts`` of the facts of one KG in the ids of :func:`assign_ids`, in the row order of ``kg_<cut>.tsv``."""
-    rmap = dict(zip(relations["name"], relations["relation"], strict=True))
-    tails = entities[entities["kind"] != "item"]
-    tmap = dict(zip(tails["key"], tails["entity"], strict=True))
-    out = pd.DataFrame(
-        {
-            "h": kept["h"].astype(np.int64).to_numpy(),
-            "r": kept["relation"].map(rmap).astype(np.int64).to_numpy(),
-            "t": kept["tail"].map(tmap).astype(np.int64).to_numpy(),
-            "ts": fact_valid_from(kept).to_numpy(),
-        }
-    )
-    return out.sort_values(["h", "r", "t"]).reset_index(drop=True)
 
 
 def relation_stats(f: pd.DataFrame) -> pd.DataFrame:
