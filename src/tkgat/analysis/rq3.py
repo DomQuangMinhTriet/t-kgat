@@ -62,6 +62,8 @@ SUBSET_NOTE = {  # random user subsets of ML-1M (decision 0008): never to be rea
     "ml-1m-u05": "ml-1m-u05 là 5% user của ML-1M, không phải ML-1M đầy đủ",
 }
 CURVE_COLOR = {"kgat": "#2b6cb0", "tkgat": "#eb6834", "tkgat_perm": "#1baf7a"}
+KG_MODELS = ("kgat", "tkgat", "tkgat_perm")  # the models that read the KG, re-run by decision 0011
+KG_0011_SINCE = "2026-10-29T08:28:49Z"  # commit of decision 0011 (UTC): earlier KG-model rows used the Wikidata-only KG
 
 
 def freeze_tag_exists(tag: str = FREEZE_TAG) -> bool:
@@ -79,6 +81,18 @@ def official_test_rows(path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     test = test[test["phase"] == "test"]
     is_dirty = test["git_commit"].fillna("").astype(str).str.endswith("-dirty")
     return registry.newest(test[~is_dirty]), test[is_dirty]
+
+
+def superseded_rows(path: str | Path) -> pd.DataFrame:
+    """Clean test rows of the KG models run before decision 0011, i.e. on the Wikidata-only KG (newest per key).
+
+    The re-run of 0011 has the same registry keys, so ``registry.load`` hides these rows; 0011 (point 4) asks for them
+    in an appendix.
+    """
+    test = registry.load(path, latest=False)
+    test = test[(test["phase"] == "test") & test["model"].isin(KG_MODELS)]
+    clean = ~test["git_commit"].fillna("").astype(str).str.endswith("-dirty")
+    return registry.newest(test[clean & (test["run_at"].astype(str) < KG_0011_SINCE)])
 
 
 def point_key(config: str) -> str:
@@ -284,7 +298,8 @@ def draw_curves(dataset: str, curves: dict[str, pd.DataFrame], path: Path) -> bo
 def build(path: str | Path, runs_dir: str | Path, datasets) -> dict:
     """Everything the report prints, per dataset."""
     rows, dirty = official_test_rows(path)
-    result = {"datasets": {}, "freeze_tag": freeze_tag_exists()}
+    result = {"datasets": {}, "freeze_tag": freeze_tag_exists(), "superseded": {}}
+    old = superseded_rows(path)
     for dataset in datasets:
         chosen, split = choose(rows, dataset)
         curves = history_curves(Path(runs_dir) / dataset, chosen, split)
@@ -297,6 +312,7 @@ def build(path: str | Path, runs_dir: str | Path, datasets) -> dict:
             "no_history": [NAME[t] for t in CURVE_MODELS if t not in curves],
             "figure": None,  # set by the caller to the figure's path, relative to the markdown file, once it is drawn
         }
+        result["superseded"][dataset] = choose(old, dataset)[0]
     return result
 
 
@@ -347,7 +363,8 @@ def markdown(result: dict) -> str:
         "hình lấy điểm của lần chạy mới nhất trên split mới nhất. Trung bình ± độ lệch chuẩn **mẫu** (`ddof=1`) qua "
         "các "
         "seed; một seed thì không có độ lệch chuẩn. Kiểm định: Wilcoxon cặp theo từng user (`tkgat.eval.stats`) trên "
-        "trung bình các seed chung, Holm trong cùng bộ dữ liệu và metric, họ cố định gồm ba phép so sánh.",
+        "trung bình các seed chung, Holm trong cùng bộ dữ liệu và metric, họ cố định gồm ba phép so sánh. "
+        "KG gồm fact Wikidata (bản chụp 2026) và metadata MovieLens (quyết định 0011).",
         "",
     ]
     for dataset, info in result["datasets"].items():
@@ -402,4 +419,30 @@ def markdown(result: dict) -> str:
         else:
             lines += ["", "*Chưa có file history của KGAT, T-KGAT hay T-KGAT hoán vị: chưa vẽ learning curve val.*"]
         lines.append("")
+    lines += superseded_markdown(result.get("superseded", {}))
     return "\n".join(lines)
+
+
+def superseded_markdown(superseded: dict) -> list[str]:
+    """The appendix of decision 0011: the KG models on the Wikidata-only KG, kept for comparison, never official."""
+    if not any(superseded.values()):
+        return []
+    lines = [
+        "## Phụ lục: KG chỉ có Wikidata (bị thay bởi quyết định 0011)",
+        "",
+        "> Các dòng này chạy trước quyết định 0011, trên KG chưa có metadata MovieLens. Chúng **không phải kết quả "
+        "chính thức**; giữ lại để người đọc thấy cả hai, vì KG được đổi sau khi điểm test của chúng đã được xem.",
+        "",
+        "| Bộ dữ liệu | Mô hình | Cấu hình | Recall@20 (test) | NDCG@20 (test) | Số seed |",
+        "|---|---|---|---|---|---|",
+    ]
+    for dataset, chosen in superseded.items():
+        for tag in KG_MODELS:
+            m = chosen.get(tag)
+            if m is None:
+                continue
+            cells = [vn_pm(*m.mean_std(metric)) for metric in METRICS]
+            lines.append(
+                f"| {dataset} | {NAME[tag]} | {shown_point(m.point)} | {cells[0]} | {cells[1]} | {len(m.rows)} |"
+            )
+    return [*lines, ""]

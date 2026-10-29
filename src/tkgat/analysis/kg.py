@@ -15,12 +15,23 @@ DATE_COLUMNS = ["point_in_time", "start_time", "tail_publication", "tail_incepti
 PRECISION_NAMES = {"11": "day", "10": "month", "9": "year", "8": "decade"}
 AWARD_RELATIONS = ("award_received", "nominated_for")
 REASONS = ("future_statement", "future_tail", "undated")
+MOVIELENS_PREFIX = "movielens."  # relations built from the MovieLens catalogue (decision 0011)
+SOURCES = ("all", "wikidata", "movielens")
 
 
-def relation_date_kinds(meta: dict) -> pd.DataFrame:
+def relation_date_kinds(meta: dict, source: str = "all") -> pd.DataFrame:
     """Per relation: number of facts of the train items and the share with a statement date, only a target
-    date, or no date (``kg_meta["date_kind_per_relation"]``), sorted by number of facts."""
+    date, or no date (``kg_meta["date_kind_per_relation"]``), sorted by number of facts.
+
+    ``source`` keeps all relations, only the Wikidata ones, or only the MovieLens metadata ones: MovieLens facts
+    are dated at the film release, so mixing them in would change what "statement date" means for Wikidata.
+    """
+    if source not in SOURCES:
+        raise ValueError(f"source must be one of {SOURCES}, got {source!r}")
     df = pd.DataFrame(meta["date_kind_per_relation"]).set_index("relation")
+    if source != "all":
+        is_ml = df.index.str.startswith(MOVIELENS_PREFIX)
+        df = df[is_ml if source == "movielens" else ~is_ml]
     return df.sort_values("facts", ascending=False)
 
 

@@ -442,3 +442,22 @@ def test_the_script_draws_no_figure_without_any_history(world):
     text = run_script(world, out)
     assert not (out / "figures").exists() and "![" not in text
     assert "Chưa có file history" in text and "chưa vẽ learning curve" in text
+
+
+def test_kg_models_run_before_0011_go_to_the_appendix_not_the_table(world):
+    world.full()
+    world.rows = [  # the first KG-model runs happened before decision 0011, on the Wikidata-only KG
+        r | {"run_at": "2026-10-28T10:00:00Z"} if r["model"] in rq3.KG_MODELS else r for r in world.rows
+    ]
+    old_kgat = np.mean([r["recall@20"] for r in world.rows if r["model"] == "kgat"])
+    world.add("kgat", SEEDS)  # the re-run of 0011, same key, later
+    result = world.build()
+    assert set(result["superseded"][DS]) == set(rq3.KG_MODELS)
+    assert result["superseded"][DS]["kgat"].mean_std("recall@20")[0] == pytest.approx(old_kgat)
+    assert result["datasets"][DS]["chosen"]["kgat"].mean_std("recall@20")[0] != pytest.approx(old_kgat)
+    text = rq3.markdown(result)
+    assert "Phụ lục: KG chỉ có Wikidata" in text and "quyết định 0011" in text
+
+
+def test_no_appendix_without_rows_before_0011(world):
+    assert "Phụ lục" not in rq3.markdown(world.full().build())
