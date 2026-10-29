@@ -6,27 +6,27 @@
     "mess_dropout": 0.1
   },
   "val_means_recall@20": [
-    0.18638832877949674,
-    0.18656964763396394,
-    0.13174099958578875,
-    0.13015457787741586
+    0.19087103682136006,
+    0.19218051136527392,
+    0.1297837898631332,
+    0.12998581006515336
   ],
   "test_mean_std": {
     "recall@10": [
-      0.11974845630893147,
-      0.01819076255284208
+      0.1243480089738404,
+      0.022670191869138802
     ],
     "recall@20": [
-      0.20245569741425787,
-      0.011558641179343276
+      0.20962066806435847,
+      0.02835616577038125
     ],
     "ndcg@10": [
-      0.16187849101352664,
-      0.009929062803931382
+      0.17500879867572008,
+      0.014047914298683205
     ],
     "ndcg@20": [
-      0.17529470170048608,
-      0.01072495521984092
+      0.18590234654020565,
+      0.01043807264256283
     ]
   },
   "kg": {
@@ -37,15 +37,17 @@
       "wikidata_snapshot": "2026-10-17",
       "n_users": 745,
       "n_items": 932,
-      "n_entities": 15288,
-      "n_relations": 18,
-      "n_rel": 38,
-      "n_nodes": 16033,
+      "n_entities": 15384,
+      "n_relations": 21,
+      "n_rel": 44,
+      "n_nodes": 16129,
       "n_interactions": 43018,
-      "n_triples": 36560,
+      "n_triples": 40210,
       "n_triples_dropped_unseen_tail": 0,
-      "n_edges": 159156,
-      "n_isolated_entities": 206
+      "n_edges": 166456,
+      "n_isolated_entities": 206,
+      "t_ref": 889235993.0,
+      "dt_den": 14511283.0
     },
     "t2": {
       "kg_variant": "default",
@@ -54,15 +56,17 @@
       "wikidata_snapshot": "2026-10-17",
       "n_users": 745,
       "n_items": 932,
-      "n_entities": 15288,
-      "n_relations": 18,
-      "n_rel": 38,
-      "n_nodes": 16033,
+      "n_entities": 15384,
+      "n_relations": 21,
+      "n_rel": 44,
+      "n_nodes": 16129,
       "n_interactions": 43018,
-      "n_triples": 36579,
+      "n_triples": 40229,
       "n_triples_dropped_unseen_tail": 1,
-      "n_edges": 159194,
-      "n_isolated_entities": 206
+      "n_edges": 166494,
+      "n_isolated_entities": 206,
+      "t_ref": 889235993.0,
+      "dt_den": 14511283.0
     }
   }
 }
