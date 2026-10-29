@@ -28,6 +28,7 @@ Ví dụ số: hai cạnh cùng π, một cạnh Δt_norm = 0 và một cạnh �
 - Hệ quả: Δt giữa các cạnh của một user thường gần 0, nên suy giảm ở phía user ít tác dụng. Phía item thì cạnh trải dài hơn (độ lệch chuẩn trung vị của timestamp cạnh train theo item là 45 ngày ở ML-100K và 67 ngày ở ML-1M), nên suy giảm vẫn có thể có tác dụng, miễn là cạnh Interact⁻¹ cũng bị suy giảm (nó bị, theo 0009).
 - MostPop gần đây (cửa sổ 14 ngày ở ML-100K, 7 ngày ở ML-1M, chọn trên val) là baseline thời gian đơn giản nhất: đo xem "chỉ cần biết cái gì đang hot" đã đủ chưa. Trên ML-100K nó đang mạnh hơn mọi mô hình học, và đó là một phát hiện cần giải thích chứ không giấu.
 - Chạy thực nghiệm trên ML-100K (51 user test) và ml-1m-u10 (10% user của ML-1M, không phải ML-1M đầy đủ). Số liệu từng mô hình ở `docs/rq3-table.md`, đọc từ registry.
+- Thang Δt của giai đoạn 2 (đo ngày 29/10 trên KG default tại t1): chỉ 0,7% (ml-100k) và 0,0% (ml-1m-u10) triple có ngày với Δt_norm < 1; 82,6% / 83,3% có ngày và bị chặn ở 1; 16,7% không có ngày. Vì vậy giai đoạn 2 theo thiết kế 0009 thực chất giảm trọng số fact có ngày so với fact không ngày, không đo được fact cũ hay mới; phải nói rõ khi báo cáo và cần thiết kế lại thang Δt nếu muốn kiểm tra thời gian trên KG.
 - Chưa làm (phase 5): rating như trọng số hoặc relation, timestamp như một relation, LLM làm sạch metadata, theo ba hướng cô gợi ý 18/09.
 
 ## Nằm ở đâu trong code
