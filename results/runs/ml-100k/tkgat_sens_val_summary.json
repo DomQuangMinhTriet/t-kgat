@@ -5,15 +5,15 @@
     "l2": 0.0001,
     "l2_kg": 1e-05,
     "mess_dropout": 0.1,
-    "gamma": 0.1
+    "gamma": 0.3
   },
   "val_means_recall@20": [
-    0.19292067206047764,
-    0.19164420509410995
+    0.18675557324811676,
+    0.19013257194483496
   ],
   "val_stds_recall@20": [
-    0.015368056292309454,
-    0.006661611761356001
+    0.012324103815522909,
+    0.019901685210190367
   ],
   "kg": {
     "t1": {
@@ -23,14 +23,14 @@
       "wikidata_snapshot": "2026-10-17",
       "n_users": 745,
       "n_items": 932,
-      "n_entities": 15288,
-      "n_relations": 18,
-      "n_rel": 38,
-      "n_nodes": 16033,
+      "n_entities": 15384,
+      "n_relations": 21,
+      "n_rel": 44,
+      "n_nodes": 16129,
       "n_interactions": 43018,
-      "n_triples": 36560,
+      "n_triples": 40210,
       "n_triples_dropped_unseen_tail": 0,
-      "n_edges": 159156,
+      "n_edges": 166456,
       "n_isolated_entities": 206,
       "t_ref": 889235993.0,
       "dt_den": 14511283.0

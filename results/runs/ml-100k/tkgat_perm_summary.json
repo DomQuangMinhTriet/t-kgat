@@ -4,27 +4,27 @@
     "l2": 0.0001,
     "l2_kg": 1e-05,
     "mess_dropout": 0.1,
-    "gamma": 1
+    "gamma": 3
   },
   "val_means_recall@20": [
-    0.1838368891787354
+    0.180028147535447
   ],
   "test_mean_std": {
     "recall@10": [
-      0.11101602692551063,
-      0.011584157073434537
+      0.13191544586953766,
+      0.005285533949940127
     ],
     "recall@20": [
-      0.19886110484983627,
-      0.01761808166759581
+      0.19496914893821823,
+      0.015566540017102958
     ],
     "ndcg@10": [
-      0.15951407880507235,
-      0.009135485652354213
+      0.16908215927942982,
+      0.010530940822736753
     ],
     "ndcg@20": [
-      0.1753999648668,
-      0.006055538503170215
+      0.17887658873853618,
+      0.00988242644218573
     ]
   },
   "kg": {
@@ -35,14 +35,14 @@
       "wikidata_snapshot": "2026-10-17",
       "n_users": 745,
       "n_items": 932,
-      "n_entities": 15288,
-      "n_relations": 18,
-      "n_rel": 38,
-      "n_nodes": 16033,
+      "n_entities": 15384,
+      "n_relations": 21,
+      "n_rel": 44,
+      "n_nodes": 16129,
       "n_interactions": 43018,
-      "n_triples": 36560,
+      "n_triples": 40210,
       "n_triples_dropped_unseen_tail": 0,
-      "n_edges": 159156,
+      "n_edges": 166456,
       "n_isolated_entities": 206,
       "t_ref": 889235993.0,
       "dt_den": 14511283.0
@@ -54,14 +54,14 @@
       "wikidata_snapshot": "2026-10-17",
       "n_users": 745,
       "n_items": 932,
-      "n_entities": 15288,
-      "n_relations": 18,
-      "n_rel": 38,
-      "n_nodes": 16033,
+      "n_entities": 15384,
+      "n_relations": 21,
+      "n_rel": 44,
+      "n_nodes": 16129,
       "n_interactions": 43018,
-      "n_triples": 36579,
+      "n_triples": 40229,
       "n_triples_dropped_unseen_tail": 1,
-      "n_edges": 159194,
+      "n_edges": 166494,
       "n_isolated_entities": 206,
       "t_ref": 889235993.0,
       "dt_den": 14511283.0
@@ -74,7 +74,7 @@
       "l2": 0.0001,
       "l2_kg": 1e-05,
       "mess_dropout": 0.1,
-      "gamma": 1
+      "gamma": 3
     },
     "t_ref": 889235993,
     "dt_den": 14511283,

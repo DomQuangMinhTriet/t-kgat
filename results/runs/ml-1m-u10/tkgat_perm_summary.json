@@ -1,30 +1,30 @@
 {
   "selected": {
     "lr": 0.001,
-    "l2": 0.0001,
+    "l2": 1e-05,
     "l2_kg": 1e-05,
     "mess_dropout": 0.1,
     "gamma": 1
   },
   "val_means_recall@20": [
-    0.1601040543006958
+    0.15363898466098838
   ],
   "test_mean_std": {
     "recall@10": [
-      0.06709802036183736,
-      0.005582287852476632
+      0.07292237356575686,
+      0.009532440028537302
     ],
     "recall@20": [
-      0.11071672838340585,
-      0.007781532795254936
+      0.11190973557698028,
+      0.004922035702173919
     ],
     "ndcg@10": [
-      0.20269010706014234,
-      0.007828933026510727
+      0.201039633157869,
+      0.0106491651064059
     ],
     "ndcg@20": [
-      0.19556768735171032,
-      0.0048553726893889974
+      0.19506730473937958,
+      0.007868284798729658
     ]
   },
   "kg": {
@@ -35,15 +35,15 @@
       "wikidata_snapshot": "2026-10-17",
       "n_users": 537,
       "n_items": 1639,
-      "n_entities": 23117,
-      "n_relations": 18,
-      "n_rel": 38,
-      "n_nodes": 23654,
+      "n_entities": 23219,
+      "n_relations": 21,
+      "n_rel": 44,
+      "n_nodes": 23756,
       "n_interactions": 42554,
-      "n_triples": 65344,
+      "n_triples": 71553,
       "n_triples_dropped_unseen_tail": 0,
-      "n_edges": 215796,
-      "n_isolated_entities": 296,
+      "n_edges": 228214,
+      "n_isolated_entities": 298,
       "t_ref": 975564102.0,
       "dt_den": 18847174.0
     },
@@ -54,15 +54,15 @@
       "wikidata_snapshot": "2026-10-17",
       "n_users": 537,
       "n_items": 1639,
-      "n_entities": 23117,
-      "n_relations": 18,
-      "n_rel": 38,
-      "n_nodes": 23654,
+      "n_entities": 23219,
+      "n_relations": 21,
+      "n_rel": 44,
+      "n_nodes": 23756,
       "n_interactions": 42554,
-      "n_triples": 65344,
+      "n_triples": 71553,
       "n_triples_dropped_unseen_tail": 0,
-      "n_edges": 215796,
-      "n_isolated_entities": 296,
+      "n_edges": 228214,
+      "n_isolated_entities": 298,
       "t_ref": 975564102.0,
       "dt_den": 18847174.0
     }
@@ -71,7 +71,7 @@
     "from": "tkgat",
     "base_point": {
       "lr": 0.001,
-      "l2": 0.0001,
+      "l2": 1e-05,
       "l2_kg": 1e-05,
       "mess_dropout": 0.1,
       "gamma": 1
