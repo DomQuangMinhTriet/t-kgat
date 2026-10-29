@@ -35,7 +35,9 @@ One row per (film, relation, target). Dates are ISO `YYYY-MM-DD`; empty when Wik
 ## Time-consistent KG (`data/processed/<dataset>/kg/<variant>/`)
 Built by `scripts/06_build_kg.py` (decisions 0004, 0006). KG at `t1` is used for train/val, KG at `t2`
 for test. A fact is kept at cut-off `t` iff its statement date and its target's existence date, when
-known, fall before the UTC day of `t`.
+known, fall before the UTC day of `t`. Besides the 18 Wikidata relations, the KG includes MovieLens
+metadata relations `movielens.genre`, `movielens.release_year` and `movielens.release_decade`; these are dated at
+the movie release and use namespaced tail entities so they cannot be confused with Wikidata entities.
 
 | Variant | Content |
 |---|---|
@@ -49,8 +51,8 @@ comparable across variants; in `default` and `drop_undated` some entities have n
 | File | Columns | Meaning |
 |---|---|---|
 | `kg_t1.tsv`, `kg_t2.tsv` | h, r, t | Integer triples, sorted, no duplicates, no inverse relations (the model adds them) |
-| `entities.csv` | entity, kind, key, label | `0..n_items-1` are the train items in `tkgat.data.encode` order (`kind=item`, `key` = raw item id, `label` = Freebase mid); then Wikidata entities (`kind=wikidata`, `key` = Wikidata id, `label` = English label), sorted by id |
-| `relations.csv` | relation, name | The 18 relation names, sorted |
+| `entities.csv` | entity, kind, key, label | `0..n_items-1` are train items; remaining entities are Wikidata (`kind=wikidata`) or namespaced MovieLens metadata (`kind=movielens_metadata`) |
+| `relations.csv` | relation, name | The 18 Wikidata and 3 MovieLens metadata relation names, sorted |
 | `dropped.csv` | freebase_id, item, relation, tail, tail_label, point_in_time, start_time, tail_publication, tail_inception, tail_birth, reason, cutoff | Facts removed at each cut-off; `reason` = `future_statement`, `future_tail` or `undated` (empty for `static`) |
 | `kg_meta.json` | — | Cut-offs, `time_consistent`, known limitations, md5 of inputs, counts per relation and reason, date kind per relation, entities only in the t2 KG |
 

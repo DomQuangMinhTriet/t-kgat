@@ -13,8 +13,10 @@ from tkgat.kg.temporal import (
     build_kg,
     check_kg,
     cutoff_day,
+    cutoff_facts,
     end_of_period,
     item_entities,
+    movielens_facts,
 )
 
 from .conftest import ROOT
@@ -74,6 +76,38 @@ def test_dates_without_precision():
 def test_cutoff_day_is_utc():
     assert cutoff_day(T1) == dt.date(1998, 3, 7)
     assert cutoff_day(889237198) == dt.date(1998, 3, 7)  # ML-100K t1
+
+
+def test_movielens_metadata_relations_are_namespaced_and_temporal():
+    catalog = pd.DataFrame(
+        {
+            "item": [10, 20, 30],
+            "title": ["Old (1995)", "Future (1999)", "No genre (1996)"],
+            "year": [1995.0, 1999.0, 1996.0],
+            "release_date": [pd.NaT, pd.NaT, pd.NaT],
+            "genres": ["Action|Comedy", "Drama", "unknown"],
+        }
+    )
+    metadata = movielens_facts(np.array([20, 10, 30]), catalog)
+    assert set(metadata["relation"]) == {
+        "movielens.genre",
+        "movielens.release_year",
+        "movielens.release_decade",
+    }
+    assert set(metadata["tail_kind"]) == {"movielens_metadata"}
+    assert not metadata["tail"].str.contains(" ").any()
+    assert set(metadata.loc[metadata["h"] == 1, "tail_label"]) == {"Action", "Comedy", "1995", "1990s"}
+    assert not metadata["tail_label"].eq("unknown").any()
+
+    kept, dropped = cutoff_facts(metadata, T1, "default")
+    assert set(kept["item"]) == {10, 30}
+    assert set(dropped["item"]) == {20} and set(dropped["reason"]) == {"future_statement"}
+
+    items = pd.DataFrame({"h": [0, 1, 2], "item": [20, 10, 30], "freebase_id": [None, None, None]})
+    entities, relations, triples = assign_ids(3, items, {"t1": kept}, sorted(set(metadata["relation"])), metadata)
+    assert set(entities.loc[3:, "kind"]) == {"movielens_metadata"}
+    assert set(relations["name"]) == set(metadata["relation"])
+    assert len(triples["t1"]) == len(kept)
 
 
 def test_titanic_award_between_t1_and_t2():

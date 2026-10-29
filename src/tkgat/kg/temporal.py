@@ -16,12 +16,14 @@ from __future__ import annotations
 
 import calendar
 import datetime as dt
+import re
 from functools import cache
 
 import numpy as np
 import pandas as pd
 
 VARIANTS = ("default", "drop_undated", "static")
+MOVIELENS_RELATIONS = ("movielens.genre", "movielens.release_decade", "movielens.release_year")
 STATIC_NOTE = (
     "static: every fact of the train items, no time filter, kg_t1 = kg_t2 (as in the KGAT paper). "
     "Reference only, to measure the effect of leakage through the KG; it contains future facts "
@@ -125,6 +127,117 @@ def item_entities(item_ids: np.ndarray, links: pd.DataFrame, item_col: str) -> p
     return items
 
 
+def _metadata_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+
+
+def movielens_facts(item_ids: np.ndarray, catalog: pd.DataFrame) -> pd.DataFrame:
+    """MovieLens metadata triples for the encoded train items.
+
+    The relations are namespaced so they cannot be confused with Wikidata relations. Genre, release-year and
+    release-decade facts are dated at the movie release (exact date when available, otherwise year precision), so
+    they pass through the same temporal guards as Wikidata facts. Unknown/no-genre labels are not emitted.
+    """
+    if catalog["item"].duplicated().any():
+        raise ValueError("MovieLens catalog contains duplicate item ids")
+    by_item = catalog.set_index("item")
+    missing = set(np.asarray(item_ids).astype(int)) - set(by_item.index.astype(int))
+    if missing:
+        raise ValueError(f"{len(missing)} train items are missing from the MovieLens catalog")
+
+    rows = []
+    for h, raw_item in enumerate(np.asarray(item_ids).astype(int)):
+        movie = by_item.loc[raw_item]
+        release = movie.get("release_date")
+        year_value = movie.get("year")
+        if pd.notna(release):
+            point_in_time = pd.Timestamp(release).strftime("%Y-%m-%d")
+            precision = "11"
+            year = int(pd.Timestamp(release).year)
+        elif pd.notna(year_value):
+            year = int(year_value)
+            point_in_time = f"{year:04d}-01-01"
+            precision = "9"
+        else:
+            year = None
+            point_in_time = precision = ""
+
+        common = {
+            "h": h,
+            "item": raw_item,
+            "freebase_id": "",
+            "point_in_time": point_in_time,
+            "point_in_time_precision": precision,
+            "start_time": "",
+            "tail_publication": "",
+            "tail_inception": "",
+            "tail_birth": "",
+            "film_publication": point_in_time,
+            "tail_kind": "movielens_metadata",
+        }
+        genres = [g.strip() for g in str(movie.get("genres", "")).split("|") if g.strip()]
+        for genre in genres:
+            if genre.lower() in {"unknown", "(no genres listed)"}:
+                continue
+            rows.append(
+                {
+                    **common,
+                    "relation": "movielens.genre",
+                    "tail": f"movielens.genre.{_metadata_key(genre)}",
+                    "tail_label": genre,
+                }
+            )
+        if year is not None:
+            decade = year // 10 * 10
+            rows.extend(
+                [
+                    {
+                        **common,
+                        "relation": "movielens.release_year",
+                        "tail": f"movielens.year.{year}",
+                        "tail_label": str(year),
+                    },
+                    {
+                        **common,
+                        "relation": "movielens.release_decade",
+                        "tail": f"movielens.decade.{decade}",
+                        "tail_label": f"{decade}s",
+                    },
+                ]
+            )
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "h",
+                "item",
+                "freebase_id",
+                "relation",
+                "tail",
+                "tail_label",
+                "point_in_time",
+                "point_in_time_precision",
+                "start_time",
+                "tail_publication",
+                "tail_inception",
+                "tail_birth",
+                "film_publication",
+                "tail_kind",
+                "statement_date",
+                "tail_date",
+            ]
+        )
+    return annotate(pd.DataFrame(rows))
+
+
+def cutoff_facts(facts: pd.DataFrame, cutoff_ts: int, variant: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split already linked/annotated facts with ``h`` into kept and dropped sets at a cut-off."""
+    f = facts.drop_duplicates(["h", "relation", "tail"]).reset_index(drop=True)
+    reason = drop_reason(f, cutoff_day(cutoff_ts), variant)
+    kept = f[reason == ""].reset_index(drop=True)
+    dropped = f[reason != ""].assign(reason=reason[reason != ""]).reset_index(drop=True)
+    return kept, dropped
+
+
 def build_kg(
     facts: pd.DataFrame, items: pd.DataFrame, cutoff_ts: int, variant: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -135,11 +248,7 @@ def build_kg(
     """
     linked = items.dropna(subset=["freebase_id"])[["h", "item", "freebase_id"]]
     f = linked.merge(facts, on="freebase_id", how="inner")
-    f = f.drop_duplicates(["h", "relation", "tail"]).reset_index(drop=True)
-    reason = drop_reason(f, cutoff_day(cutoff_ts), variant)
-    kept = f[reason == ""].reset_index(drop=True)
-    dropped = f[reason != ""].assign(reason=reason[reason != ""]).reset_index(drop=True)
-    return kept, dropped
+    return cutoff_facts(f, cutoff_ts, variant)
 
 
 def check_kg(kept: pd.DataFrame, cutoff_ts: int, variant: str, n_items: int) -> list[str]:
@@ -186,8 +295,17 @@ def assign_ids(
     sources = [universe] if universe is not None else list(kgs.values())
     tails = sorted(set().union(*(set(k["tail"]) for k in sources)))
     labels: dict[str, str] = {}
+    kinds: dict[str, str] = {}
     for k in sources:
         labels.update(dict(zip(k["tail"], k["tail_label"], strict=True)))
+        if "tail_kind" in k:
+            kinds.update(
+                {
+                    tail: kind
+                    for tail, kind in zip(k["tail"], k["tail_kind"], strict=True)
+                    if pd.notna(kind) and kind
+                }
+            )
     missing = set().union(*(set(k["tail"]) for k in kgs.values())) - set(tails)
     if missing:
         raise ValueError(f"{len(missing)} tails of the KGs are not in the universe")
@@ -204,7 +322,7 @@ def assign_ids(
             pd.DataFrame(
                 {
                     "entity": np.arange(n_items, n_items + len(tails)),
-                    "kind": "wikidata",
+                    "kind": [kinds.get(t, "wikidata") for t in tails],
                     "key": tails,
                     "label": [labels.get(t, "") for t in tails],
                 }

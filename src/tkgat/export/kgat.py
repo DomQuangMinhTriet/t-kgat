@@ -133,7 +133,10 @@ def export_kgat(
         out / "relation_list.txt",
         [
             "org_id remap_id",
-            *[f"wikidata.{n} {int(r)}" for r, n in zip(relations["relation"], relations["name"], strict=True)],
+            *[
+                f"{n if str(n).startswith('movielens.') else f'wikidata.{n}'} {int(r)}"
+                for r, n in zip(relations["relation"], relations["name"], strict=True)
+            ],
         ],
     )
     _write_kg(out / "kg_final.txt", kg_t1)
