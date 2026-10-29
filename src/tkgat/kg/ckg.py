@@ -20,6 +20,11 @@ Edges are sorted by (head, tail, relation) so that the edges of a head are conti
 Time (T-KGAT, decision 0009): ``edge_ts`` is built from ``EncodedSplit.train_ts`` only, and so are the two constants of
 the Delta-t term, ``t_ref`` (the largest train timestamp, the same for the t1 and the t2 graph) and ``dt_den``
 (``t_ref`` minus the smallest train timestamp). Val and test timestamps are never read.
+
+Time on KG triples (T-KGAT Stage 2, decision 0009, items 8-10): with ``kg_ts`` the KG edges carry the date from which
+their fact holds (``kg_<cut>_dates.tsv`` of script 06, read by :func:`load_kg_dates`); an undated fact keeps NaN. The
+anchor ``t_ref`` and ``dt_den`` still come from ``train_ts`` only. The control shuffles these dates over the KG triples
+(:func:`permute_kg_ts`).
 """
 
 from __future__ import annotations
@@ -191,12 +196,54 @@ def load_kg(
     )
 
 
+def load_kg_dates(processed_dir: str | Path, kg: KGTriples) -> np.ndarray:
+    """The date (Unix seconds, NaN if undated) of every triple of ``kg``, from ``kg_<cutoff>_dates.tsv``.
+
+    ``kg`` must come from :func:`load_kg`, which has checked the triples against the split; the dates file must list
+    exactly the same triples in the same order, otherwise ``ValueError`` (a dates file of another build is refused).
+    """
+    path = Path(processed_dir) / "kg" / kg.variant / f"kg_{kg.cutoff}_dates.tsv"
+    if not path.exists():
+        raise ValueError(f"{path} is missing: re-run scripts/06_build_kg.py (T-KGAT Stage 2 needs the fact dates)")
+    dates = pd.read_csv(path, sep="\t")
+    if list(dates.columns) != ["h", "r", "t", "ts"]:
+        raise ValueError(f"{path} has columns {list(dates.columns)}, expected ['h', 'r', 't', 'ts']")
+    if not np.array_equal(dates[["h", "r", "t"]].to_numpy(dtype=np.int64), kg.triples):
+        raise ValueError(f"{path} does not list the triples of kg_{kg.cutoff}.tsv in the same order")
+    return dates["ts"].to_numpy(dtype=np.float64)
+
+
+def permute_kg_ts(kg_ts: np.ndarray, seed: int) -> np.ndarray:
+    """The control of Stage 2: the fact dates shuffled over all KG triples (``numpy.random.default_rng(seed)``).
+
+    The multiset of dates, NaN (undated) included, is unchanged; only which triple holds which date changes.
+    """
+    kg_ts = np.asarray(kg_ts, dtype=np.float64)
+    return kg_ts[np.random.default_rng(seed).permutation(len(kg_ts))]
+
+
+def carry_kg_ts(kg_from: KGTriples, ts_from: np.ndarray, kg_to: KGTriples, ts_to: np.ndarray) -> np.ndarray:
+    """Dates of ``kg_to`` where every triple also in ``kg_from`` takes its date from ``ts_from``.
+
+    For the test graph of the control: the t1 triples keep the permuted dates they were trained with, the triples
+    added at t2 keep their own. With unpermuted dates it changes nothing (a triple has one date at both cut-offs).
+    """
+    index = {tuple(row): i for i, row in enumerate(kg_from.triples.tolist())}
+    out = np.asarray(ts_to, dtype=np.float64).copy()
+    for j, row in enumerate(kg_to.triples.tolist()):
+        i = index.get(tuple(row))
+        if i is not None:
+            out[j] = ts_from[i]
+    return out
+
+
 @dataclass(frozen=True)
 class CKG:
     """Edge list of the collaborative knowledge graph, sorted by (head, tail, relation).
 
     ``edge_ts`` holds, for Interact and Interact^-1 edges, the train timestamp of the (user, item) pair (float64: a
-    float32 would round Unix timestamps to about a minute) and NaN for KG edges. Plain KGAT does not read it.
+    float32 would round Unix timestamps to about a minute). KG edges hold NaN, or the date of their fact when the graph
+    was built with ``kg_ts`` (Stage 2). Plain KGAT does not read it.
     """
 
     n_users: int
@@ -260,13 +307,18 @@ class CKG:
         }
 
 
-def build_ckg(enc: EncodedSplit, kg: KGTriples, known_tails: np.ndarray | None = None) -> CKG:
+def build_ckg(
+    enc: EncodedSplit, kg: KGTriples, known_tails: np.ndarray | None = None, kg_ts: np.ndarray | None = None
+) -> CKG:
     """Build the CKG from the train interactions of ``enc`` and the KG ``kg``.
 
     Only ``enc.train`` and ``enc.train_ts`` are read; val and test never enter. With ``known_tails`` (``used_tails``
     of the t1 KG) every triple whose tail is not in that set is dropped and counted (design Q2): pass it for the test
-    graph, leave it ``None`` for the training graph.
+    graph, leave it ``None`` for the training graph. ``kg_ts`` (one date per triple of ``kg``, NaN if undated) puts the
+    fact dates on the KG edges, both directions (Stage 2); without it KG edges hold NaN.
     """
+    if kg_ts is not None and len(kg_ts) != len(kg.triples):
+        raise ValueError("kg_ts is not aligned with the KG triples")
     if kg.n_items != enc.n_items:
         raise ValueError(f"the KG has {kg.n_items} items, the split has {enc.n_items}")
     pairs = enc.train
@@ -277,11 +329,12 @@ def build_ckg(enc: EncodedSplit, kg: KGTriples, known_tails: np.ndarray | None =
     n_users, n_items, n_rel_kg = enc.n_users, enc.n_items, kg.n_relations
 
     tri = kg.triples
+    fact_ts = np.full(len(tri), np.nan) if kg_ts is None else np.asarray(kg_ts, dtype=np.float64)
     dropped = 0
     if known_tails is not None:
         keep = np.isin(tri[:, 2], known_tails)
         dropped = int((~keep).sum())
-        tri = tri[keep]
+        tri, fact_ts = tri[keep], fact_ts[keep]
 
     user = pairs[:, 0]
     item = n_users + pairs[:, 1]
@@ -297,7 +350,7 @@ def build_ckg(enc: EncodedSplit, kg: KGTriples, known_tails: np.ndarray | None =
         ]
     ).astype(np.int64)
     ts = np.asarray(enc.train_ts, dtype=np.float64)
-    edge_ts = np.concatenate([ts, ts, np.full(2 * len(tri), np.nan)])
+    edge_ts = np.concatenate([ts, ts, fact_ts, fact_ts])
     t_ref = float(ts.max()) if len(ts) else None
     dt_den = float(ts.max() - ts.min()) if len(ts) else None
 
