@@ -6,7 +6,7 @@
 Needs the saved split (script 02), the links (script 03) and data/raw/wikidata/facts.tsv (script 04).
 Output, one folder per variant (default, drop_undated, static) in <processed_dir>/kg/<variant>/:
   kg_t1.tsv, kg_t2.tsv   integer triples h, r, t (no inverse relations; the model adds them)
-  entities.csv           entity, kind (item | wikidata), key (raw item id | Wikidata id), label
+  entities.csv           entity, kind (item | wikidata | movielens_metadata), key, label
                          entities 0..n_items-1 are the train items in tkgat.data.encode order
   relations.csv          relation, name
   dropped.csv            facts removed at each cut-off, with the reason
@@ -24,6 +24,7 @@ from pathlib import Path
 import pandas as pd
 
 from tkgat.data.encode import encode
+from tkgat.data.loaders import load
 from tkgat.kg.temporal import (
     KNOWN_LIMITATIONS,
     STATIC_NOTE,
@@ -33,7 +34,9 @@ from tkgat.kg.temporal import (
     build_kg,
     check_kg,
     cutoff_day,
+    cutoff_facts,
     item_entities,
+    movielens_facts,
     relation_stats,
 )
 from tkgat.pipeline.build import load_config, load_saved
@@ -42,6 +45,7 @@ LINKS = {
     "ml-100k": ("data/processed/links/ml100k_links.csv", "item_100k"),
     "ml-1m": ("data/processed/links/ml1m_links.csv", "item"),
 }
+ITEM_METADATA_FILES = {"ml-100k": "u.item", "ml-1m": "movies.dat"}
 
 
 def md5(path: Path) -> str:
@@ -75,6 +79,7 @@ def main() -> None:
     ap.add_argument("--data", required=True)
     ap.add_argument("--facts", default="data/raw/wikidata/facts.tsv")
     ap.add_argument("--links", help="override the links file for this dataset")
+    ap.add_argument("--raw-dir", help="override raw_dir from the data config (needed for MovieLens metadata)")
     ap.add_argument("--variant", choices=[*VARIANTS, "all"], default="all")
     args = ap.parse_args()
 
@@ -85,20 +90,30 @@ def main() -> None:
     link_path = Path(args.links or link_path)
     links = pd.read_csv(link_path, dtype={"freebase_id": str})
     items = item_entities(enc.item_ids, links, item_col)
+    raw_dir = Path(args.raw_dir or cfg["raw_dir"])
+    catalog_path = raw_dir / ITEM_METADATA_FILES[cfg["name"]]
+    _, catalog = load(cfg["name"], raw_dir)
+    ml_facts = movielens_facts(enc.item_ids, catalog)
 
     facts_path = Path(args.facts)
     raw = pd.read_csv(facts_path, sep="\t", dtype=str, keep_default_na=False, quoting=csv.QUOTE_NONE)
     facts = annotate(raw[raw["freebase_id"].isin(set(items["freebase_id"].dropna()))])
-    relations = sorted(set(raw["relation"]))
+    relations = sorted(set(raw["relation"]) | set(ml_facts["relation"]))
     cutoffs = {"t1": meta["t1"], "t2": meta["t2"]}
     film_facts = items[["h", "freebase_id"]].merge(facts, on="freebase_id")
+    source_facts = pd.concat([film_facts, ml_facts], ignore_index=True)
     # every variant shares the entity ids of the static KG (all facts of the train items)
-    universe, _ = build_kg(facts, items, cutoffs["t1"], "static")
+    wiki_universe, _ = build_kg(facts, items, cutoffs["t1"], "static")
+    universe = pd.concat([wiki_universe, ml_facts], ignore_index=True)
 
     for variant in VARIANTS if args.variant == "all" else [args.variant]:
         kept, dropped = {}, {}
+        wikidata_kept = {}
         for cut, ts in cutoffs.items():
-            kept[cut], dropped[cut] = build_kg(facts, items, ts, variant)
+            wikidata_kept[cut], wiki_dropped = build_kg(facts, items, ts, variant)
+            ml_kept, ml_dropped = cutoff_facts(ml_facts, ts, variant)
+            kept[cut] = pd.concat([wikidata_kept[cut], ml_kept], ignore_index=True)
+            dropped[cut] = pd.concat([wiki_dropped, ml_dropped], ignore_index=True)
             problems = check_kg(kept[cut], ts, variant, enc.n_items)
             if problems:
                 raise RuntimeError(f"KG check failed at {cut} ({variant}):\n- " + "\n- ".join(problems))
@@ -145,18 +160,29 @@ def main() -> None:
                 "facts_md5": md5(facts_path),
                 "links": str(link_path),
                 "links_md5": md5(link_path),
+                "movielens_items": str(catalog_path),
+                "movielens_items_md5": md5(catalog_path),
                 "split_sha256": meta.get("sha256", {}),
             },
             "n_items": enc.n_items,
             "n_items_linked": int(items["freebase_id"].notna().sum()),
             "n_items_with_facts": items_t,
+            "n_items_with_wikidata_facts": {c: int(k["h"].nunique()) for c, k in wikidata_kept.items()},
+            "movielens_metadata_relations": sorted(set(ml_facts["relation"])),
+            "movielens_metadata_note": (
+                "genres and release year/decade come from the MovieLens item catalog; ML-1M release years are "
+                "parsed from the title"
+            ),
+            "n_movielens_metadata_triples": {
+                c: int(kept[c]["relation"].str.startswith("movielens.").sum()) for c in kept
+            },
             "n_entities": len(ent),
             "n_relations": len(rel),
             "n_triples": {c: len(t) for c, t in tri.items()},
             "n_tail_entities_used": {c: len(t) for c, t in tails.items()},
             "n_entities_only_in_t2": len(tails["t2"] - tails["t1"]),
             "n_dropped": {c: d["reason"].value_counts().to_dict() for c, d in dropped.items()},
-            "date_kind_per_relation": relation_stats(film_facts).reset_index().to_dict(orient="records"),
+            "date_kind_per_relation": relation_stats(source_facts).reset_index().to_dict(orient="records"),
             "per_relation": per_relation(kept, dropped),
         }
         (out / "kg_meta.json").write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")

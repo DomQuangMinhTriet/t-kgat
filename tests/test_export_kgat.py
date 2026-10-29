@@ -49,7 +49,7 @@ def exported(synthetic, tmp_path):
             "label": [""] * n + ["genre A", "director B", "award C"],
         }
     )
-    relations = pd.DataFrame({"relation": [0, 1], "name": ["award_received", "genre"]})
+    relations = pd.DataFrame({"relation": [0, 1], "name": ["award_received", "movielens.genre"]})
     kg_t1 = pd.DataFrame({"h": [0, 1, 2], "r": [1, 1, 0], "t": [n, n + 1, n + 1]})
     kg_t2 = pd.concat([kg_t1, pd.DataFrame({"h": [3], "r": [0], "t": [n + 2]})], ignore_index=True)
     freebase = {int(enc.item_ids[0]): "m.abc", int(enc.item_ids[1]): "m.def"}
@@ -117,7 +117,9 @@ def test_ids_lists_and_kg(exported):
     assert [r[0] for r in table(folder / "entity_list.txt")][: enc.n_items] == [
         f"movielens.item.{i}" for i in enc.item_ids
     ]
-    assert [int(r[1]) for r in table(folder / "relation_list.txt")] == [0, 1]
+    relation_list = table(folder / "relation_list.txt")
+    assert [int(r[1]) for r in relation_list] == [0, 1]
+    assert [r[0] for r in relation_list] == ["wikidata.award_received", "movielens.genre"]
     for name, kg in (("kg_final.txt", kg_t1), ("kg_test.txt", kg_t2)):
         got = [tuple(int(x) for x in line.split()) for line in (folder / name).read_text(encoding="utf-8").splitlines()]
         assert got == list(zip(kg["h"], kg["r"], kg["t"], strict=True))
