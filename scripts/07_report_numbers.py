@@ -411,23 +411,30 @@ def add_kg(n: Numbers, key: str, d: dict, facts: pd.DataFrame, ctx: dict) -> Non
     n.add(
         S6, f"{key}.kg_items_with_facts", vn_int(meta["n_items_with_facts"]["t1"]), src + " (cơ sở: item trong train)"
     )
-    kinds = kg.relation_date_kinds(meta)
+    n.add(
+        S6,
+        f"{key}.kg_items_with_wikidata_facts",
+        vn_int(meta["n_items_with_wikidata_facts"]["t1"]),
+        src + " (cơ sở: item trong train)",
+    )
+    n_facts = kg.relation_date_kinds(meta)["facts"].sum()
+    n.add(S6, f"{key}.kg_facts", vn_int(n_facts), src + " qua kg.relation_date_kinds")
+    ml = kg.relation_date_kinds(meta, "movielens")
+    n.add(S6, f"{key}.kg_facts_movielens", vn_int(ml["facts"].sum()), src + " qua kg.relation_date_kinds (movielens.*)")
+    # the date statistics describe the Wikidata facts only (decision 0011): MovieLens facts are dated at the release
+    kinds = kg.relation_date_kinds(meta, "wikidata")
+    wsrc = src + " qua kg.relation_date_kinds (chỉ relation Wikidata)"
     total = kinds["facts"].sum()
     stmt = kinds["facts"] * kinds["statement_dated"]
-    n.add(S6, f"{key}.kg_facts", vn_int(total), src + " qua kg.relation_date_kinds")
-    n.add(S6, f"{key}.statement_dated_share", vn_pct(float(stmt.sum() / total)), src + " qua kg.relation_date_kinds")
+    n.add(S6, f"{key}.kg_facts_wikidata", vn_int(total), wsrc)
+    n.add(S6, f"{key}.statement_dated_share", vn_pct(float(stmt.sum() / total)), wsrc)
     n.add(
         S6,
         f"{key}.award_share_of_statement_dated",
         vn_pct(float(stmt[list(kg.AWARD_RELATIONS)].sum() / stmt.sum())),
-        src + " qua kg.relation_date_kinds",
+        wsrc,
     )
-    n.add(
-        S6,
-        f"{key}.no_date_share",
-        vn_pct(float((kinds["facts"] * kinds["no_date"]).sum() / total)),
-        src + " qua kg.relation_date_kinds",
-    )
+    n.add(S6, f"{key}.no_date_share", vn_pct(float((kinds["facts"] * kinds["no_date"]).sum() / total)), wsrc)
     vt = kg.variant_triples(d["metas"])
     for v in kg_variants():
         for c in ("t1", "t2"):

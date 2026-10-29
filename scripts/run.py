@@ -36,6 +36,11 @@ for this same ``run_name`` (``kgat_summary.json`` or ``kgat_val_summary.json``),
 re-runs the point that ``tkgat`` selected with ``train_ts`` permuted over all train edges, one permutation per seed
 (``perm_seed`` in ``config``).
 
+T-KGAT Stage 2 (decision 0009 items 7-10; ``configs/model/tkgat_kg.yaml``, ``time_on: kg``): Delta-t on the KG edges,
+from the fact dates of ``kg_t*_dates.tsv`` (script 06), instead of on the user-item edges; ``config`` of its rows holds
+``time_on = kg``. Its control ``tkgat_kg_perm.yaml`` (``control: permute_kg_ts``, ``from_tkgat: tkgat_kg``) shuffles the
+fact dates over the t1 triples with ``numpy.random.default_rng(seed)``; the t1 triples keep those dates at test.
+
 ``run_name`` (optional in the data config, default ``name``) identifies the split in the registry
 ``dataset`` column and in ``results/runs/``; ``name`` only selects the loader. Two configs of the same
 dataset (e.g. 5-core and 10-core) must have different run names so their results never overwrite each other.
@@ -55,9 +60,18 @@ import yaml
 from tkgat import registry
 from tkgat.data.encode import encode
 from tkgat.eval.metrics import evaluate
-from tkgat.kg.ckg import build_ckg, load_kg, no_kg, permute_train_ts, used_tails
+from tkgat.kg.ckg import (
+    build_ckg,
+    carry_kg_ts,
+    load_kg,
+    load_kg_dates,
+    no_kg,
+    permute_kg_ts,
+    permute_train_ts,
+    used_tails,
+)
 from tkgat.models.baselines import MostPop
-from tkgat.models.kgat import KGAT
+from tkgat.models.kgat import KGAT, TIME_ON
 from tkgat.pipeline.build import load_config, load_saved
 from tkgat.train.bpr import BPRConfig, fit_bpr
 from tkgat.train.kgat import fit_kgat, split_params
@@ -83,15 +97,23 @@ def kgat_train_graph(mcfg: dict, dcfg: dict, data, meta: dict, val_only: bool):
     return kg, build_ckg(data, kg)
 
 
-def kgat_test_graph(dcfg: dict, data, meta: dict, kg_t1, ckg_t1):
-    """The graph of the test score: the same train edges, the KG at t2 without the triples of tails unseen at t1."""
+def kgat_test_graph(dcfg: dict, data, meta: dict, kg_t1, ckg_t1, ts_t1=None):
+    """The graph of the test score: the same train edges, the KG at t2 without the triples of tails unseen at t1.
+
+    ``ts_t1`` (Stage 2): the fact dates the t1 graph was trained with; the t2 graph then carries fact dates too, and a
+    triple already in the t1 KG keeps its t1 date (the permuted one for the control).
+    """
     if kg_t1.variant == "none":
         return ckg_t1
     kg_t2 = load_kg(Path(dcfg["processed_dir"]), kg_t1.variant, "t2", data, meta)
-    return build_ckg(data, kg_t2, known_tails=used_tails(kg_t1))
+    kg_ts = None
+    if ts_t1 is not None:
+        kg_ts = carry_kg_ts(kg_t1, ts_t1, kg_t2, load_kg_dates(Path(dcfg["processed_dir"]), kg_t2))
+    return build_ckg(data, kg_t2, known_tails=used_tails(kg_t1), kg_ts=kg_ts)
 
 
-TKGAT_CONTROLS = ("permute_train_ts",)
+TKGAT_CONTROLS = ("permute_train_ts", "permute_kg_ts")
+CONTROL_TIME_ON = {"permute_train_ts": "interact", "permute_kg_ts": "kg"}  # what each control shuffles
 
 
 def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = False) -> tuple[list[dict], dict]:
@@ -118,6 +140,15 @@ def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = F
     for key in ("fixed", "kg", "seeds"):
         if mcfg.get(key) != ref.get(key):
             raise ValueError(f"{key} differs from {tag}.yaml: the registry key holds the file name and the point only")
+    time_on = mcfg.get("time_on", "interact")
+    if time_on not in TIME_ON:
+        raise ValueError(f"time_on must be one of {TIME_ON}, got {time_on!r}")
+    if control and ref.get("time_on", "interact") != time_on:
+        raise ValueError(f"time_on differs from {tag}.yaml")
+    if control and CONTROL_TIME_ON[control] != time_on:
+        raise ValueError(f"control {control} shuffles the dates of time_on = {CONTROL_TIME_ON[control]}, not {time_on}")
+    if time_on == "kg" and mcfg.get("kg", {}).get("variant", "default") == "none":
+        raise ValueError("time_on = kg needs a KG (kg.variant none has no triple to date)")
     names = [f"{tag}_summary.json"] + ([f"{tag}_val_summary.json"] if val_only else [])
     for name in names:
         if (out_dir / name).exists():
@@ -143,7 +174,8 @@ def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = F
     for point in mcfg["grid"]:
         if set(point) != {"gamma"} or not point["gamma"] > 0:
             raise ValueError(f"a T-KGAT grid point holds gamma > 0 only, got {point}")
-    return [{**base, **point} for point in mcfg["grid"]], base
+    extra = {"time_on": "kg"} if time_on == "kg" else {}  # Stage 1 points stay exactly what they were
+    return [{**base, **point, **extra} for point in mcfg["grid"]], base
 
 
 def registry_config(point: dict, ckg, seed: int, perm: bool) -> dict:
@@ -253,27 +285,41 @@ def main(argv: list[str] | None = None) -> None:
     if tkgat:
         grid, base_point = tkgat_points(mcfg, Path(args.model), out_dir, args.val_only)
         mcfg = {**mcfg, "grid": grid}
-    perm = tkgat and mcfg.get("control") == "permute_train_ts"
-    kg_t1 = ckg_t1 = None
+    control = mcfg.get("control") if tkgat else None
+    perm = control is not None
+    time_kg = tkgat and mcfg.get("time_on", "interact") == "kg"  # Stage 2: fact dates on the KG edges
+    kg_t1 = ckg_t1 = ts_t1 = None
     if kgat:
         kg_t1, ckg_t1 = kgat_train_graph(mcfg, dcfg, data, meta, args.val_only)
+        if time_kg:
+            ts_t1 = load_kg_dates(Path(dcfg["processed_dir"]), kg_t1)
+            ckg_t1 = build_ckg(data, kg_t1, kg_ts=ts_t1)
         print(
             f"[kgat] KG {kg_t1.variant} at t1: {len(kg_t1)} triples, CKG {ckg_t1.n_nodes} nodes {ckg_t1.n_edges} edges"
         )
-    train_graphs, test_graphs = {None: (data, ckg_t1)}, {}
+    train_graphs, test_graphs = {None: (data, ckg_t1, ts_t1)}, {}
 
-    def graph_for(seed: int):
-        """(data, train graph) of a seed: the same for every seed, except that the control shuffles ``train_ts``."""
+    def train_graph(seed: int):
+        """(data, train graph, KG dates) of a seed: the same for every seed, except that a control shuffles
+        ``train_ts`` (Stage 1) or the fact dates (Stage 2) with this seed."""
         key = seed if perm else None
         if key not in train_graphs:
-            shuffled = permute_train_ts(data, seed)
-            train_graphs[key] = (shuffled, build_ckg(shuffled, kg_t1))
+            if control == "permute_kg_ts":
+                shuffled_ts = permute_kg_ts(ts_t1, seed)
+                train_graphs[key] = (data, build_ckg(data, kg_t1, kg_ts=shuffled_ts), shuffled_ts)
+            else:
+                shuffled = permute_train_ts(data, seed)
+                train_graphs[key] = (shuffled, build_ckg(shuffled, kg_t1, kg_ts=ts_t1), ts_t1)
         return train_graphs[key]
+
+    def graph_for(seed: int):
+        return train_graph(seed)[:2]
 
     def test_graph_for(seed: int):
         key = seed if perm else None
         if key not in test_graphs:
-            test_graphs[key] = kgat_test_graph(dcfg, graph_for(seed)[0], meta, kg_t1, graph_for(seed)[1])
+            data_s, ckg_s, ts_s = train_graph(seed)
+            test_graphs[key] = kgat_test_graph(dcfg, data_s, meta, kg_t1, ckg_s, ts_t1=ts_s if time_kg else None)
         return test_graphs[key]
 
     def tkgat_info() -> dict:
@@ -284,7 +330,8 @@ def main(argv: list[str] | None = None) -> None:
                 "base_point": base_point,
                 "t_ref": round(ckg.t_ref),
                 "dt_den": round(ckg.dt_den),
-                "control": mcfg.get("control"),
+                "control": control,
+                "time_on": "kg" if time_kg else "interact",
             }
         }
 
