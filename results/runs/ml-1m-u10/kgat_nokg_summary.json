@@ -1,0 +1,68 @@
+{
+  "selected": {
+    "lr": 0.001,
+    "l2": 0.0001,
+    "l2_kg": 1e-05,
+    "mess_dropout": 0.1
+  },
+  "val_means_recall@20": [
+    0.15053201277015757,
+    0.1516247155525222,
+    0.1454979426248731,
+    0.13369367497154622
+  ],
+  "test_mean_std": {
+    "recall@10": [
+      0.06414857265938567,
+      0.0025284952949263255
+    ],
+    "recall@20": [
+      0.10419864954812237,
+      0.010081148309462384
+    ],
+    "ndcg@10": [
+      0.17998799013540873,
+      0.018368317464384918
+    ],
+    "ndcg@20": [
+      0.1772642358359359,
+      0.016008030710963593
+    ]
+  },
+  "kg": {
+    "t1": {
+      "kg_variant": "none",
+      "cutoff": "t1",
+      "time_consistent": true,
+      "wikidata_snapshot": null,
+      "n_users": 537,
+      "n_items": 1639,
+      "n_entities": 1639,
+      "n_relations": 0,
+      "n_rel": 2,
+      "n_nodes": 2176,
+      "n_interactions": 42554,
+      "n_triples": 0,
+      "n_triples_dropped_unseen_tail": 0,
+      "n_edges": 85108,
+      "n_isolated_entities": 0
+    },
+    "t2": {
+      "kg_variant": "none",
+      "cutoff": "t1",
+      "time_consistent": true,
+      "wikidata_snapshot": null,
+      "n_users": 537,
+      "n_items": 1639,
+      "n_entities": 1639,
+      "n_relations": 0,
+      "n_rel": 2,
+      "n_nodes": 2176,
+      "n_interactions": 42554,
+      "n_triples": 0,
+      "n_triples_dropped_unseen_tail": 0,
+      "n_edges": 85108,
+      "n_isolated_entities": 0
+    }
+  }
+}
