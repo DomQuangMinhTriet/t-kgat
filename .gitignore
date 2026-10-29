@@ -17,3 +17,6 @@ data/export/
 
 # model checkpoints written by scripts/run.py (kgat), reproducible from the registry rows and the seeds
 results/**/states/
+
+# local run logs and unattended runner scripts (not part of the protocol)
+logs/
