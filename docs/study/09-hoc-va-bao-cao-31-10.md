@@ -144,7 +144,7 @@ Quy ước: mọi số lấy từ `results/registry.csv` (qua `scripts/10_rq3_ta
 
 ### 2.4 Tái lập
 - Tag `v0.1-review` (commit `0e194e3`) đóng băng dữ liệu, KG, baseline, báo cáo; đúng commit của lần chạy KGAT/T-KGAT mới nhất.
-- BPR-MF tái lập được trên GPU; KGAT không tái lập từng bit (`torch.sparse.mm`) ⇒ Phôn chạy lại từ clone sạch, tiêu chí khớp là trung bình 5 seed nằm trong một độ lệch chuẩn.
+- BPR-MF tái lập được trên GPU; KGAT không tái lập từng bit (`torch.sparse.mm`) ⇒ cần chạy lại từ clone sạch trên máy khác, tiêu chí khớp là trung bình 5 seed nằm trong một độ lệch chuẩn. **Việc này chưa làm** (dời sang đầu giai đoạn 4, trước khi gắn tag `v0.2-kgat`), nên khi present phải nói: kết quả KGAT/T-KGAT là sơ bộ, chưa tái lập độc lập.
 
 **Cô có thể hỏi:**
 - *"Tập val dùng vào việc gì?"* — Dừng sớm, chọn điểm lưới, chọn γ, chọn cửa sổ MostPop recent. Test chỉ chấm một lần.
@@ -192,6 +192,7 @@ Nguồn: `docs/rq3-table.md` (ml-100k, ml-1m-u10), `results/significance.csv` v�
 4. KGAT không tái lập từng bit trên GPU.
 5. ml-1m-u10 là 10% user của ML-1M, không phải ML-1M đầy đủ (KGAT trên ML-1M đầy đủ mất khoảng 29 giờ mỗi cấu hình).
 6. KGAT/T-KGAT chạy trước khi cô duyệt quy trình, và KG đổi sau khi đã xem test (0011).
+7. Chưa kiểm tra tái lập độc lập trên máy khác (không có tag `v0.2-kgat`); BPR-MF tái lập được, KGAT thì không từng bit.
 
 **Cô có thể hỏi:**
 - *"MostPop recent thắng, vậy mô hình có ích gì?"* — Trên ML-1M đủ user, BPR-MF thắng có ý nghĩa; ML-100K test quá ngắn và ít user. Mục tiêu là vượt MostPop recent trên ML-1M.
@@ -239,4 +240,4 @@ Nguồn: `docs/rq3-table.md` (ml-100k, ml-1m-u10), `results/significance.csv` v�
 | Trưa 30/10 | Thuộc Phụ lục A; tự trả lời 30 câu ở cuối tài liệu 08 |
 | Chiều 30/10 | Chạy notebook từ đầu đến cuối; xem lại các hình |
 | Tối 30/10 | Tập dượt 2 lượt theo tài liệu 10, lượt 2 đổi vai |
-| Sáng 31/10 | Đọc lại 3 thông điệp, 3 nhận xét, 6 hạn chế, 3 câu hỏi |
+| Sáng 31/10 | Đọc lại 3 thông điệp, 3 nhận xét, 7 hạn chế, 3 câu hỏi |
