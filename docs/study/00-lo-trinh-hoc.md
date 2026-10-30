@@ -45,3 +45,8 @@ Chủ đề 2 học trước chủ đề 1 vì nó trực tiếp gây ra kết q
 | $\Delta t$ | khoảng thời gian (từ tương tác/fact đến thời điểm dự đoán) |
 | $\gamma$ | hệ số suy giảm theo thời gian trong T-KGAT |
 | $\delta_r$ | bằng 1 nếu $r$ là quan hệ Interact (user–item), bằng 0 nếu là quan hệ KG |
+
+## Tài liệu ôn tập cho buổi 31/10
+- [08-tong-hop-ly-thuyet.md](08-tong-hop-ly-thuyet.md): tổng hợp lý thuyết cả 7 chủ đề, nối với code, quyết định và kết quả hiện tại.
+- [09-hoc-va-bao-cao-31-10.md](09-hoc-va-bao-cao-31-10.md): học để báo cáo theo bố cục đã chốt (dữ liệu, huấn luyện, kết quả), kèm câu cô có thể hỏi.
+- [10-huong-dan-present-31-10.md](10-huong-dan-present-31-10.md): kịch bản present, lời nói mẫu, checklist.

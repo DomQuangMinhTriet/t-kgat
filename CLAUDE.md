@@ -56,19 +56,23 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
 | `src/tkgat/train/bpr.py` | BPR training on any device; negatives sampled on the device from train positives only; early stop on val |
 | `src/tkgat/eval/` | full-ranking Recall/NDCG@K per user; paired Wilcoxon, paired t, bootstrap CI, Holm |
 | `src/tkgat/registry.py` | appends every val/test score with git commit, config, seed |
-| `scripts/01…08` | verify data → build splits → link entities → fetch Wikidata → Wikidata coverage report → build KG at t1/t2 → report numbers → KGAT export |
+| `scripts/01…08` | verify data → build splits → link entities → fetch Wikidata → Wikidata coverage report → build KG at t1/t2 (plus `kg_t*_dates.tsv` for Stage 2) → report numbers → KGAT export |
+| `scripts/09…10` | `09_significance.py` (baseline Wilcoxon + Holm, BPR-MF training table), `10_sensitivity.py` (val-only split sensitivity), `10_rq3_table.py` (RQ3 table, pairs and val curves from the registry; Stage 2 has its own Holm family) |
 | `scripts/run.py` | train every grid point × seed, select on val, score test once |
 | `configs/data/` | `ml100k.yaml` (5-core, main), `ml100k_k10.yaml` (10-core sensitivity), `ml1m.yaml`, `ml1m_u10.yaml` / `ml1m_u05.yaml` (random 10% / 5% of the ML-1M users, decision 0008) |
 | `src/tkgat/data/subsample.py` | `subsample_users`: all ratings of a seeded random sample of users (`user_fraction`, `user_seed` in a data config) |
 | `src/tkgat/export/kgat.py` | writes the official split and one KG variant in the KGAT file format (`scripts/08_export_kgat.py`, output in `data/export/`, ignored by git) |
 | `experiments/legacy_kgat_data/` | the 10k-interaction scripts of PR #20, reference only: not the project protocol, never report numbers from them |
-| `src/tkgat/kg/ckg.py`, `models/kgat.py`, `train/kgat.py` | the collaborative KG (`edge_ts`, `t_ref`, `dt_den`, `permute_train_ts`), KGAT / T-KGAT (Delta-t in the attention, decision 0009 Stage 1) and its trainer |
-| `configs/model/` | `mostpop.yaml`, `mostpop_recent.yaml`, `bprmf.yaml`, `kgat.yaml` (+ `kgat_nokg`, `kgat_drop_undated`, `kgat_static`), `tkgat.yaml` (gamma in {1, 3, 10}; (lr, l2) are read from the point the `kgat` run selected on val), `tkgat_perm.yaml` (the control: `train_ts` permuted over all train edges, one permutation per seed) |
-| `docs/` | `plan.md`, `decisions/`, `data-dictionary.md`, `meetings/`, `study/` (guides), `theory/` (team notes) |
+| `src/tkgat/kg/ckg.py`, `models/kgat.py`, `train/kgat.py` | the collaborative KG (`edge_ts`, `t_ref`, `dt_den`, `permute_train_ts`), KGAT / T-KGAT (Delta-t in the attention: Stage 1 on user-item edges, Stage 2 on KG triples via `time_on: kg`, decision 0009) and its trainer; `kg_ts`, `load_kg_dates`, `permute_kg_ts` for Stage 2 |
+| `configs/model/` | `mostpop.yaml`, `mostpop_recent.yaml`, `bprmf.yaml`, `kgat.yaml` (+ `kgat_nokg`, `kgat_drop_undated`, `kgat_static`), `tkgat.yaml` (gamma in {1, 3, 10}; (lr, l2) are read from the point the `kgat` run selected on val), `tkgat_perm.yaml` (the control: `train_ts` permuted over all train edges, one permutation per seed), `tkgat_sens.yaml` (gamma in {0.1, 0.3}, `--val-only`, decision 0010), `tkgat_kg.yaml` / `tkgat_kg_perm.yaml` (Stage 2 and its control: fact dates shuffled over the t1 KG triples) |
+| `docs/` | `plan.md`, `decisions/`, `data-dictionary.md`, `data-report.md`, `rq3-table.md`, `meetings/`, `study/` (guides; `08` theory summary, `09` study guide and `10` presenting guide for 2026-10-31), `theory/` (team notes, topics 1-7) |
+| `notebooks/` | `00_present_2026-10-31.ipynb`, `01_eda.ipynb`, `02_entity_linking.ipynb`, `03_kg_temporal.ipynb` |
+| `scripts/generate_ml1m_u10_kgat.py` | exports ml-1m-u10 to the folder layout of the reference KGAT code (PR #34); reference only |
 
-Planned (not written yet): T-KGAT Stage 2 (Delta-t on KG triples, decision 0009),
-`notebooks/02_entity_linking.ipynb`,
-`00_present_2026-10-31.ipynb`, `docs/data-report.md`.
+Planned (not run or not written yet): KGAT with the `drop_undated` and `static` KG variants, KGAT on the full ML-1M (~29 h per
+configuration), CKE baseline, 2-hop KG, one run under the paper's random split as a reference, a redesign of the Stage 2
+Delta-t scale (see Known facts), and the three directions of 2026-09-18 (rating as relation or weight, timestamp as relation,
+LLM cleaning of film metadata).
 
 ## Commands (Windows PowerShell, repo root)
 ```powershell
@@ -113,8 +117,30 @@ ruff check .; pytest                # both must pass before every commit (CI run
 - Wikidata: 119,748 facts, 18 relations, 3,725 of 3,811 linked films. Statement dates exist almost
   only for `award_received` (80%) and `nominated_for` (97%). Titanic's Oscars (1998-03-23) fall between
   t1 and t2 of ML-100K.
-- KG triples at t1 (verified 2026-10-23, `kg_meta.json`): ML-100K default 36,560 / drop_undated 29,840 /
-  static 37,103; ML-1M default 103,443 / drop_undated 84,522 / static 104,782.
+- KG triples at t1 before decision 0011 (Wikidata only; verified 2026-10-23, `kg_meta.json`): ML-100K default 36,560 /
+  drop_undated 29,840 / static 37,103; ML-1M default 103,443 / drop_undated 84,522 / static 104,782.
+- KG triples after decision 0011 (Wikidata + MovieLens genre, release year and decade; script 06 run 2026-10-29):
+  ml-100k t1 default 40,210 (3,650 MovieLens facts) / drop_undated 33,490 / static 40,757, t2 default 40,230;
+  ml-1m-u10 default 71,553 (6,209 MovieLens facts) / drop_undated 59,577 / static 72,686, same at t1 and t2.
+- Tag `v0.1-review` = commit `0e194e3` (data, KG, baselines, data report frozen); it is also the commit of the 0011 re-run.
+- Preliminary KG-model results after 0011 (all rows from `0e194e3`, RTX 3050, 5 seeds; `docs/rq3-table.md`), test
+  Recall@20: ml-100k KGAT 0.2096 ± 0.0284, KGAT no KG 0.2017 ± 0.0232, T-KGAT (gamma 3) 0.2151 ± 0.0174, permuted
+  0.1950 ± 0.0156; ml-1m-u10 KGAT (l2 1e-5) 0.1086 ± 0.0054, no KG 0.1042 ± 0.0101, T-KGAT (gamma 1) 0.1113 ± 0.0046,
+  permuted 0.1119 ± 0.0049. T-KGAT is not different from its permutation control on either dataset (p Holm >= 0.45);
+  KGAT vs no KG on ml-1m-u10: Recall p Holm 0.143, NDCG 0.049. Val gamma sensitivity points in opposite directions
+  (ml-100k: gamma 0 best; ml-1m-u10: gamma 1 best). No evidence yet that time helps.
+- Stage 2 Delta-t scale: on the t1 default KG only 0.7% (ml-100k) / 0.0% (ml-1m-u10) of the triples are dated with
+  `dt_norm < 1`; 82.6% / 83.3% are dated and capped at 1, 16.7% / 16.7% undated (`count_dt.py`, 2026-10-29). With the cap of
+  0009 item 10, Stage 2 down-weights dated facts against undated ones; it does not measure old against new facts. Say so
+  whenever Stage 2 results are reported.
+- Stage 2 results (all rows from `18cac0d`, RTX 3050, 5 seeds; `docs/rq3-table.md`): gamma = 1 selected on both datasets
+  (lower edge of the grid). Test Recall@20: ml-100k `tkgat_kg` 0.1933 ± 0.0216, control `tkgat_kg_perm` 0.1971 ± 0.0238
+  (vs KGAT p Holm 0.162); ml-1m-u10 0.1145 ± 0.0148, control 0.1164 ± 0.0099 (vs KGAT Recall p Holm 0.189, NDCG 0.065).
+  Real vs permuted fact dates: no difference (p Holm >= 0.155). No evidence for time on the KG either.
+- Full ML-1M KG after 0011 (`docs/data-report-numbers.md`, 2026-10-30): default 114,288 / drop_undated 95,367 / static
+  116,059 triples at t1 (same at t2); 11,277 MovieLens facts. The time filter drops 1.3% of the facts on ML-100K (547 of
+  40,757) and 1.5% on ML-1M (1,771); affected items carry 53.1% / 48.1% (ML-100K) and 41.5% / 43.9% (ML-1M) of the
+  val / test positives. The bullets below with ~1.5% and 344 / 899 items are the Wikidata-only numbers of 2026-10-23.
   ML-1M has the same KG at t1 and t2 (no dated fact between 2000-12-02 and 2000-12-29).
 - The time filter drops only ~1.5% of facts (ML-100K: 543 of 37,103 at t1), but they fall on popular
   films: the 10% most-rated train items hold 16% of all facts yet 44% of the future award/nomination facts

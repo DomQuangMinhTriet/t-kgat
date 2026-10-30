@@ -11,6 +11,15 @@
   gamma = 1 has already been seen. This draft quotes no number: they belong to `results/registry.csv` (read with
   `registry.load`) and are not in `main` yet; they are to be taken from there, and the datasets on which gamma = 1 was
   selected confirmed, before the draft is approved.
+- Update after the 0011 re-run (2026-10-29, all rows from the clean commit `0e194e3`, read with `registry.load`; still a
+  proposal): the re-run on the KG with MovieLens metadata selected **gamma = 3 on ml-100k** (interior of the grid) and
+  **gamma = 1 on ml-1m-u10** (lower edge). Validation Recall@20 (mean ± sample std over five seeds, (lr, l2) of the
+  selected KGAT point) for gamma 0 (KGAT) / 0.1 / 0.3 / 1 / 3 / 10: ml-100k 0.1922 ± 0.0111 / 0.1868 ± 0.0123 /
+  0.1901 ± 0.0199 / 0.1837 ± 0.0162 / 0.1860 ± 0.0163 / 0.1801 ± 0.0149; ml-1m-u10 0.1518 ± 0.0044 / 0.1478 ± 0.0067 /
+  0.1492 ± 0.0080 / 0.1564 ± 0.0044 / 0.1499 ± 0.0051 / 0.1448 ± 0.0044. The two datasets point in opposite directions
+  (ml-100k prefers gamma = 0, ml-1m-u10 prefers gamma = 1), the opposite of the Wikidata-only run, and most differences are
+  within one std. The reading is unchanged: the time signal is weak and mixed with seed noise. Open points (a)-(c) below
+  are answered: gamma sits at the edge on ml-1m-u10 only; the appendix covers both datasets; the extra points have run.
 - Decision:
   1. **The official grid does not change.** It was registered before the runs, and the test score of gamma = 1 was looked at.
      The official T-KGAT result stays the test row of the gamma that the latest official run selected (`selected` in
