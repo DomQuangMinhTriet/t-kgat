@@ -78,7 +78,7 @@ Quy ước: mọi số lấy từ `results/registry.csv` (qua `scripts/10_rq3_ta
 - Fact có ngày giữ nếu trước mốc (năm ⇒ 31/12); thực thể ra đời sau mốc bị bỏ; fact không ngày giữ nếu hai đầu đã tồn tại. KG train/val dựng tại t1, test tại t2.
 - Kích thước KG default tại t1: ml-100k 40.210 triple, ml-1m-u10 71.553.
 - Ví dụ: 11 giải Oscar của *Titanic* (23/03/1998) nằm giữa t1 và t2 ⇒ chỉ có trong KG test; *Titanic* mất 28 fact ở t1.
-- Bộ lọc chỉ bỏ khoảng 1,5% fact nhưng chúng tập trung ở phim phổ biến: item bị mất ít nhất một fact mang 53,1% số dương ở val và 48,1% ở test (ML-100K). Hình `fig4_fact_bi_loai.png`.
+- Bộ lọc chỉ bỏ 1,3% fact (ML-100K; 1,5% ở ML-1M) nhưng chúng tập trung ở phim phổ biến: item bị mất ít nhất một fact mang 53,1% số dương ở val và 48,1% ở test (ML-100K). Hình `fig4_fact_bi_loai.png`.
 
 ### 1.6 Bằng chứng không rò rỉ (08, mục 2.6)
 - `check_split`: 6 kiểm tra (thứ tự thời gian; không cặp ở hai phần; user/item đã biết; 5-core trên train; mask chỉ dùng quá khứ; đáp án không trùng mask). Script 02 từ chối lưu split vi phạm.
@@ -167,6 +167,8 @@ Quy ước: mọi số lấy từ `results/registry.csv` (qua `scripts/10_rq3_ta
 | KGAT không KG | 0,2017 ± 0,0232 | 0,1042 ± 0,0101 | chưa chạy |
 | T-KGAT | 0,2151 ± 0,0174 | 0,1113 ± 0,0046 | chưa chạy |
 | T-KGAT hoán vị | 0,1950 ± 0,0156 | 0,1119 ± 0,0049 | chưa chạy |
+| T-KGAT Stage 2 | 0,1933 ± 0,0216 (γ = 1) | 0,1145 ± 0,0148 (γ = 1) | chưa chạy |
+| Stage 2 hoán vị ngày fact | 0,1971 ± 0,0238 | 0,1164 ± 0,0099 | chưa chạy |
 
 Nguồn: `docs/rq3-table.md` (ml-100k, ml-1m-u10), `results/significance.csv` và `docs/data-report.md` (ML-1M).
 
@@ -178,7 +180,7 @@ Nguồn: `docs/rq3-table.md` (ml-100k, ml-1m-u10), `results/significance.csv` v�
 
 **Nhận xét 3 — Thời gian (RQ3).** T-KGAT so với bản hoán vị: không khác biệt trên cả hai bộ (p Holm ≥ 0,45). T-KGAT hơn KGAT ở NDCG trên ml-1m-u10 (p Holm 0,049) nhưng bản hoán vị cũng đạt mức đó ⇒ phần hơn không đến từ thời gian. Độ nhạy γ chỉ trên val cho hai chiều ngược nhau (ml-100k nghiêng về γ = 0; ml-1m-u10 về γ = 1). Giải thích bằng dữ liệu: rating nhập theo phiên nên Δt theo user ≈ 0; tín hiệu thời gian yếu.
 
-**Stage 2** (Δt trên triple KG): *chờ kết quả sáng 30/10.* Điều đã biết trước khi có số: Δt_norm của cạnh KG bị chặn ở 1, và chỉ 0,7% (ml-100k) / 0,0% (ml-1m-u10) fact có ngày có Δt_norm < 1 ⇒ Stage 2 thực chất giảm trọng số fact có ngày so với fact không ngày; nó không đo "fact cũ hay mới". Phải nói đúng như vậy.
+**Stage 2** (Δt trên triple KG, γ = 1 được chọn trên cả hai bộ, là mép dưới lưới): ml-100k 0,1933 ± 0,0216, thấp hơn KGAT nhưng không có ý nghĩa (Recall p Holm 0,162); ml-1m-u10 0,1145 ± 0,0148, cao hơn KGAT nhưng không có ý nghĩa (Recall p Holm 0,189; NDCG 0,065). So với bản hoán vị ngày fact: không khác biệt trên cả hai bộ (p Holm từ 0,155 trở lên), và bản hoán vị còn nhỉnh hơn ở Recall. Vì Δt_norm của cạnh KG bị chặn ở 1 (chỉ 0,7% / 0,0% fact có ngày nằm dưới mức này), Stage 2 thực chất giảm trọng số fact có ngày so với fact không ngày, không đo được "fact cũ hay mới". Đọc: không có bằng chứng; cần thiết kế lại thang Δt cho KG. Phải nói đúng như vậy.
 
 ### 3.3 Minh bạch về quyết định 0011 (bắt buộc nói)
 "KG được thêm metadata MovieLens (PR #34) sau khi điểm test của KG cũ đã được xem. Quyết định 0011 quy định: KG mới là chính thức, chạy lại mọi mô hình dùng KG với cùng lưới và seed, lấy kết quả mới dù tốt hay xấu; kết quả KG cũ để ở phụ lục của `docs/rq3-table.md`. Nhóm thừa nhận đây là lần nhìn test thứ hai của KGAT và T-KGAT."
@@ -227,12 +229,13 @@ Nguồn: `docs/rq3-table.md` (ml-100k, ml-1m-u10), `results/significance.csv` v�
 | ml-100k KGAT / T-KGAT / hoán vị | 0,2096 / 0,2151 / 0,1950 |
 | ml-1m-u10 KGAT / T-KGAT / hoán vị | 0,1086 / 0,1113 / 0,1119 |
 | Stage 2: fact có ngày với Δt_norm < 1 | 0,7% (ml-100k), 0,0% (ml-1m-u10) |
+| Stage 2 / hoán vị ngày fact | 0,1933 / 0,1971 (ml-100k); 0,1145 / 0,1164 (ml-1m-u10) |
 
 ## Phụ lục B — Lịch ôn đến sáng 31/10
 
 | Khi nào | Việc |
 |---|---|
-| Sáng 30/10 | Đọc tài liệu 08 mục 2, 4, 5 (rò rỉ, KGAT, thời gian); điền số Stage 2 vào phần 3 khi có |
+| Sáng 30/10 | Đọc tài liệu 08 mục 2, 4, 5 (rò rỉ, KGAT, thời gian); đọc kỹ đoạn Stage 2 ở phần 3 (đã có số) |
 | Trưa 30/10 | Thuộc Phụ lục A; tự trả lời 30 câu ở cuối tài liệu 08 |
 | Chiều 30/10 | Chạy notebook từ đầu đến cuối; xem lại các hình |
 | Tối 30/10 | Tập dượt 2 lượt theo tài liệu 10, lượt 2 đổi vai |

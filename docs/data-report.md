@@ -9,7 +9,7 @@ Mọi ngày tính theo UTC. Mọi con số do `scripts/07_report_numbers.py` sin
 - **Dữ liệu.** ML-100K: 943 user, 1.682 item được rating, 100.000 rating, từ 20/09/1997 đến 22/04/1998. ML-1M: 6.040 user, 3.706 item được rating, 1.000.209 rating, từ 25/04/2000 đến 28/02/2003, nhưng 90,5% rating nằm trong năm 2000. Cả 9 file gốc khớp SHA-256.
 - **Timestamp.** Nhóm hiểu timestamp là lúc user ghi rating (README của GroupLens chỉ nói số giây kể từ epoch). 77,9% rating của ML-100K và 72,4% của ML-1M nằm trong 24 giờ đầu của user, nên các cạnh của một user gần như trùng thời điểm, còn các cạnh của một item trải trên nhiều tháng (mục 3). Báo cáo chưa kiểm tra nguyên nhân.
 - **Chia theo mốc t1/t2** giữ lại 12,6% (val) và 13,3% (test) positive của ML-100K, tức chỉ 66 và 51 user; ML-1M giữ lại 21,0% và 75,7% với 480 và 952 user (mục 4).
-- **KG theo thời gian** chỉ bỏ 1,5% (ML-100K) và 1,3% (ML-1M) số fact tại t1, nhưng các item mất fact nhận 53,1% và 48,1% positive val/test của ML-100K, 40,6% và 42,6% của ML-1M (mục 6).
+- **KG theo thời gian** chỉ bỏ 1,3% (ML-100K) và 1,5% (ML-1M) số fact tại t1, nhưng các item mất fact nhận 53,1% và 48,1% positive val/test của ML-100K, 41,5% và 43,9% của ML-1M (mục 6). Từ quyết định 0011, KG gồm fact Wikidata và metadata MovieLens (thể loại, năm, thập niên).
 - **Baseline** (Recall@20 trên test). ML-1M: MostPop 0,0902; MostPop recent (cửa sổ 7 ngày) 0,1060; BPR-MF 0,1194 ± 0,0031. ML-100K (51 user test): MostPop 0,1555; MostPop recent (cửa sổ 14 ngày) 0,3372; BPR-MF 0,1471 ± 0,0295 (mục 7).
 
 ## 1. Hai bộ dữ liệu
@@ -95,24 +95,24 @@ KB4Rec liên kết MovieLens-20M với Freebase và YAGO. ML-1M dùng chung khô
 
 **Quy tắc** (quyết định 0004 và 0006). KG tại mốc t chỉ giữ fact đã đúng trước t (so sánh chặt): fact có ngày statement giữ nếu ngày đó trước t; fact trỏ tới thực thể chưa tồn tại tại t (phần tiếp theo, hãng ra đời sau) bị loại; fact không có ngày nào, như phim → thể loại, được giữ theo mặc định. Ngày chỉ có năm đọc là 31/12, chỉ có tháng đọc là ngày cuối tháng. KG của train và val dựng tại t1, của test tại t2. Ba biến thể: **default**, **drop_undated** (bỏ fact không có ngày nào) và **static** (giữ mọi fact như bài báo KGAT; chỉ để đo rò rỉ qua KG, không phải kết quả đúng theo thời gian).
 
-**Các fact có ngày đến đâu.** Cơ sở: fact của item train, 37.103 fact (932 item) ở ML-100K và 104.782 fact (3.009 item) ở ML-1M. Chỉ 7,6% và 5,8% số fact có ngày của chính statement, và 97,1% và 97,8% trong số đó thuộc `award_received` hoặc `nominated_for`, đúng hai quan hệ có thể kéo thông tin tương lai vào KG; 18,1% (cả hai bộ) không có ngày nào. Ngày chỉ có năm là một giới hạn đã biết: 44,4% trong 6.295 giá trị `point_in_time` (Phụ lục D).
+**Các fact có ngày đến đâu.** Cơ sở: fact Wikidata của item train, 37.103 fact (927 item) ở ML-100K và 104.782 fact (2.975 item) ở ML-1M; ngoài ra có 3.654 và 11.277 fact metadata MovieLens (quyết định 0011), mang ngày công chiếu của phim và đi qua cùng các quy tắc. Chỉ 7,6% và 5,8% số fact có ngày của chính statement, và 97,1% và 97,8% trong số đó thuộc `award_received` hoặc `nominated_for`, đúng hai quan hệ có thể kéo thông tin tương lai vào KG; 18,1% (cả hai bộ) không có ngày nào. Ngày chỉ có năm là một giới hạn đã biết: 44,4% trong 6.295 giá trị `point_in_time` (Phụ lục D).
 
 | Biến thể | ML-100K tại t1 | ML-100K tại t2 | ML-1M tại t1 | ML-1M tại t2 |
 |---|---|---|---|---|
-| default | 36.560 | 36.580 | 103.443 | 103.443 |
-| drop_undated | 29.840 | 29.860 | 84.522 | 84.522 |
-| static (tham chiếu) | 37.103 | 37.103 | 104.782 | 104.782 |
+| default | 40.210 | 40.230 | 114.288 | 114.288 |
+| drop_undated | 33.490 | 33.510 | 95.367 | 95.367 |
+| static (tham chiếu) | 40.757 | 40.757 | 116.059 | 116.059 |
 
-*Bảng 4. Số triple của KG theo biến thể và mốc.*
+*Bảng 4. Số triple của KG theo biến thể và mốc (Wikidata và metadata MovieLens, quyết định 0011).*
 
-- **Fact bị lọc tại t1** (static trừ default): 543 fact (1,5%) ở ML-100K và 1.339 fact (1,3%) ở ML-1M; đích chưa tồn tại là 433 và 1.069 fact, ngày statement sau mốc là 110 và 270 fact. Biến thể drop_undated bỏ thêm 6.720 và 18.921 fact không có ngày nào.
+- **Fact bị lọc tại t1** (static trừ default): 547 fact (1,3%) ở ML-100K và 1.771 fact (1,5%) ở ML-1M; đích chưa tồn tại là 433 và 1.069 fact, ngày sau mốc là 114 và 702 fact (kể cả fact metadata MovieLens của phim mà năm phát hành, đọc là 31/12, rơi sau mốc; quyết định 0011). Biến thể drop_undated bỏ thêm 6.720 và 18.921 fact không có ngày nào.
 - **Từ t1 đến t2:** KG default của ML-100K tăng 20 triple, trong đó 19 là fact `award_received` được trao giữa hai mốc; ML-1M không đổi vì không có fact nào mang ngày rơi vào khoảng từ 02/12/2000 đến 29/12/2000. Số thực thể chỉ xuất hiện trong KG t2 là 1 (ML-100K) và 0 (ML-1M); cách xử lý sẽ chọn ở giai đoạn KGAT.
 
-**Fact bị loại tập trung vào phim nổi tiếng.** 10% item phổ biến nhất trong train (93 và 301 item) nắm 15,8% và 15,0% số fact, nhưng chiếm 44,3% và 35,8% số fact giải thưởng và đề cử "tương lai" bị loại tại t1 (97 fact trên 25 phim ở ML-100K; 260 fact trên 74 phim ở ML-1M). Ví dụ *Titanic* và *Toy Story*: Phụ lục D.
+**Fact bị loại tập trung vào phim nổi tiếng.** 10% item phổ biến nhất trong train (93 và 301 item) nắm 15,3% và 14,6% số fact, nhưng chiếm 44,3% và 35,8% số fact giải thưởng và đề cử "tương lai" bị loại tại t1 (97 fact trên 25 phim ở ML-100K; 260 fact trên 74 phim ở ML-1M). Ví dụ *Titanic* và *Toy Story*: Phụ lục D.
 
 ![Hình 3. Trái: fact bị loại tại t1 theo quan hệ ở ML-100K, tách theo lý do. Phải: tỷ lệ positive val/test nằm trên các item mất ít nhất một fact.](figures/fig4_fact_bi_loai.png)
 
-**Phần tương tác bị ảnh hưởng.** Một item "bị lọc" là item có số triple khác nhau giữa static và default tại cùng một mốc: 344 item (36,9% item train) ở ML-100K và 899 item (29,9% item train) ở ML-1M. Các item này nhận 53,1% positive val và 48,1% positive test của ML-100K, 40,6% và 42,6% của ML-1M: dù chỉ một phần nhỏ fact bị lọc, phần lớn tương tác dùng để chọn mô hình và chấm điểm nằm trên item mà KG tĩnh chứa thông tin tương lai. Mức ảnh hưởng lên Recall@20 **chưa được đo**; chỉ đo được khi chạy KGAT với hai biến thể.
+**Phần tương tác bị ảnh hưởng.** Một item "bị lọc" là item có số triple khác nhau giữa static và default tại cùng một mốc: 344 item (36,9% item train) ở ML-100K và 945 item (31,4% item train) ở ML-1M. Các item này nhận 53,1% positive val và 48,1% positive test của ML-100K, 41,5% và 43,9% của ML-1M: dù chỉ một phần nhỏ fact bị lọc, phần lớn tương tác dùng để chọn mô hình và chấm điểm nằm trên item mà KG tĩnh chứa thông tin tương lai. Mức ảnh hưởng lên Recall@20 **chưa được đo**; chỉ đo được khi chạy KGAT với hai biến thể.
 
 ## 7. Baseline
 

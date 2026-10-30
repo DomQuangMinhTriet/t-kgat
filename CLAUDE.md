@@ -133,6 +133,14 @@ ruff check .; pytest                # both must pass before every commit (CI run
   `dt_norm < 1`; 82.6% / 83.3% are dated and capped at 1, 16.7% / 16.7% undated (`count_dt.py`, 2026-10-29). With the cap of
   0009 item 10, Stage 2 down-weights dated facts against undated ones; it does not measure old against new facts. Say so
   whenever Stage 2 results are reported.
+- Stage 2 results (all rows from `18cac0d`, RTX 3050, 5 seeds; `docs/rq3-table.md`): gamma = 1 selected on both datasets
+  (lower edge of the grid). Test Recall@20: ml-100k `tkgat_kg` 0.1933 ± 0.0216, control `tkgat_kg_perm` 0.1971 ± 0.0238
+  (vs KGAT p Holm 0.162); ml-1m-u10 0.1145 ± 0.0148, control 0.1164 ± 0.0099 (vs KGAT Recall p Holm 0.189, NDCG 0.065).
+  Real vs permuted fact dates: no difference (p Holm >= 0.155). No evidence for time on the KG either.
+- Full ML-1M KG after 0011 (`docs/data-report-numbers.md`, 2026-10-30): default 114,288 / drop_undated 95,367 / static
+  116,059 triples at t1 (same at t2); 11,277 MovieLens facts. The time filter drops 1.3% of the facts on ML-100K (547 of
+  40,757) and 1.5% on ML-1M (1,771); affected items carry 53.1% / 48.1% (ML-100K) and 41.5% / 43.9% (ML-1M) of the
+  val / test positives. The bullets below with ~1.5% and 344 / 899 items are the Wikidata-only numbers of 2026-10-23.
   ML-1M has the same KG at t1 and t2 (no dated fact between 2000-12-02 and 2000-12-29).
 - The time filter drops only ~1.5% of facts (ML-100K: 543 of 37,103 at t1), but they fall on popular
   films: the 10% most-rated train items hold 16% of all facts yet 44% of the future award/nomination facts

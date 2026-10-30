@@ -17,6 +17,8 @@ Nguồn: `results/registry.csv` qua `registry.load`, chỉ dòng `phase = test` 
 | KGAT không KG [sơ bộ] | l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,2017 ± 0,0232 | 0,1764 ± 0,0185 | 5 |
 | T-KGAT [sơ bộ] | gamma = 3, l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,2151 ± 0,0174 | 0,1840 ± 0,0136 | 5 |
 | T-KGAT (đối chứng hoán vị) [sơ bộ] | gamma = 3, l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,1950 ± 0,0156 | 0,1789 ± 0,0099 | 5 |
+| T-KGAT giai đoạn 2 (Δt trên KG) [sơ bộ] | gamma = 1, l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1, time_on = kg | 0,1933 ± 0,0216 | 0,1817 ± 0,0079 | 5 |
+| T-KGAT giai đoạn 2 (đối chứng hoán vị ngày fact) [sơ bộ] | gamma = 1, l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1, time_on = kg | 0,1971 ± 0,0238 | 0,1826 ± 0,0122 | 5 |
 
 **So sánh cặp** (hiệu = trước − sau):
 
@@ -25,9 +27,13 @@ Nguồn: `results/registry.csv` qua `registry.load`, chỉ dòng `phase = test` 
 | T-KGAT so với KGAT | Recall@20 | 5 | 51 | 22 | 0,0055 | 0,733 | 1,000 | only 51 evaluation users (< 100); only 22 non-zero differences (< 30) |
 | T-KGAT thật so với hoán vị | Recall@20 | 5 | 51 | 29 | 0,0201 | 0,315 | 0,944 | only 51 evaluation users (< 100); only 29 non-zero differences (< 30) |
 | KGAT so với KGAT không KG | Recall@20 | 5 | 51 | 28 | 0,0079 | 0,909 | 1,000 | only 51 evaluation users (< 100); only 28 non-zero differences (< 30) |
+| T-KGAT giai đoạn 2 so với KGAT | Recall@20 | 5 | 51 | 30 | -0,0164 | 0,162 | 0,162 | only 51 evaluation users (< 100) |
+| T-KGAT giai đoạn 2 thật so với hoán vị | Recall@20 | 5 | 51 | 26 | -0,0038 | 0,078 | 0,155 | only 51 evaluation users (< 100); only 26 non-zero differences (< 30) |
 | T-KGAT so với KGAT | NDCG@20 | 5 | 51 | 35 | -0,0019 | 0,512 | 0,651 | only 51 evaluation users (< 100) |
 | T-KGAT thật so với hoán vị | NDCG@20 | 5 | 51 | 34 | 0,0051 | 0,326 | 0,651 | only 51 evaluation users (< 100) |
 | KGAT so với KGAT không KG | NDCG@20 | 5 | 51 | 35 | 0,0095 | 0,196 | 0,587 | only 51 evaluation users (< 100) |
+| T-KGAT giai đoạn 2 so với KGAT | NDCG@20 | 5 | 51 | 35 | -0,0042 | 0,376 | 0,456 | only 51 evaluation users (< 100) |
+| T-KGAT giai đoạn 2 thật so với hoán vị | NDCG@20 | 5 | 51 | 33 | -0,0009 | 0,228 | 0,456 | only 51 evaluation users (< 100) |
 
 ![Learning curve val của KGAT, T-KGAT và T-KGAT hoán vị trên ml-100k](figures/rq3_curves_ml-100k.png)
 
@@ -44,6 +50,8 @@ Nguồn: `results/registry.csv` qua `registry.load`, chỉ dòng `phase = test` 
 | KGAT không KG [sơ bộ] | l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,1042 ± 0,0101 | 0,1773 ± 0,0160 | 5 |
 | T-KGAT [sơ bộ] | gamma = 1, l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,1113 ± 0,0046 | 0,1942 ± 0,0056 | 5 |
 | T-KGAT (đối chứng hoán vị) [sơ bộ] | gamma = 1, l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,1119 ± 0,0049 | 0,1951 ± 0,0079 | 5 |
+| T-KGAT giai đoạn 2 (Δt trên KG) [sơ bộ] | gamma = 1, l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1, time_on = kg | 0,1145 ± 0,0148 | 0,1958 ± 0,0109 | 5 |
+| T-KGAT giai đoạn 2 (đối chứng hoán vị ngày fact) [sơ bộ] | gamma = 1, l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1, time_on = kg | 0,1164 ± 0,0099 | 0,1919 ± 0,0097 | 5 |
 
 **So sánh cặp** (hiệu = trước − sau):
 
@@ -52,9 +60,13 @@ Nguồn: `results/registry.csv` qua `registry.load`, chỉ dòng `phase = test` 
 | T-KGAT so với KGAT | Recall@20 | 5 | 95 | 66 | 0,0027 | 0,225 | 0,450 | only 95 evaluation users (< 100) |
 | T-KGAT thật so với hoán vị | Recall@20 | 5 | 95 | 65 | -0,0006 | 0,360 | 0,450 | only 95 evaluation users (< 100) |
 | KGAT so với KGAT không KG | Recall@20 | 5 | 95 | 75 | 0,0044 | 0,048 | 0,143 | only 95 evaluation users (< 100) |
+| T-KGAT giai đoạn 2 so với KGAT | Recall@20 | 5 | 95 | 68 | 0,0058 | 0,095 | 0,189 | only 95 evaluation users (< 100) |
+| T-KGAT giai đoạn 2 thật so với hoán vị | Recall@20 | 5 | 95 | 61 | -0,0020 | 0,900 | 0,900 | only 95 evaluation users (< 100) |
 | T-KGAT so với KGAT | NDCG@20 | 5 | 95 | 82 | 0,0069 | 0,016 | 0,049 | only 95 evaluation users (< 100) |
 | T-KGAT thật so với hoán vị | NDCG@20 | 5 | 95 | 82 | -0,0008 | 0,833 | 0,833 | only 95 evaluation users (< 100) |
 | KGAT so với KGAT không KG | NDCG@20 | 5 | 95 | 84 | 0,0100 | 0,016 | 0,049 | only 95 evaluation users (< 100) |
+| T-KGAT giai đoạn 2 so với KGAT | NDCG@20 | 5 | 95 | 83 | 0,0085 | 0,032 | 0,065 | only 95 evaluation users (< 100) |
+| T-KGAT giai đoạn 2 thật so với hoán vị | NDCG@20 | 5 | 95 | 82 | 0,0038 | 0,276 | 0,276 | only 95 evaluation users (< 100) |
 
 ![Learning curve val của KGAT, T-KGAT và T-KGAT hoán vị trên ml-1m-u10](figures/rq3_curves_ml-1m-u10.png)
 

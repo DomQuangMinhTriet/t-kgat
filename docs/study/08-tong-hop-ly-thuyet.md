@@ -248,7 +248,7 @@ MovieLens (id, tên, năm) → KB4Rec (MovieLens → Freebase) → Wikidata qua 
 - Fact có ngày: giữ nếu ngày < mốc. Fact trỏ tới thực thể ra đời sau mốc: bỏ. Fact không ngày: giữ nếu hai đầu đã tồn tại (biến thể `default`); biến thể `drop_undated` bỏ hết fact không ngày; `static` là KG không lọc (chỉ làm tham chiếu đo rò rỉ qua KG).
 - KG train/val dựng tại t1, test tại t2. `check_kg` từ chối lưu KG có fact sau mốc.
 - Ví dụ: 11 giải Oscar của *Titanic* (23/03/1998) nằm giữa t1 và t2 của ML-100K ⇒ chỉ có trong KG test; *Titanic* mất 28 fact ở t1. *Toy Story* `followed_by` *Toy Story 2* (24/11/1999) sau toàn bộ ML-100K.
-- Bộ lọc chỉ bỏ khoảng 1,5% fact nhưng chúng rơi vào phim phổ biến: 10% item nhiều rating nhất giữ 16% số fact nhưng 44% số fact giải thưởng/đề cử tương lai bị bỏ tại t1 (ML-100K).
+- Bộ lọc chỉ bỏ 1,3% fact (ML-100K; 1,5% ở ML-1M) nhưng chúng rơi vào phim phổ biến: 10% item nhiều rating nhất giữ 15,3% số fact nhưng 44,3% số fact giải thưởng/đề cử tương lai bị bỏ tại t1 (ML-100K).
 - **Giới hạn phải nói:** Wikidata là bản chụp 2026. Ta lọc được *ngày sự kiện*, không lọc được *ngày fact được nhập vào KG*.
 
 ### 6.6 Hai nguồn KG hiện tại
@@ -330,6 +330,8 @@ Recall@20 trên test, trung bình ± độ lệch chuẩn mẫu qua 5 seed.
 | KGAT không KG | 0,2017 ± 0,0232 | 0,1042 ± 0,0101 | chưa chạy |
 | T-KGAT Stage 1 | 0,2151 ± 0,0174 (γ = 3) | 0,1113 ± 0,0046 (γ = 1) | chưa chạy |
 | T-KGAT hoán vị | 0,1950 ± 0,0156 | 0,1119 ± 0,0049 | chưa chạy |
+| T-KGAT Stage 2 | 0,1933 ± 0,0216 (γ = 1) | 0,1145 ± 0,0148 (γ = 1) | chưa chạy |
+| Stage 2 hoán vị ngày fact | 0,1971 ± 0,0238 | 0,1164 ± 0,0099 | chưa chạy |
 
 p Holm (Wilcoxon cặp theo user), Recall / NDCG:
 - T-KGAT vs KGAT: ml-100k 1,000 / 0,651; ml-1m-u10 0,450 / 0,049.
@@ -337,7 +339,9 @@ p Holm (Wilcoxon cặp theo user), Recall / NDCG:
 - KGAT vs không KG: ml-100k 1,000 / 0,587; ml-1m-u10 0,143 / 0,049.
 - Baseline ML-1M: BPR-MF > MostPop recent (p Holm ≈ 1,1·10⁻⁵); ml-100k: MostPop recent > BPR-MF (p Holm 0,029).
 
-**Đọc:** chưa có bằng chứng thời gian giúp (T-KGAT không khác bản hoán vị); bằng chứng KG giúp yếu hơn so với KG cũ; độ nhạy γ trên val cho hai chiều ngược nhau (ml-100k nghiêng về γ = 0, ml-1m-u10 về γ = 1). Stage 2 đang chạy (đêm 29/10).
+**Đọc:** chưa có bằng chứng thời gian giúp (T-KGAT không khác bản hoán vị); bằng chứng KG giúp yếu hơn so với KG cũ; độ nhạy γ trên val cho hai chiều ngược nhau (ml-100k nghiêng về γ = 0, ml-1m-u10 về γ = 1). Stage 2 cũng không có bằng chứng (xem dưới).
+
+**Stage 2** (Δt trên triple KG, γ = 1 được chọn trên cả hai bộ, là mép dưới lưới): ml-100k 0,1933 ± 0,0216, thấp hơn KGAT nhưng không có ý nghĩa (Recall p Holm 0,162); ml-1m-u10 0,1145 ± 0,0148, cao hơn KGAT nhưng không có ý nghĩa (Recall p Holm 0,189; NDCG 0,065). So với bản hoán vị ngày fact: không khác biệt trên cả hai bộ (p Holm từ 0,155 trở lên), và bản hoán vị còn nhỉnh hơn ở Recall. Vì Δt_norm của cạnh KG bị chặn ở 1 (chỉ 0,7% / 0,0% fact có ngày nằm dưới mức này), Stage 2 thực chất giảm trọng số fact có ngày so với fact không ngày, không đo được "fact cũ hay mới". Đọc: không có bằng chứng; cần thiết kế lại thang Δt cho KG.
 
 ---
 

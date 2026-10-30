@@ -53,7 +53,7 @@ Ký hiệu: **[Mở]** = mục notebook hoặc hình cần mở; **[Chuyển]** 
 
 **Triết:** "Để có KG, nhóm nối MovieLens sang Freebase qua KB4Rec rồi sang Wikidata. Độ phủ là 97,2% số phim. Độ phủ không phải độ chính xác, nên nhóm kiểm 50 phim ngẫu nhiên: không phim nào sai, nhưng khoảng tin cậy Wilson 95% vẫn cho tỷ lệ sai đến khoảng 7%, nên nhóm không nói 'đúng 100%'. KG hiện có fact Wikidata và metadata MovieLens như thể loại, năm phát hành."
 
-"Theo góp ý của cô, một fact chỉ được dùng nếu nó đã đúng trước mốc. Ngày chỉ có năm thì coi là 31/12 cho chắc. KG cho train và val dựng tại t1, cho test dựng tại t2. Ví dụ *Titanic*: 11 giải Oscar ngày 23/03/1998 nằm giữa t1 và t2, nên chỉ có trong KG của test. Bộ lọc chỉ bỏ khoảng 1,5% fact, nhưng chúng tập trung ở phim nổi tiếng: những phim bị mất fact mang khoảng một nửa số dương của val và test."
+"Theo góp ý của cô, một fact chỉ được dùng nếu nó đã đúng trước mốc. Ngày chỉ có năm thì coi là 31/12 cho chắc. KG cho train và val dựng tại t1, cho test dựng tại t2. Ví dụ *Titanic*: 11 giải Oscar ngày 23/03/1998 nằm giữa t1 và t2, nên chỉ có trong KG của test. Bộ lọc chỉ bỏ khoảng 1,3% fact ở ML-100K, nhưng chúng tập trung ở phim nổi tiếng: những phim bị mất fact mang khoảng một nửa số dương của val và test."
 
 **1d. Bằng chứng không rò rỉ (2 phút).** **[Mở]** mục 7 (bảng kiểm tra).
 
@@ -97,7 +97,7 @@ Ký hiệu: **[Mở]** = mục notebook hoặc hình cần mở; **[Chuyển]** 
 
 "Nhận xét thứ hai về thời gian: T-KGAT không khác bản hoán vị ở cả hai bộ dữ liệu. Trên ml-1m-u10, T-KGAT có hơn KGAT ở NDCG, nhưng bản hoán vị cũng đạt mức đó, nên phần hơn không phải nhờ thời gian. Kết luận hiện tại: chưa có bằng chứng thời gian giúp ích. Nhóm giải thích bằng chính phát hiện ở phần dữ liệu: rating nhập theo phiên nên Δt gần như không mang thông tin."
 
-*[Stage 2, khi đã có số:]* "Với Stage 2, nhóm phát hiện Δt chuẩn hóa của fact bị chặn ở 1, và chỉ 0,7% fact có ngày nằm dưới mức đó, nên Stage 2 thực chất giảm trọng số fact có ngày so với fact không ngày, chưa đo được fact cũ hay mới. Kết quả là [đọc từ bảng]. Nhóm đề xuất thiết kế lại cách chuẩn hóa này."
+"Với Stage 2, đặt Δt lên các fact của KG: kết quả cũng không khác bản hoán vị ngày fact, và không khác KGAT có ý nghĩa. Nhóm phát hiện Δt chuẩn hóa của fact bị chặn ở 1, và chỉ 0,7% fact có ngày nằm dưới mức đó, nên Stage 2 thực chất giảm trọng số fact có ngày so với fact không ngày, chưa đo được fact cũ hay mới. Nhóm đề xuất thiết kế lại cách chuẩn hóa này."
 
 **3c. Minh bạch và hạn chế (1,5 phút) · Triết.** **[Mở]** phụ lục của bảng RQ3; slide hạn chế (tài liệu 09, mục 3.4).
 
