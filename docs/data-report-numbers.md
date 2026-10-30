@@ -238,33 +238,36 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `toystory.sequel_date` | 24/11/1999 | kg.film_fact_status (facts.tsv, dropped.csv của ML-100K) |
 | `ml100k.kg_items` | 932 | data/processed/ml-100k/kg/*/kg_meta.json (cơ sở: item trong train sau 5-core) |
 | `ml100k.kg_items_linked` | 927 | data/processed/ml-100k/kg/*/kg_meta.json (cơ sở: item trong train) |
-| `ml100k.kg_items_with_facts` | 927 | data/processed/ml-100k/kg/*/kg_meta.json (cơ sở: item trong train) |
-| `ml100k.kg_facts` | 37.103 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds |
-| `ml100k.statement_dated_share` | 7,6% | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds |
-| `ml100k.award_share_of_statement_dated` | 97,1% | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds |
-| `ml100k.no_date_share` | 18,1% | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds |
-| `ml100k.triples_default_t1` | 36.560 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml100k.triples_default_t2` | 36.580 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml100k.triples_drop_undated_t1` | 29.840 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml100k.triples_drop_undated_t2` | 29.860 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml100k.triples_static_t1` | 37.103 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml100k.triples_static_t2` | 37.103 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml100k.filtered_share_t1` | 1,5% | 1 − default/static tại t1 |
-| `ml100k.filtered_facts_t1` | 543 | static − default tại t1 |
+| `ml100k.kg_items_with_facts` | 932 | data/processed/ml-100k/kg/*/kg_meta.json (cơ sở: item trong train) |
+| `ml100k.kg_items_with_wikidata_facts` | 927 | data/processed/ml-100k/kg/*/kg_meta.json (cơ sở: item trong train) |
+| `ml100k.kg_facts` | 40.757 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds |
+| `ml100k.kg_facts_movielens` | 3.654 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds (movielens.*) |
+| `ml100k.kg_facts_wikidata` | 37.103 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds (chỉ relation Wikidata) |
+| `ml100k.statement_dated_share` | 7,6% | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds (chỉ relation Wikidata) |
+| `ml100k.award_share_of_statement_dated` | 97,1% | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds (chỉ relation Wikidata) |
+| `ml100k.no_date_share` | 18,1% | data/processed/ml-100k/kg/*/kg_meta.json qua kg.relation_date_kinds (chỉ relation Wikidata) |
+| `ml100k.triples_default_t1` | 40.210 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml100k.triples_default_t2` | 40.230 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml100k.triples_drop_undated_t1` | 33.490 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml100k.triples_drop_undated_t2` | 33.510 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml100k.triples_static_t1` | 40.757 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml100k.triples_static_t2` | 40.757 | data/processed/ml-100k/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml100k.filtered_share_t1` | 1,3% | 1 − default/static tại t1 |
+| `ml100k.filtered_facts_t1` | 547 | static − default tại t1 |
 | `ml100k.dropped_future_tail_t1` | 433 | data/processed/ml-100k/kg/*/kg_meta.json |
-| `ml100k.dropped_future_statement_t1` | 110 | data/processed/ml-100k/kg/*/kg_meta.json |
+| `ml100k.dropped_future_statement_t1` | 114 | data/processed/ml-100k/kg/*/kg_meta.json |
 | `ml100k.dropped_undated_t1` | 6.720 | data/processed/ml-100k/kg/*/kg_meta.json |
 | `ml100k.entities_only_in_t2` | 1 | data/processed/ml-100k/kg/*/kg_meta.json |
 | `ml100k.award_future_t1` | 52 | dropped.csv (award_received, future_statement) |
 | `ml100k.award_future_t2` | 33 | dropped.csv (award_received, future_statement) |
 | `ml100k.award_between_t1_t2` | 19 | dropped.csv: có ở t1, không có ở t2 |
 | `ml100k.top10_items` | 93 | kg.popular_concentration (static t1, dropped.csv, train.csv) |
-| `ml100k.top10_share_all_facts` | 15,8% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
+| `ml100k.top10_share_all_facts` | 15,3% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml100k.top10_share_future_award_facts` | 44,3% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml100k.future_award_facts_t1` | 97 | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml100k.future_award_films_t1` | 25 | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml100k.top20_items` | 186 | kg.popular_concentration (static t1, dropped.csv, train.csv) |
-| `ml100k.top20_share_all_facts` | 27,8% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
+| `ml100k.top20_share_all_facts` | 27,2% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml100k.top20_share_future_award_facts` | 64,9% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml100k.affected_items` | 344 | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
 | `ml100k.affected_item_share` | 36,9% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
@@ -272,38 +275,41 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.affected_test_positive_share` | 48,1% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
 | `ml1m.kg_items` | 3.009 | data/processed/ml-1m/kg/*/kg_meta.json (cơ sở: item trong train sau 5-core) |
 | `ml1m.kg_items_linked` | 2.988 | data/processed/ml-1m/kg/*/kg_meta.json (cơ sở: item trong train) |
-| `ml1m.kg_items_with_facts` | 2.975 | data/processed/ml-1m/kg/*/kg_meta.json (cơ sở: item trong train) |
-| `ml1m.kg_facts` | 104.782 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds |
-| `ml1m.statement_dated_share` | 5,8% | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds |
-| `ml1m.award_share_of_statement_dated` | 97,8% | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds |
-| `ml1m.no_date_share` | 18,1% | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds |
-| `ml1m.triples_default_t1` | 103.443 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml1m.triples_default_t2` | 103.443 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml1m.triples_drop_undated_t1` | 84.522 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml1m.triples_drop_undated_t2` | 84.522 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml1m.triples_static_t1` | 104.782 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml1m.triples_static_t2` | 104.782 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
-| `ml1m.filtered_share_t1` | 1,3% | 1 − default/static tại t1 |
-| `ml1m.filtered_facts_t1` | 1.339 | static − default tại t1 |
+| `ml1m.kg_items_with_facts` | 3.004 | data/processed/ml-1m/kg/*/kg_meta.json (cơ sở: item trong train) |
+| `ml1m.kg_items_with_wikidata_facts` | 2.975 | data/processed/ml-1m/kg/*/kg_meta.json (cơ sở: item trong train) |
+| `ml1m.kg_facts` | 116.059 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds |
+| `ml1m.kg_facts_movielens` | 11.277 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds (movielens.*) |
+| `ml1m.kg_facts_wikidata` | 104.782 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds (chỉ relation Wikidata) |
+| `ml1m.statement_dated_share` | 5,8% | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds (chỉ relation Wikidata) |
+| `ml1m.award_share_of_statement_dated` | 97,8% | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds (chỉ relation Wikidata) |
+| `ml1m.no_date_share` | 18,1% | data/processed/ml-1m/kg/*/kg_meta.json qua kg.relation_date_kinds (chỉ relation Wikidata) |
+| `ml1m.triples_default_t1` | 114.288 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml1m.triples_default_t2` | 114.288 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml1m.triples_drop_undated_t1` | 95.367 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml1m.triples_drop_undated_t2` | 95.367 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml1m.triples_static_t1` | 116.059 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml1m.triples_static_t2` | 116.059 | data/processed/ml-1m/kg/*/kg_meta.json qua kg.variant_triples |
+| `ml1m.filtered_share_t1` | 1,5% | 1 − default/static tại t1 |
+| `ml1m.filtered_facts_t1` | 1.771 | static − default tại t1 |
 | `ml1m.dropped_future_tail_t1` | 1.069 | data/processed/ml-1m/kg/*/kg_meta.json |
-| `ml1m.dropped_future_statement_t1` | 270 | data/processed/ml-1m/kg/*/kg_meta.json |
+| `ml1m.dropped_future_statement_t1` | 702 | data/processed/ml-1m/kg/*/kg_meta.json |
 | `ml1m.dropped_undated_t1` | 18.921 | data/processed/ml-1m/kg/*/kg_meta.json |
 | `ml1m.entities_only_in_t2` | 0 | data/processed/ml-1m/kg/*/kg_meta.json |
 | `ml1m.award_future_t1` | 84 | dropped.csv (award_received, future_statement) |
 | `ml1m.award_future_t2` | 84 | dropped.csv (award_received, future_statement) |
 | `ml1m.award_between_t1_t2` | 0 | dropped.csv: có ở t1, không có ở t2 |
 | `ml1m.top10_items` | 301 | kg.popular_concentration (static t1, dropped.csv, train.csv) |
-| `ml1m.top10_share_all_facts` | 15,0% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
+| `ml1m.top10_share_all_facts` | 14,6% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml1m.top10_share_future_award_facts` | 35,8% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml1m.future_award_facts_t1` | 260 | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml1m.future_award_films_t1` | 74 | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml1m.top20_items` | 602 | kg.popular_concentration (static t1, dropped.csv, train.csv) |
-| `ml1m.top20_share_all_facts` | 27,6% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
+| `ml1m.top20_share_all_facts` | 27,1% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
 | `ml1m.top20_share_future_award_facts` | 44,6% | kg.popular_concentration (static t1, dropped.csv, train.csv) |
-| `ml1m.affected_items` | 899 | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
-| `ml1m.affected_item_share` | 29,9% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
-| `ml1m.affected_val_positive_share` | 40,6% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
-| `ml1m.affected_test_positive_share` | 42,6% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
+| `ml1m.affected_items` | 945 | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
+| `ml1m.affected_item_share` | 31,4% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
+| `ml1m.affected_val_positive_share` | 41,5% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
+| `ml1m.affected_test_positive_share` | 43,9% | kg.items_with_filtered_facts (static so với default cùng mốc), kg.positive_share |
 
 ## 7. Baseline
 
@@ -365,10 +371,10 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `ml100k.sig.bprmf_vs_mostpop.p_holm` | 0,513 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
 | `ml100k.sig.bprmf_vs_mostpop_recent.p_holm` | 0,029 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
 | `ml100k.sig.mostpop_vs_mostpop_recent.p_holm` | 0,0071 | results/significance.csv (scripts/09), ml-100k, Recall@20, Holm trong cùng bộ dữ liệu và metric |
-| `registry.rows_all` | 148 | results/registry.csv qua registry.load()(latest=False) |
-| `registry.rows_latest` | 124 | results/registry.csv qua registry.load() |
+| `registry.rows_all` | 547 | results/registry.csv qua registry.load()(latest=False) |
+| `registry.rows_latest` | 453 | results/registry.csv qua registry.load() |
 | `registry.rows_dirty_label` | 78 | results/registry.csv qua registry.load() |
 | `registry.dirty_rows.0231c86-dirty` | 59 | results/registry.csv qua registry.load()(latest=False), nhãn commit 0231c86-dirty |
 | `registry.dirty_rows.08f5e63-dirty` | 19 | results/registry.csv qua registry.load()(latest=False), nhãn commit 08f5e63-dirty |
 | `registry.key` | dataset, split_sha256, model, config, seed, phase | registry.RUN_KEY |
-| `registry.splits` | 5 | results/registry.csv qua registry.load() |
+| `registry.splits` | 6 | results/registry.csv qua registry.load() |
