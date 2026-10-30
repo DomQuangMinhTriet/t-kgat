@@ -103,7 +103,7 @@ Ký hiệu: **[Mở]** = mục notebook hoặc hình cần mở; **[Chuyển]** 
 
 **Triết:** "Có một điểm nhóm phải báo rõ: KG được thêm metadata MovieLens sau khi đã xem điểm test của KG cũ. Nhóm ghi quyết định 0011: KG mới là chính thức, chạy lại toàn bộ với cùng lưới và seed, lấy kết quả mới dù tốt hay xấu; kết quả cũ để ở phụ lục để cô đối chiếu."
 
-"Các hạn chế: Wikidata là bản chụp năm 2026; timestamp được giả định là lúc nhập rating; test dưới 100 user ở hai bộ nhỏ nên p lớn chưa chứng minh không khác biệt; KGAT trên GPU không tái lập từng bit; ml-1m-u10 chưa phải ML-1M đầy đủ; và KGAT chạy trước khi cô duyệt quy trình nên nhóm ghi là sơ bộ."
+"Các hạn chế: Wikidata là bản chụp năm 2026; timestamp được giả định là lúc nhập rating; test dưới 100 user ở hai bộ nhỏ nên p lớn chưa chứng minh không khác biệt; KGAT trên GPU không tái lập từng bit; ml-1m-u10 chưa phải ML-1M đầy đủ; KGAT chạy trước khi cô duyệt quy trình nên nhóm ghi là sơ bộ; và nhóm chưa kiểm tra tái lập độc lập trên máy khác, sẽ làm đầu giai đoạn 4."
 
 **[Chuyển]** "Cuối cùng là kế hoạch và các câu hỏi nhóm xin ý kiến cô."
 

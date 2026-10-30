@@ -297,7 +297,7 @@ MovieLens (id, tên, năm) → KB4Rec (MovieLens → Freebase) → Wikidata qua 
 - **Decision record** (`docs/decisions/NNNN-*.md`): mọi thay đổi giao thức phải có file quyết định (bối cảnh, quyết định, hệ quả); quyết định đã accepted không sửa, chỉ thay thế bằng quyết định mới.
 - **Thiết bị:** mọi model và trainer nhận `device`; GPU laptop RTX 3050 4 GB. `seed_all(seed)` đầu mỗi lần chạy.
 - **Dữ liệu không vào git** (giấy phép MovieLens/KB4Rec).
-- **Tag:** `v0.1-review` (commit `0e194e3`) đóng băng dữ liệu, KG, baseline, báo cáo dữ liệu và là commit của lần chạy lại theo 0011. `v0.2-kgat` dự kiến gắn sau khi Phôn chạy lại khớp.
+- **Tag:** `v0.1-review` (commit `0e194e3`) đóng băng dữ liệu, KG, baseline, báo cáo dữ liệu và là commit của lần chạy lại theo 0011. Chưa có `v0.2-kgat`: việc chạy lại từ clone sạch trên máy khác chưa làm (dời sang giai đoạn 4), nên kết quả KGAT và T-KGAT vẫn là sơ bộ, chưa được kiểm tra tái lập độc lập.
 
 **Các quyết định (đọc tên là phải nhớ nội dung):**
 
