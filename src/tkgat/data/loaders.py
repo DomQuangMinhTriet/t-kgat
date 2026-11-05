@@ -1,7 +1,7 @@
-"""Loaders for the raw MovieLens files.
+"""Loaders for the raw interaction files.
 
 Every loader returns two DataFrames with the same schema so that the rest of
-the pipeline does not care which MovieLens release it is working on:
+the pipeline does not care which dataset it is working on:
 
 * ``interactions``: ``user, item, rating, ts`` (``ts`` = Unix seconds, UTC)
 * ``items``: ``item, title, year, release_date, genres``
@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 ML100K_GENRES = [
@@ -87,11 +88,44 @@ def load_ml1m(raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     return inter, items[["item", "title", "year", "release_date", "genres"]]
 
 
-LOADERS = {"ml-100k": load_ml100k, "ml-1m": load_ml1m}
+LASTFM_INTERACTIONS = "kgat_author_earliest.tsv"
+
+
+def load_lastfm(raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Last-FM (LFM-1b tracks) in the user/item universe of the published KGAT data.
+
+    ``kgat_author_earliest.tsv`` holds one row per (user, item) pair of the author's Last-FM dataset with
+    the earliest listening timestamp of that pair, in the author's remapped ids (``user_list.txt`` /
+    ``item_list.txt`` of ``Data/last-fm``). Listening events have no rating, so every interaction is a
+    positive with ``rating = 1`` (the data config sets ``min_rating: 1``).
+
+    The dataset ships no item metadata we use, so ``items`` carries the item ids with empty columns; it
+    exists only so that the pipeline sees the same two-frame schema as the MovieLens loaders.
+    """
+    raw_dir = Path(raw_dir)
+    inter = pd.read_csv(
+        raw_dir / LASTFM_INTERACTIONS,
+        sep="\t",
+        dtype={"user": "int64", "item": "int64", "ts": "int64"},
+    )
+    if list(inter.columns) != ["user", "item", "ts"]:
+        raise ValueError(f"{LASTFM_INTERACTIONS} has columns {list(inter.columns)}, expected ['user', 'item', 'ts']")
+    if inter.duplicated(["user", "item"]).any():
+        raise ValueError(f"{LASTFM_INTERACTIONS} holds duplicate (user, item) pairs")
+    inter["rating"] = np.int64(1)
+    items = pd.DataFrame({"item": np.sort(inter["item"].unique())})
+    items["title"] = ""
+    items["year"] = np.nan
+    items["release_date"] = pd.NaT
+    items["genres"] = ""
+    return inter[["user", "item", "rating", "ts"]], items[["item", "title", "year", "release_date", "genres"]]
+
+
+LOADERS = {"ml-100k": load_ml100k, "ml-1m": load_ml1m, "lastfm": load_lastfm}
 
 
 def load(name: str, raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load a dataset by its config name (``ml-100k`` or ``ml-1m``)."""
+    """Load a dataset by its config name (``ml-100k``, ``ml-1m`` or ``lastfm``)."""
     if name not in LOADERS:
         raise KeyError(f"unknown dataset {name!r}; expected one of {sorted(LOADERS)}")
     return LOADERS[name](raw_dir)
