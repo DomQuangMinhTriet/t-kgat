@@ -2,7 +2,9 @@
 
 Dự án T-KGAT — Temporal Knowledge Graph Attention Network for Recommendation. Báo cáo dành cho cô Nguyễn Ngọc Minh Châu; nhóm thực hiện: Đởm Quang Minh Triết, Nguyễn Đăng Phôn.
 
-Last-FM là bộ dữ liệu thứ ba của dự án, sau MovieLens-100K và MovieLens-1M (`docs/data-report.md`). **Protocol không đổi**: cùng mã chia dữ liệu, cùng mốc phân vị 0,8 / 0,9, k-core chỉ tính trên train, cùng `check_split`, cùng quy tắc KG theo thời gian của quyết định 0004 và 0006, cùng grid và cùng seed. Chỉ dataset là khác.
+Last-FM là bộ dữ liệu thứ ba của dự án, sau MovieLens-100K và MovieLens-1M (`docs/data-report.md`), theo định hướng của cô (xem quyết định 0012). **Protocol không đổi**: cùng mã chia dữ liệu, cùng mốc phân vị 0,8 / 0,9, k-core chỉ tính trên train, cùng `check_split`, cùng quy tắc KG theo thời gian của quyết định 0004 và 0006, cùng grid và cùng seed. Chỉ dataset là khác.
+
+Hai quyết định nền của bộ dữ liệu này là quyết định 0012 (Last-FM là một dataset của dự án, kèm nguồn ngày tháng và các hạn chế của chính dữ liệu) và quyết định 0013 (các lần chạy chính thức nằm trên `lastfm-u10`). Báo cáo này không nhắc lại nội dung hai quyết định đó; đọc chúng trước khi đọc mục 5 và mục 6.
 
 Mọi ngày tính theo UTC. Mọi con số do `scripts/07_report_numbers_lastfm.py` sinh từ các file của pipeline (bảng đầy đủ kèm nguồn: `docs/data-report-lastfm-numbers.md`); `tests/test_data_report_lastfm.py` kiểm tra điều đó. **Chưa có kết quả mô hình nào trên Last-FM**, nên báo cáo này chỉ nói về dữ liệu và KG.
 
@@ -113,6 +115,8 @@ Kết luận thực tế: bộ nhớ GPU không phải vấn đề (đỉnh dùn
 5. Một số ít thực thể đích dùng id dạng `g.` thay vì `m.`; bản chụp Freebase không có subject nào dạng `g.`, nên các thực thể đó chắc chắn không có ngày.
 6. KG tại t1 giống KG tại t2, nên Last-FM không kiểm được đường rò rỉ "fact tương lai giữa hai mốc".
 7. Bộ lọc thời gian chỉ cắt 15 triple, nên trên Last-FM phép so default với static gần như không có hiệu lực. RQ về rò rỉ qua KG vẫn phải trả lời bằng MovieLens.
+8. **Hạn chế của chính tập cặp (user, item)**, ghi trong quyết định 0012 và không có kiểm tra tự động nào thấy được: tập cặp của bản Last-FM mà tác giả KGAT công bố chỉ chứa các cặp còn được nghe lại ở giai đoạn cuối, nên bản thân tập cặp đã được chọn bằng thông tin sau mốc, có thể thiên vị các cặp "sống lâu". Xem quyết định 0012 để biết con số và cách kiểm. Phải nêu hạn chế này cùng mọi kết quả Last-FM.
+9. Khoảng thời gian của train, val và test rất lệch nhau (xem quyết định 0012): một mô hình có thể được lợi từ tính mới theo cách MovieLens không cho phép. Đây là đặc điểm của dữ liệu, phải báo cáo, không phải lỗi.
 
 ## 7. Việc tiếp theo khi đã có kết quả
 

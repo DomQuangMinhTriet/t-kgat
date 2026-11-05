@@ -157,9 +157,14 @@ ruff check .; pytest                # both must pass before every commit (CI run
   pipeline output): `lastfm` kg:default 214.0 s/epoch, peak 1,303 MB, 106,625 nodes / 3,101,554 edges; no_kg 153.3 s,
   1,399 MB. `lastfm-u10` kg:default 3.79 s/epoch, 238 MB; no_kg 2.51 s, 220 MB. Memory is not the limit, time is:
   5 seeds x 4 grid points x 300 epochs is ~357 h for full `lastfm`.
-- **Decision 2026-11-05 (approved by Triết in chat):** official Last-FM runs are on `lastfm-u10`; full `lastfm` is
-  recorded as not feasible on the current hardware, as decision 0008 did for ML-1M. No Last-FM row is in the registry
-  yet. `docs/data-report-lastfm.md` section 7 lists what to analyse once results exist.
+- **Decisions 0012 (Last-FM as a dataset) and 0013 (official runs on `lastfm-u10`), both proposed 2026-11-05 by
+  Triết.** The move to Last-FM follows the advisor's direction of 2026-11-01; it was taken after the MovieLens test
+  scores were seen, which 0012 states explicitly. Full `lastfm` is recorded as not feasible on the current hardware,
+  as 0008 did for ML-1M; grids, 5 seeds, selection on validation and the single test score are unchanged. No Last-FM
+  row is in the registry yet. `docs/data-report-lastfm.md` section 7 lists what to analyse once results exist.
+- 0012 records a pair-selection caveat found by Triết that no pipeline check can see: the KGAT Last-FM pair set only
+  holds pairs listened to again on or after 2014-04-01, so the pair universe itself was selected with information from
+  after the cut-off, which may favour long-lived pairs. Report it with every Last-FM result.
 - Tag `v0.1-review` = commit `0e194e3` (data, KG, baselines, data report frozen); it is also the commit of the 0011 re-run.
 - Preliminary KG-model results after 0011 (all rows from `0e194e3`, RTX 3050, 5 seeds; `docs/rq3-table.md`), test
   Recall@20: ml-100k KGAT 0.2096 ± 0.0284, KGAT no KG 0.2017 ± 0.0232, T-KGAT (gamma 3) 0.2151 ± 0.0174, permuted
