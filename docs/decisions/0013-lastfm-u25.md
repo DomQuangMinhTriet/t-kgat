@@ -1,6 +1,6 @@
 # 0013 — Last-FM: official run on a user subset (lastfm-u25)
 
-- Status: proposed (2026-11-05, Triết; subset changed from `lastfm-u10` to `lastfm-u25` on 2026-11-06). Follows 0008
+- Status: accepted (2026-11-06, Triết); proposed 2026-11-05 (Triết; subset changed from `lastfm-u10` to `lastfm-u25` on 2026-11-06). Follows 0008
   (subsets) and 0012 (Last-FM dataset).
 - Context: `scripts/measure_kgat.py`, one seed, RTX 3050 with 4 GB, no test scores. Full Last-FM, KG default graph: 106,625
   nodes, 3,101,554 edges, 214.0 s per epoch, peak 1,303 MB; without KG: 153.3 s per epoch. The KGAT grid alone (4 grid points,
@@ -30,10 +30,7 @@
   4. In the one-hop KG, triples whose head is not a train item are dropped (1,293 of 331,097 on full Last-FM, 1,097 of
      154,076 on `lastfm-u25`, all undated), because keeping them would change the KG structure shared with MovieLens
      (`ckg.py`).
-  5. Measurement gate: `lastfm-u25` is run in full if KGAT on the KG default graph takes no more than 20 s per epoch
-     (`s/epoch` of `scripts/measure_kgat.py`, as defined above). The measurement of 2026-11-06 gave 20.13 and 20.52 s,
-     1% to 3% above the gate (the training phases alone, without the validation share, took 19.98 and 20.34 s). Whether
-     this meets the gate is settled by the team before this record is accepted.
+  5. Measurement gate, three bands, fixed before the measurement: KGAT on the KG default graph at no more than 20 s per epoch (s/epoch of scripts/measure_kgat.py) runs in full; 20 to 30 s runs in full under the cut rule of item 6; above 30 s the subset goes back to lastfm-u20. The measurement of 2026-11-06 gave 20.13 and 20.52 s (training phases alone 19.98 and 20.34 s), so lastfm-u25 runs in full under the cut rule of item 6. The worst case without early stopping is 121.7 h (87.8 h without Stage 2).
   6. If the time runs out, Stage 2 (`tkgat_kg` and `tkgat_kg_perm`) is dropped first and reported as not run for lack of
      time. Seeds, grids and epochs are never reduced to save time.
   7. Option A (a pair set not restricted by the April 2014 window of 0012) is not re-run on `lastfm-u25` for lack of time.

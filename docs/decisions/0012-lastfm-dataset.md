@@ -1,6 +1,6 @@
 # 0012 — Last-FM as a second dataset
 
-- Status: proposed (2026-11-05, Triết). The dataset builder is Phôn's PR #41 ("lastfm: building script for tkgat").
+- Status: accepted (2026-11-06, Triết); proposed 2026-11-05 (Triết). The dataset builder is Phôn's PR #41 ("lastfm: building script for tkgat").
   Builds on 0002 (time split), 0004 and 0006 (dating rules) and 0008 (subsets and KGAT export).
 - Context: On 2026-11-01 the advisor said the MovieLens results point to a problem in the input data and asked the group
   to switch to Last-FM and repeat the MovieLens experiments. The KGAT release of Last-FM has no timestamps and no
