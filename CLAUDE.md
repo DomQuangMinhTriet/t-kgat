@@ -165,12 +165,13 @@ ruff check .; pytest                # both must pass before every commit (CI run
   518 MB. Two concurrent processes take 41.4 s/epoch each: no throughput gain, so run sequentially. Upper bound of all
   KG-model runs on u25 at 300 epochs: ~122 h (~88 h without Stage 2); table in decision 0013.
 - **Decisions 0012 (Last-FM as a dataset) and 0013 (official runs on `lastfm-u25`, file `0013-lastfm-u25.md`), both
-  proposed by Triết (2026-11-05; 0013 moved from u10 to u25 on 2026-11-06).** The move to Last-FM follows the advisor's
+  accepted by Triết (2026-11-06); proposed 2026-11-05, 0013 moved from u10 to u25 on 2026-11-06.** The move to Last-FM follows the advisor's
   direction of 2026-11-01; it was taken after the MovieLens test scores were seen, which 0012 states explicitly. Full
   `lastfm` is recorded as not feasible on the current hardware, as 0008 did for ML-1M; grids, 5 seeds, selection on
-  validation and the single test score are unchanged. 0013 also sets a gate (u25 runs in full if KGAT kg:default takes
-  no more than 20 s/epoch; measured 20.13-20.52 s, just above it, to be settled before acceptance), drops Stage 2 first
-  if time runs out (never seeds, grids or epochs), and does not re-run option A (pairs without the April 2014 window)
+  validation and the single test score are unchanged. 0013 also sets a gate in three bands on KGAT kg:default
+  (no more than 20 s/epoch: full run; 20 to 30 s: full run under the cut rule of item 6; above 30 s: back to
+  lastfm-u20). Measured 20.13 and 20.52 s, so u25 runs in full under the cut rule of item 6: Stage 2 is dropped first
+  if time runs out, and seeds, grids and epochs are never reduced. 0013 does not re-run option A (pairs without the April 2014 window)
   on u25. No Last-FM row is in the registry yet. `docs/data-report-lastfm.md` section 7 lists what to analyse once results exist.
 - 0012 records a pair-selection caveat found by Triết that no pipeline check can see: the KGAT Last-FM pair set only
   holds pairs listened to again on or after 2014-04-01, so the pair universe itself was selected with information from
