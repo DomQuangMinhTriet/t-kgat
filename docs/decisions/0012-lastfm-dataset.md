@@ -19,7 +19,7 @@
      community mirror is used because Google's download no longer works, SHA-256 verified against the mirror's
      description): the existence date of the tail entity is the earliest of `music.release.release_date`,
      `music.artist.active_start` and `people.person.date_of_birth`, read as in 0004 and 0006 (a year means
-     31 December, a `-01-01` date means 31 December, BC years are undated). 78.5% of the triples have a dated tail
+     31 December, a `-01-01` date means 31 December, BC years are undated). 78.5% of the 331,097 item-seeded triples have a dated tail (before the 1,293 triples that cannot be carried are dropped)
      (releases 97.9%, artists 98.4%, producers 71.0%, engineers 25.5%; type, canonical-version, single-versions and
      song facts are undated). The Wikidata route was tried first and dated only about 21% of the triples. The KG is
      built with the default time-consistent policy used for MovieLens (undated facts kept); only 15 triples have a
@@ -41,7 +41,7 @@
     2014-04-28. A model can benefit from recency in a way MovieLens did not allow; reported as a feature of the data.
   - The interaction cold-start filter drops 12,263 validation (7.9%) and 20,391 test (13.2%) interactions.
   - Time consistency of the KG is almost vacuous here (15 triples dropped at t1), so leakage through the KG is
-    much less of a concern than on MovieLens. 21.5% of the triples have no date (mostly entity types, engineers), so
+    much less of a concern than on MovieLens. 21.5% of the 331,097 item-seeded triples have no date (21.2% of the 329,804 triples the pipeline carries) (mostly entity types, engineers), so
     Stage 2 has no time signal on them. Dates are release dates, not the time the fact entered Freebase, and the dump is
     a community mirror of Google's last release.
   - Pair selection: the KGAT pair set only contains pairs with at least one listen on or after 2014-04-01 (checked on a
@@ -53,4 +53,5 @@
   - The test set has 7,149 users (MovieLens: 51 and 95), so paired tests have much more power.
   - Note: the released KGAT files (train.txt + test.txt) hold 3,034,763 tokens, i.e. 33 fewer than the 3,034,796 interactions published for Last-FM. The upstream GitHub files give the same count and, after removing Windows line endings, the same SHA-256 as the local copy, so the gap is in the release itself, not in this pipeline.
   - Compute: size and time to be measured with `scripts/measure_kgat.py` on the local machine (RTX 3050, 4 GB) before the
-    grid is run; a user subset and fewer seeds (0013) may be needed.
+    grid is run; a user subset and fewer seeds (0013) may be needed. The official run is on the 25% user subset
+    `lastfm-u25` (see 0013).
