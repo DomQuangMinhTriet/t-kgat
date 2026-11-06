@@ -40,6 +40,27 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `lastfm.test_dropped_cold_item_share` | 4,6% | data/processed/lastfm/meta.json |
 | `lastfm.train_pos_before_kcore` | 1.234.283 | data/processed/lastfm/meta.json |
 | `lastfm.kcore_removed` | 13.295 | data/processed/lastfm/meta.json |
+| `lastfm-u25.pairs` | 370.979 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.t1` | 29/04/2014 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.t2` | 07/06/2014 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.train_pos` | 236.053 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.users` | 5.321 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.items` | 18.665 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.val_pos` | 23.708 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.val_users` | 2.319 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.val_kept_share` | 63,9% | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.val_dropped_cold_user_share` | 7,3% | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.val_dropped_cold_item_share` | 28,8% | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.test_pos` | 22.419 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.test_users` | 1.608 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.test_kept_share` | 60,4% | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.test_dropped_cold_user_share` | 11,5% | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.test_dropped_cold_item_share` | 28,1% | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.train_pos_before_kcore` | 296.783 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.kcore_removed` | 60.730 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.users_sampled` | 5.892 / 23.566 | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.user_fraction` | 25% | data/processed/lastfm-u25/meta.json |
+| `lastfm-u25.user_seed` | 2019 | data/processed/lastfm-u25/meta.json |
 | `lastfm-u10.pairs` | 148.084 | data/processed/lastfm-u10/meta.json |
 | `lastfm-u10.t1` | 29/04/2014 | data/processed/lastfm-u10/meta.json |
 | `lastfm-u10.t2` | 06/06/2014 | data/processed/lastfm-u10/meta.json |
@@ -101,6 +122,41 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `lastfm.kg.no_date.music.recording.featured_artists` | 9,0% | data/processed/lastfm/kg/default/kg_meta.json |
 | `lastfm.kg.no_date.music.recording.song` | 100,0% | data/processed/lastfm/kg/default/kg_meta.json |
 | `lastfm.kg.relations_fully_undated` | 4 | data/processed/lastfm/kg/default/kg_meta.json |
+| `lastfm-u25.kg.author_triples` | 464.567 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.item_seeded` | 154.076 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.head_seeded` | 152.979 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.dropped_not_1hop` | 1.097 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.dropped_not_1hop_share` | 0,7% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.entities` | 44.392 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.tail_entities` | 25.727 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.relations` | 9 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.default.t1` | 152.976 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.default.t2` | 152.976 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.default.dated_t1` | 122.653 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.drop_undated.t1` | 122.653 | data/processed/lastfm-u25/kg/drop_undated/kg_meta.json |
+| `lastfm-u25.kg.drop_undated.t2` | 122.653 | data/processed/lastfm-u25/kg/drop_undated/kg_meta.json |
+| `lastfm-u25.kg.drop_undated.dated_t1` | 122.653 | data/processed/lastfm-u25/kg/drop_undated/kg_meta.json |
+| `lastfm-u25.kg.static.t1` | 152.979 | data/processed/lastfm-u25/kg/static/kg_meta.json |
+| `lastfm-u25.kg.static.t2` | 152.979 | data/processed/lastfm-u25/kg/static/kg_meta.json |
+| `lastfm-u25.kg.static.dated_t1` | 122.656 | data/processed/lastfm-u25/kg/static/kg_meta.json |
+| `lastfm-u25.kg.filtered_t1` | 3 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.filtered_t1_share` | 0,0% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.undated_t1` | 30.323 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.undated_t1_share` | 19,8% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.items_with_facts` | 18.665 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.entities_only_in_t2` | 0 | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.dropped_not_1hop.music.recording.canonical_version` | 1.023 | data/processed/lastfm-u25/kg/default/dropped.csv |
+| `lastfm-u25.kg.dropped_not_1hop.music.single.versions` | 74 | data/processed/lastfm-u25/kg/default/dropped.csv |
+| `lastfm-u25.kg.no_date.music.recording.releases` | 1,9% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.no_date.music.recording.artist` | 1,1% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.no_date.common.topic.notable_types` | 100,0% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.no_date.music.recording.producer` | 27,5% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.no_date.music.recording.engineer` | 74,8% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.no_date.music.single.versions` | 100,0% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.no_date.music.recording.canonical_version` | 100,0% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.no_date.music.recording.featured_artists` | 5,1% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.no_date.music.recording.song` | 100,0% | data/processed/lastfm-u25/kg/default/kg_meta.json |
+| `lastfm-u25.kg.relations_fully_undated` | 4 | data/processed/lastfm-u25/kg/default/kg_meta.json |
 | `lastfm-u10.kg.author_triples` | 464.567 | data/processed/lastfm-u10/kg/default/kg_meta.json |
 | `lastfm-u10.kg.item_seeded` | 62.554 | data/processed/lastfm-u10/kg/default/kg_meta.json |
 | `lastfm-u10.kg.head_seeded` | 61.929 | data/processed/lastfm-u10/kg/default/kg_meta.json |
@@ -147,6 +203,12 @@ Giá trị "chưa có" nghĩa là nguồn chưa tồn tại; script điền số
 | `lastfm.dt.inside_window_share` | 21,2% | data/processed/lastfm/train.csv + kg/default/kg_t1_dates.tsv |
 | `lastfm.dt.capped_share` | 57,6% | data/processed/lastfm/train.csv + kg/default/kg_t1_dates.tsv |
 | `lastfm.dt.median_dated` | 1,59 | data/processed/lastfm/train.csv + kg/default/kg_t1_dates.tsv |
+| `lastfm-u25.dt.window_years` | 9,20 | data/processed/lastfm-u25/train.csv + kg/default/kg_t1_dates.tsv |
+| `lastfm-u25.dt.t_ref` | 29/04/2014 | data/processed/lastfm-u25/train.csv |
+| `lastfm-u25.dt.undated_share` | 19,8% | data/processed/lastfm-u25/train.csv + kg/default/kg_t1_dates.tsv |
+| `lastfm-u25.dt.inside_window_share` | 24,4% | data/processed/lastfm-u25/train.csv + kg/default/kg_t1_dates.tsv |
+| `lastfm-u25.dt.capped_share` | 55,7% | data/processed/lastfm-u25/train.csv + kg/default/kg_t1_dates.tsv |
+| `lastfm-u25.dt.median_dated` | 1,45 | data/processed/lastfm-u25/train.csv + kg/default/kg_t1_dates.tsv |
 | `lastfm-u10.dt.window_years` | 9,20 | data/processed/lastfm-u10/train.csv + kg/default/kg_t1_dates.tsv |
 | `lastfm-u10.dt.t_ref` | 29/04/2014 | data/processed/lastfm-u10/train.csv |
 | `lastfm-u10.dt.undated_share` | 19,4% | data/processed/lastfm-u10/train.csv + kg/default/kg_t1_dates.tsv |

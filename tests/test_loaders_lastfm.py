@@ -78,7 +78,7 @@ def test_wrong_columns_are_refused(tmp_path):
         load_lastfm(out)
 
 
-@pytest.mark.parametrize("name", ["lastfm", "lastfm_u10"])
+@pytest.mark.parametrize("name", ["lastfm", "lastfm_u25", "lastfm_u10"])
 def test_shipped_configs_use_the_loader_and_the_protocol(name):
     cfg = load_config(ROOT / "configs" / "data" / f"{name}.yaml")
     assert cfg["name"] == "lastfm" and not cfg["clean"]

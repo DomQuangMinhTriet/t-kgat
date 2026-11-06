@@ -42,7 +42,12 @@ from tkgat.kg.lastfm import DATE_PREDICATES, FREEBASE_SNAPSHOT, HEAD_NOT_ITEM  #
 from tkgat.kg.temporal import VARIANTS  # noqa: E402
 from tkgat.pipeline.build import load_config  # noqa: E402
 
-RUNS = {"lastfm": "configs/data/lastfm.yaml", "lastfm-u10": "configs/data/lastfm_u10.yaml"}
+# lastfm-u25 is the official run (decision 0013); lastfm-u10 stays as the small development set
+RUNS = {
+    "lastfm": "configs/data/lastfm.yaml",
+    "lastfm-u25": "configs/data/lastfm_u25.yaml",
+    "lastfm-u10": "configs/data/lastfm_u10.yaml",
+}
 # MovieLens runs whose Delta-t scale the Last-FM one is compared with (same computation, same files)
 ML_RUNS = {"ml-100k": "configs/data/ml100k.yaml", "ml-1m-u10": "configs/data/ml1m_u10.yaml"}
 # values of docs/data-report-numbers.md that the Last-FM report compares against, by key

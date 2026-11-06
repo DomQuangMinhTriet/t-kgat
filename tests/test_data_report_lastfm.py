@@ -19,6 +19,8 @@ NUMBERS = ROOT / "docs" / "data-report-lastfm-numbers.md"
 REQUIRED = [
     ROOT / "data" / "processed" / "lastfm" / "meta.json",
     ROOT / "data" / "processed" / "lastfm" / "kg" / "static" / "kg_meta.json",
+    ROOT / "data" / "processed" / "lastfm-u25" / "meta.json",
+    ROOT / "data" / "processed" / "lastfm-u25" / "kg" / "static" / "kg_meta.json",
     ROOT / "data" / "processed" / "lastfm-u10" / "meta.json",
     ROOT / "data" / "processed" / "lastfm-u10" / "kg" / "static" / "kg_meta.json",
 ]
