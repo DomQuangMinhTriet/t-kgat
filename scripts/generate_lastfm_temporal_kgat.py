@@ -4,9 +4,10 @@ The author dataset is never modified. Interactions use the author's user/item
 universe, keep the earliest timestamp per pair, and follow the project's
 leakage-safe 0.8/0.1/0.1 temporal protocol.
 
-The original KG has no dates. Use ``--kg-policy static`` for the current
-interaction-temporal reference. Strict KG snapshots require a four-column file:
-``head relation tail timestamp`` in the original KGAT IDs.
+The original KG has no dates, so ``--kg-policy static`` is the default: only the
+interactions are made temporal and the KG is copied unchanged. ``--kg-policy strict``
+needs ``--kg-fact-times``, a four-column file ``head relation tail timestamp`` in the
+original KGAT IDs.
 """
 
 from __future__ import annotations
@@ -118,9 +119,7 @@ def load_cache(path: Path, expected: set[int]) -> pd.DataFrame:
     return frame
 
 
-def scan_interactions(
-    path: Path, expected: set[int], maps: Mappings, progress_every: int
-) -> tuple[pd.DataFrame, dict]:
+def scan_interactions(path: Path, expected: set[int], maps: Mappings, progress_every: int) -> tuple[pd.DataFrame, dict]:
     raw_users = {raw: old for old, raw in maps.users.items()}
     raw_items = {raw: old for old, raw in maps.items.items()}
     earliest: dict[int, int] = {}
@@ -227,13 +226,18 @@ def kg_snapshots(
     source = read_kg(author / "kg_final.txt")
     seeded = [triple for triple in source if triple[0] in train_items or triple[2] in train_items]
     if policy == "static":
-        return seeded, seeded.copy(), {}, {
-            "policy": "static",
-            "time_consistent": False,
-            "warning": "Author KG copied without fact dates; reference only, not leakage-free.",
-            "source_triples": len(source),
-            "train_item_seeded_triples": len(seeded),
-        }
+        return (
+            seeded,
+            seeded.copy(),
+            {},
+            {
+                "policy": "static",
+                "time_consistent": False,
+                "warning": "Author KG copied without fact dates; reference only, not leakage-free.",
+                "source_triples": len(source),
+                "train_item_seeded_triples": len(seeded),
+            },
+        )
     if fact_path is None:
         raise ValueError("strict KG policy requires --kg-fact-times")
     times = read_fact_times(fact_path)
@@ -245,16 +249,21 @@ def kg_snapshots(
     kg_t2 = [triple for triple, ts in dated if ts < t2]
     if not set(kg_t1) <= set(kg_t2):
         raise RuntimeError("KG t1 is not contained in KG t2")
-    return kg_t1, kg_t2, times, {
-        "policy": "strict_drop_undated",
-        "time_consistent": True,
-        "source_triples": len(source),
-        "train_item_seeded_triples": len(seeded),
-        "dated_seeded_triples": len(dated),
-        "undated_seeded_triples_dropped": len(seeded) - len(dated),
-        "triples_t1": len(kg_t1),
-        "triples_t2": len(kg_t2),
-    }
+    return (
+        kg_t1,
+        kg_t2,
+        times,
+        {
+            "policy": "strict_drop_undated",
+            "time_consistent": True,
+            "source_triples": len(source),
+            "train_item_seeded_triples": len(seeded),
+            "dated_seeded_triples": len(dated),
+            "undated_seeded_triples_dropped": len(seeded) - len(dated),
+            "triples_t1": len(kg_t1),
+            "triples_t2": len(kg_t2),
+        },
+    )
 
 
 def write_lines(path: Path, lines: Iterable[str]) -> None:
@@ -290,12 +299,8 @@ def write_part(
     return events
 
 
-def write_mask(
-    path: Path, frame: pd.DataFrame, users: dict[int, int], items: dict[int, int]
-) -> None:
-    known = frame[frame.user.isin(users) & frame.item.isin(items)].sort_values(
-        ["ts", "user", "item"], kind="mergesort"
-    )
+def write_mask(path: Path, frame: pd.DataFrame, users: dict[int, int], items: dict[int, int]) -> None:
+    known = frame[frame.user.isin(users) & frame.item.isin(items)].sort_values(["ts", "user", "item"], kind="mergesort")
     rows = grouped(known, users, items)
     write_lines(
         path,
@@ -422,7 +427,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--q-test", type=float, default=0.9)
     parser.add_argument("--kcore", type=int, default=5)
     parser.add_argument("--progress-every", type=int, default=10_000_000)
-    parser.add_argument("--kg-policy", choices=("strict", "static"), default="strict")
+    parser.add_argument("--kg-policy", choices=("strict", "static"), default="static")
     parser.add_argument("--kg-fact-times", type=Path)
     return parser.parse_args()
 

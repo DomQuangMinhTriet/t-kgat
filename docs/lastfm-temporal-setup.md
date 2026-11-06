@@ -110,4 +110,8 @@ thác temporal data phải mở rộng loader/model để đọc các file mới
 Hiện lệnh `--kg-policy static` chỉ temporal hóa interaction. KG gốc không có ngày của từng fact nên ba KG snapshot
 đang giống nhau và chưa thể xem là KG temporal leakage-free.
 
+Số token trong `train.txt` + `test.txt` mà script đếm là 3.034.763, còn số công bố của KGAT Last-FM là 3.034.796 (lệch 33). Đã tải lại `train.txt` và `test.txt` từ GitHub gốc của KGAT: cùng số token, cùng SHA-256 với bản trong repo (sau khi bỏ CR). Chênh lệch nằm sẵn trong bản phát hành KGAT, không do script.
+
+Qua file nghe thô LFM-1b, tập cặp (user, item) của KGAT chỉ giữ các cặp có ít nhất một lượt nghe từ 01/04/2014 trở đi (99,97% của 204.774 cặp trong mẫu 2.475 user; không giới hạn cửa sổ thì khoảng 887 cặp mỗi user, so với 83 trong bản phát hành, tức khoảng 9%). Vì vậy số cặp mới mỗi ngày tăng đột ngột lúc 00:00 UTC ngày 01/04/2014. Đây là hạn chế của tập cặp, không phải lỗi của script; kết luận trên Last-FM phải nêu hạn chế này.
+
 Chỉ chia sẻ archive theo đúng điều khoản sử dụng của LFM-1b; ưu tiên Drive riêng cho thành viên dự án.
