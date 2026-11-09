@@ -1,0 +1,72 @@
+{
+  "selected": {
+    "lr": 0.001,
+    "l2": 1e-05,
+    "l2_kg": 1e-05,
+    "mess_dropout": 0.1
+  },
+  "val_means_recall@20": [
+    0.05608923299618022,
+    0.05546156301167645,
+    0.04344026986513959,
+    0.04327446384341893
+  ],
+  "test_mean_std": {
+    "recall@10": [
+      0.03301516135337964,
+      0.0011765614942835134
+    ],
+    "recall@20": [
+      0.053378907413023646,
+      0.0007746126178802841
+    ],
+    "ndcg@10": [
+      0.03949465220981606,
+      0.0009289001849633662
+    ],
+    "ndcg@20": [
+      0.044373879090956685,
+      0.0008376318241771351
+    ]
+  },
+  "kg": {
+    "t1": {
+      "kg_variant": "default",
+      "cutoff": "t1",
+      "time_consistent": true,
+      "wikidata_snapshot": null,
+      "n_users": 5321,
+      "n_items": 18665,
+      "n_entities": 44392,
+      "n_relations": 9,
+      "n_rel": 20,
+      "n_nodes": 49713,
+      "n_interactions": 236053,
+      "n_triples": 152976,
+      "n_triples_dropped_unseen_tail": 0,
+      "n_edges": 778058,
+      "n_isolated_entities": 2,
+      "t_ref": 1398783364.0,
+      "dt_den": 290426881.0
+    },
+    "t2": {
+      "kg_variant": "default",
+      "cutoff": "t2",
+      "time_consistent": true,
+      "wikidata_snapshot": null,
+      "n_users": 5321,
+      "n_items": 18665,
+      "n_entities": 44392,
+      "n_relations": 9,
+      "n_rel": 20,
+      "n_nodes": 49713,
+      "n_interactions": 236053,
+      "n_triples": 152976,
+      "n_triples_dropped_unseen_tail": 0,
+      "n_edges": 778058,
+      "n_isolated_entities": 2,
+      "t_ref": 1398783364.0,
+      "dt_den": 290426881.0
+    }
+  }
+}
