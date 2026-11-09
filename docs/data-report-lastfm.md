@@ -15,7 +15,7 @@ Mọi ngày tính theo UTC. Mọi con số do `scripts/07_report_numbers_lastfm.
 - **KG** lấy từ KG công bố kèm KGAT, có 9 quan hệ; ngày hiệu lực lấy từ bản chụp Freebase ngày 09/08/2015. KG không có ngày của statement, nên một fact chỉ được định ngày qua ngày tồn tại của đích (quyết định 0006 D).
 - **Bộ lọc thời gian gần như không cắt gì**: 15 triple trên 329.804 tại t1, và KG tại t1 giống KG tại t2. Khác MovieLens, Last-FM không có fact nào rơi vào giữa hai mốc.
 - **Thang Delta-t của Stage 2 tốt hơn MovieLens rõ rệt**: 21,2% triple nằm trong cửa sổ chuẩn hóa (`dt_norm < 1`), so với 0,7% của ML-100K và 0,0% của `ml-1m-u10`. Stage 2 trên Last-FM thực sự có độ phân giải để so fact cũ với fact mới (mục 4).
-- **Chưa chạy grid nào.** Trên máy hiện có, grid đầy đủ của `lastfm` cần hàng trăm giờ, nên các lần chạy chính thức sẽ nằm trên tập con `lastfm-u25` (mục 5).
+- **Lần chạy chính thức trên `lastfm-u25` đã xong** (quyết định 0013; Stage 2 chạy trên Kaggle theo quyết định 0014). Grid đầy đủ của `lastfm` cần hàng trăm giờ nên không chạy được trên máy hiện có (mục 5). Số của từng mô hình nằm trong `docs/rq3-table.md`, sinh từ registry bằng `scripts/10_rq3_table.py`, không chép vào báo cáo này; kết quả còn sơ bộ vì chưa có tag `v0.2-kgat`. Báo cáo này vẫn chỉ nói về dữ liệu và KG.
 
 ## 1. Nguồn dữ liệu
 
@@ -126,7 +126,7 @@ Kết luận thực tế: bộ nhớ GPU không phải vấn đề (đỉnh dùn
 
 ## 7. Việc tiếp theo khi đã có kết quả
 
-**Ghi chú để dùng sau.** Các con số của báo cáo này là nền để phân tích khi đã có kết quả mô hình trên Last-FM. Khi đó, đem chúng ra đối chiếu theo các hướng sau:
+**Ghi chú để dùng tiếp.** Kết quả mô hình trên `lastfm-u25` đã có (xem `docs/rq3-table.md`, còn sơ bộ) nhưng các hướng phân tích dưới đây chưa làm đủ. Các con số của báo cáo này là nền để đọc kết quả đó; đem chúng ra đối chiếu theo các hướng sau (mỗi phân tích thêm cần quyết định riêng trước khi chạy):
 
 1. **Val lớn có làm selection ổn định hơn không.** `lastfm` có 10.618 user val, so với 66 của ML-100K và 480 của ML-1M. Nếu chạy được, so độ lệch chuẩn giữa các seed của Recall@20 val trên Last-FM với MovieLens: đây là phép kiểm trực tiếp cho nhận định "selection trên 66 user val là nhiễu" trong CLAUDE.md.
 2. **Stage 2 với thang Delta-t có độ phân giải.** 21,2% triple nằm trong cửa sổ, nên nếu Stage 2 vẫn không khác tập đối chứng (ngày fact bị trộn), kết luận "thời gian trên KG không giúp" sẽ mạnh hơn nhiều so với kết luận hiện có trên MovieLens, nơi thang Delta-t gần như bão hòa. Đối chiếu trực tiếp với Bảng 4.

@@ -76,7 +76,7 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
 
 Planned (not run or not written yet): KGAT with the `drop_undated` and `static` KG variants, KGAT on the full ML-1M (~29 h per
 configuration), CKE baseline, 2-hop KG, one run under the paper's random split as a reference, a redesign of the Stage 2
-Delta-t scale (see Known facts), the Last-FM model runs (no Last-FM row is in the registry yet), the Delta-t distribution of
+Delta-t scale (see Known facts), the Delta-t distribution of
 the Last-FM user-item edges (the counterpart of section 3b of `notebooks/01_eda.ipynb`), and the three directions of
 2026-09-18 (rating as relation or weight, timestamp as relation, LLM cleaning of film metadata).
 
@@ -172,7 +172,12 @@ ruff check .; pytest                # both must pass before every commit (CI run
   (no more than 20 s/epoch: full run; 20 to 30 s: full run under the cut rule of item 6; above 30 s: back to
   lastfm-u20). Measured 20.13 and 20.52 s, so u25 runs in full under the cut rule of item 6: Stage 2 is dropped first
   if time runs out, and seeds, grids and epochs are never reduced. 0013 does not re-run option A (pairs without the April 2014 window)
-  on u25. No Last-FM row is in the registry yet. `docs/data-report-lastfm.md` section 7 lists what to analyse once results exist.
+  on u25. **State on 2026-11-09:** the official `lastfm-u25` run is complete (139 rows in the registry, all at commit `ce55c0c`;
+  every learned model has 5 seeds on val and test; MostPop is deterministic). Stage 2 (`tkgat_kg`, `tkgat_kg_perm`) ran on a Kaggle Tesla T4 and every other model on
+  the laptop RTX 3050 (decision 0014, accepted 2026-11-09), so Stage 2 against KGAT or Stage 1 compares two machines. The results are
+  preliminary (no tag `v0.2-kgat`); the table is `docs/rq3-table.md` (numbers come from `scripts/10_rq3_table.py`, never copy them
+  here by hand). None of the RQ3 paired comparisons on Last-FM (KGAT vs no KG, T-KGAT vs KGAT and vs its controls, Stage 2) is significant after Holm. `docs/data-report-lastfm.md` section 7 lists what to analyse
+  next; any extra analysis needs its own decision record first.
 - 0012 records a pair-selection caveat found by Triết that no pipeline check can see: the KGAT Last-FM pair set only
   holds pairs listened to again on or after 2014-04-01, so the pair universe itself was selected with information from
   after the cut-off, which may favour long-lived pairs. Report it with every Last-FM result.
