@@ -6,6 +6,7 @@ The same two layers as ``tests/test_data_report.py`` (whose tests cover the chec
 """
 
 import importlib.util
+import re
 
 import pytest
 
@@ -46,10 +47,23 @@ def test_every_number_in_the_report_is_in_the_numbers_file():
 
 
 @pytest.mark.skipif(not NUMBERS.exists(), reason="numbers file not written yet")
-def test_the_numbers_file_says_no_model_has_been_run():
-    """No Last-FM model has been run, so no score may appear in the report (and no test score ever leaks here)."""
-    sources = {source for _, source in parse_numbers(NUMBERS.read_text(encoding="utf-8")).values()}
-    assert not any("results/" in s or "registry" in s.lower() for s in sources)
+def test_the_numbers_file_holds_no_score_and_reads_only_validation_rows_of_the_registry():
+    """The numbers file may quote the registry for training hours and best epochs, never for a score, and only
+    from validation rows: a test score must not reach the data report (rule 1 of CLAUDE.md)."""
+    rows = parse_numbers(NUMBERS.read_text(encoding="utf-8"))
+    scores = [key for key in rows if re.search(r"recall|ndcg|precision|score", key, re.I)]
+    assert not scores, f"score-like keys in the numbers file: {scores}"
+    from_results = {
+        key: source for key, (_, source) in rows.items() if "results/" in source or "registry" in source.lower()
+    }
+    not_val = [key for key, source in from_results.items() if "phase=val" not in source]
+    assert not not_val, f"numbers read from results/ without saying phase=val: {not_val}"
+
+
+def test_the_script_drops_test_rows_before_computing_anything():
+    """``add_registry`` is only ever given validation rows; check the call site filters on the phase."""
+    source = (ROOT / "scripts" / "07_report_numbers_lastfm.py").read_text(encoding="utf-8")
+    assert "phase == 'val'" in source and source.index("phase == 'val'") < source.index("add_registry(n, run")
 
 
 def load_script():

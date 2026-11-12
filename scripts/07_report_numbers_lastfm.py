@@ -8,10 +8,14 @@ come from this file (``tests/test_data_report_lastfm.py`` checks it), and every 
 written by the pipeline:
 
   data/processed/<run>/meta.json            the split (script 02): cut-offs, counts, the user subsample
-  data/processed/<run>/train.csv            the train timestamps, for the Delta-t anchor of T-KGAT
+  data/processed/<run>/train.csv            the train timestamps: Delta-t anchor of T-KGAT, time spread of the train
+                                            edges (eda.node_time_spread), edges per week around 2014-04-01
+  data/processed/<run>/{train,val,test}.csv the last timestamp of the pairs (only the ts column is read)
   data/processed/<run>/kg/<variant>/        kg_meta.json, kg_t1_dates.tsv, dropped.csv (script 06_build_kg_lastfm)
+  results/registry.csv                      training hours per device and the range of best epochs, VALIDATION rows
+                                            only (``phase == "val"``): the test rows are dropped before anything is
+                                            computed, so no test score can reach this file (rule 1 of CLAUDE.md)
 
-Nothing is read from results/: no Last-FM model has been run yet, so this file holds data and KG numbers only.
 A source that does not exist yet gives "chưa có" and is filled in on the next run.
 """
 
@@ -19,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -28,6 +33,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from tkgat import registry  # noqa: E402
+from tkgat.analysis import eda, rq3  # noqa: E402
 from tkgat.analysis.report import (  # noqa: E402
     CONVENTIONS,
     MISSING,
@@ -68,8 +75,16 @@ COMPARE = [
     "ml1m.filtered_share_t1",
 ]
 S1, S2, S3 = "1. Dữ liệu và chia theo thời gian", "2. KG theo thời gian", "3. Thang Delta-t của Stage 2"
-S4 = "4. Đối chiếu với MovieLens"
+S_EDGE = "4. Thời gian của cạnh train (Stage 1)"
+S_WEEK = "5. Số cạnh train theo tuần quanh 01/04/2014"
+S_RUN = "6. Thời gian chạy và epoch tốt nhất (registry, chỉ dòng val)"
+S_ML = "7. Đối chiếu với MovieLens"
 YEAR_S = 365.25 * 86400
+# The pair set of the KGAT Last-FM data holds only pairs still listened to from 2014-04-01 (decision 0012). The weekly
+# count of train edges is compared over the four Monday-started weeks before and the four weeks from that Monday.
+WEEK_MARKER = pd.Timestamp("2014-03-31")  # Monday of the week that contains 2014-04-01
+WEEKS_BEFORE = (pd.Timestamp("2014-03-03"), WEEK_MARKER)  # [start, end)
+WEEKS_AFTER = (WEEK_MARKER, pd.Timestamp("2014-04-21"))  # [start, end]
 
 
 def day(ts: int) -> str:
@@ -109,6 +124,18 @@ def add_split(n: Numbers, run: str, meta: dict) -> None:
         n.add(S1, f"{run}.users_sampled", f"{vn_int(sub['users_kept'])} / {vn_int(sub['users_total'])}", src)
         n.add(S1, f"{run}.user_fraction", vn_pct(sub["user_fraction"], 0), src)
         n.add(S1, f"{run}.user_seed", str(sub["user_seed"]), src)
+
+
+def add_last_timestamp(n: Numbers, run: str, processed: Path) -> None:
+    """The latest timestamp among the pairs that survive the split: the report quotes it as the end of the data.
+
+    It is the maximum over train, val and test, i.e. after the cold-user / cold-item filter, so it is a lower
+    bound of the latest listening event of the raw pairs.
+    """
+    last = max(
+        int(pd.read_csv(processed / f"{part}.csv", usecols=["ts"])["ts"].max()) for part in ("train", "val", "test")
+    )
+    n.add(S1, f"{run}.last_ts", day(last), f"data/processed/{run}/train.csv, val.csv, test.csv, cột ts lớn nhất")
 
 
 def add_kg(n: Numbers, run: str, metas: dict[str, dict], dropped: pd.DataFrame) -> None:
@@ -175,6 +202,62 @@ def add_delta_t(n: Numbers, run: str, processed: Path, metas: dict[str, dict], s
         raise RuntimeError(f"{run}: kg_t1_dates.tsv has {total} rows, kg_meta.json says {expected}")
 
 
+def add_edge_time(n: Numbers, run: str, processed: Path, t1: int) -> None:
+    """Time spread of the train edges and edges per week: the conditions under which Stage 1 can act.
+
+    Same functions as the MovieLens report (``eda.node_time_spread`` with the t1 anchor, ``eda.share_below``,
+    ``eda.weekly_counts``), applied to ``train.csv`` only.
+    """
+    src = f"data/processed/{run}/train.csv qua eda.node_time_spread (mốc t1)"
+    train = pd.read_csv(processed / "train.csv")
+    by_user = eda.node_time_spread(train, by="user", ref=t1)
+    by_item = eda.node_time_spread(train, by="item", ref=t1)
+    share = eda.share_below(by_user["spread_s"], {"1h": 3600})["1h"]
+    n.add(S_EDGE, f"{run}.spread.user_under_1h", vn_pct(share, 2), src + ", độ trải < 1 giờ")
+    n.add(S_EDGE, f"{run}.spread.user_std_days_median", vn_dec(float(by_user["std_days"].median()), 1), src)
+    n.add(S_EDGE, f"{run}.spread.item_std_days_median", vn_dec(float(by_item["std_days"].median()), 1), src)
+    weekly = eda.weekly_counts(train)
+    wsrc = f"data/processed/{run}/train.csv qua eda.weekly_counts"
+    before = weekly[(weekly.index >= WEEKS_BEFORE[0]) & (weekly.index < WEEKS_BEFORE[1])]
+    after = weekly[(weekly.index >= WEEKS_AFTER[0]) & (weekly.index <= WEEKS_AFTER[1])]
+    n.add(S_WEEK, f"{run}.week.before_mean", vn_int(round(before.mean())), wsrc + ", 4 tuần trước 31/03/2014")
+    n.add(S_WEEK, f"{run}.week.after_mean", vn_int(round(after.mean())), wsrc + ", 4 tuần từ 31/03/2014")
+
+
+def device_slug(label: str) -> str:
+    """A key-safe name of a registry device label (``cuda:Tesla T4`` -> ``Tesla_T4``)."""
+    return re.sub(r"[^A-Za-z0-9]+", "_", label.removeprefix("cuda:")).strip("_")
+
+
+def add_registry(n: Numbers, run: str, rows: pd.DataFrame) -> None:
+    """Training hours per device and the range of best epochs, from the validation rows of the registry.
+
+    ``rows`` are the validation rows of one run: a validation row carries the whole training time of its
+    (grid point, seed) and the epoch chosen on validation. The test rows are never passed in.
+    """
+    src = "results/registry.csv (phase=val)"
+    hours = rows.assign(hours=rows["seconds"].astype(float) / 3600)
+    for device, total in hours.groupby("device")["hours"].sum().items():
+        n.add(S_RUN, f"{run}.hours.device.{device_slug(device)}", vn_dec(total, 1), src + ", tổng cột seconds")
+    for (device, model), total in hours.groupby(["device", "model"])["hours"].sum().items():
+        n.add(S_RUN, f"{run}.hours.{device_slug(device)}.{model}", vn_dec(total, 1), src + ", tổng cột seconds")
+    esrc = src + ", mọi điểm lưới và seed"
+    for model, group in rows.groupby("model"):
+        n.add(S_RUN, f"{run}.best_epoch.{model}.min", vn_int(group["best_epoch"].min()), esrc)
+        n.add(S_RUN, f"{run}.best_epoch.{model}.max", vn_int(group["best_epoch"].max()), esrc)
+    # The grid point of each model with the best mean (over seeds) validation Recall@20: the rule of scripts/run.py
+    # (``np.argmax(val_means)``), which is what scripts/10_rq3_table.py later reads back as the point of the test rows.
+    # Points are grouped with rq3.point_key (``perm_seed`` is the run seed, not a setting). An exact tie would go to the
+    # first point in string order here and to the first point of the grid in run.py; it does not occur in this registry.
+    keyed = rows.assign(point=rows["config"].map(rq3.point_key))
+    best_point = keyed.groupby(["model", "point"])["recall@20"].mean().groupby("model").idxmax()
+    csrc = src + ", điểm lưới có trung bình Recall@20 val cao nhất"
+    for model, (_, point) in best_point.items():
+        group = keyed[(keyed["model"] == model) & (keyed["point"] == point)]
+        n.add(S_RUN, f"{run}.best_epoch.{model}.chosen.min", vn_int(group["best_epoch"].min()), csrc)
+        n.add(S_RUN, f"{run}.best_epoch.{model}.chosen.max", vn_int(group["best_epoch"].max()), csrc)
+
+
 def add_comparison(n: Numbers, movielens_numbers: Path) -> None:
     """The MovieLens values the Last-FM report compares against.
 
@@ -184,21 +267,21 @@ def add_comparison(n: Numbers, movielens_numbers: Path) -> None:
     same :func:`add_delta_t` on the MovieLens runs, from the same kinds of pipeline file.
     """
     if not movielens_numbers.exists():
-        n.add(S4, "cmp.ml100k.val_kept_share", MISSING, "docs/data-report-numbers.md")
+        n.add(S_ML, "cmp.ml100k.val_kept_share", MISSING, "docs/data-report-numbers.md")
     else:
         known = parse_numbers(movielens_numbers.read_text(encoding="utf-8"))
         for key in COMPARE:
             if key not in known:
                 raise KeyError(f"{movielens_numbers.name} has no key {key!r}: re-run scripts/07_report_numbers.py")
-            n.add(S4, f"cmp.{key}", known[key][0], f"docs/data-report-numbers.md (`{key}`)")
+            n.add(S_ML, f"cmp.{key}", known[key][0], f"docs/data-report-numbers.md (`{key}`)")
     for run, config in ML_RUNS.items():
         processed = ROOT / load_config(ROOT / config)["processed_dir"]
         kg_dir = processed / "kg"
         if not (processed / "train.csv").exists() or not (kg_dir / "default" / "kg_meta.json").exists():
-            n.add(S4, f"{run}.dt.inside_window_share", MISSING, f"data/processed/{run}/kg/default/")
+            n.add(S_ML, f"{run}.dt.inside_window_share", MISSING, f"data/processed/{run}/kg/default/")
             continue
         metas = {v: json.loads((kg_dir / v / "kg_meta.json").read_text(encoding="utf-8")) for v in VARIANTS}
-        add_delta_t(n, run, processed, metas, section=S4)
+        add_delta_t(n, run, processed, metas, section=S_ML)
 
 
 def build() -> Numbers:
@@ -212,13 +295,24 @@ def build() -> Numbers:
     n.add(CONVENTIONS, "conv.seeds", vn_int(len(kgat["seeds"])), "configs/model/kgat.yaml")
     n.add(CONVENTIONS, "conv.grid_points", vn_int(len(kgat["grid"])), "configs/model/kgat.yaml")
     n.add(CONVENTIONS, "conv.max_epochs", vn_int(kgat["fixed"]["max_epochs"]), "configs/model/kgat.yaml")
+    bprmf = load_config(ROOT / "configs" / "model" / "bprmf.yaml")
+    n.add(CONVENTIONS, "conv.max_epochs_bprmf", vn_int(bprmf["fixed"]["max_epochs"]), "configs/model/bprmf.yaml")
+    registry_path = ROOT / "results" / "registry.csv"
+    # validation rows only, filtered before anything else: the test rows never enter this script
+    val_rows = registry.load(registry_path).query("phase == 'val'") if registry_path.exists() else None
     for run, config in RUNS.items():
         processed = ROOT / load_config(ROOT / config)["processed_dir"]
         meta_path = processed / "meta.json"
         if not meta_path.exists():
             n.add(S1, f"{run}.train_pos", MISSING, f"data/processed/{run}/meta.json")
             continue
-        add_split(n, run, json.loads(meta_path.read_text(encoding="utf-8")))
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        add_split(n, run, meta)
+        add_last_timestamp(n, run, processed)
+        add_edge_time(n, run, processed, int(meta["t1"]))
+        run_rows = None if val_rows is None else val_rows[val_rows["dataset"] == run]
+        if run_rows is not None and len(run_rows):
+            add_registry(n, run, run_rows)
         kg_dir = processed / "kg"
         if not (kg_dir / "default" / "kg_meta.json").exists():
             n.add(S2, f"{run}.kg.default.t1", MISSING, f"data/processed/{run}/kg/default/kg_meta.json")
@@ -227,6 +321,9 @@ def build() -> Numbers:
         add_kg(n, run, metas, pd.read_csv(kg_dir / "default" / "dropped.csv"))
         add_delta_t(n, run, processed, metas)
     add_comparison(n, ROOT / "docs" / "data-report-numbers.md")
+    # the loop adds the sections run by run; list them in the order of their numbers (the sort is stable)
+    order = [CONVENTIONS, S1, S2, S3, S_EDGE, S_WEEK, S_RUN, S_ML]
+    n.rows.sort(key=lambda row: order.index(row[0]))
     return n
 
 
