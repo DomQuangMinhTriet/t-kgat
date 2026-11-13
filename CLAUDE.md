@@ -16,6 +16,9 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
   to make that impossible. See `docs/meetings/Meeting_Notes_17102026.md` and decision 0001.
 - Data: MovieLens-100K (main; Phôn runs it) and MovieLens-1M (run in parallel by Triết),
   KB4Rec links to Freebase, Wikidata facts with dates (fetched 2026-10-17).
+  Last-FM (LFM-1b tracks, the user/item universe of the published KGAT data) is the third dataset, added
+  2026-11-05 with the same protocol; its KG is the one published with KGAT, dated from a Freebase dump of
+  2015-08-09 (`docs/data-report-lastfm.md`).
 
 ## Non-negotiable rules (refuse or ask before breaking any of them)
 1. **Test is scored once.** Epochs, hyper-parameters and variants are chosen on validation only
@@ -51,28 +54,31 @@ The full plan (Vietnamese) is `docs/plan.md`; section 12 is the current two-week
 | `src/tkgat/data/` | `loaders`, `clean` (duplicate titles, item 267), `split` (temporal split, k-core), `leakage` (`check_split`), `encode` |
 | `src/tkgat/kg/linking.py` | ML-100K → ML-1M → ML-20M → Freebase/YAGO links, name + year checks |
 | `src/tkgat/kg/temporal.py` | time-consistent KG: date parsing (decision 0006), `build_kg` (variants `default`, `drop_undated`, `static`), `check_kg`, shared entity ids |
+| `src/tkgat/kg/lastfm.py` | the same KG for Last-FM: reads the KGAT KG + a Freebase dump, `parse_freebase_date`, `lastfm_facts`, its own `check_kg`; the temporal rule itself is reused from `temporal.py` |
 | `src/tkgat/models/baselines.py` | `MostPop` (optionally recent window), `BPRMF` |
 | `src/tkgat/device.py` | `resolve_device("auto"/"cuda"/"cpu")`, `seed_all` (deterministic kernels), device label for the registry |
 | `src/tkgat/train/bpr.py` | BPR training on any device; negatives sampled on the device from train positives only; early stop on val |
 | `src/tkgat/eval/` | full-ranking Recall/NDCG@K per user; paired Wilcoxon, paired t, bootstrap CI, Holm |
 | `src/tkgat/registry.py` | appends every val/test score with git commit, config, seed |
 | `scripts/01…08` | verify data → build splits → link entities → fetch Wikidata → Wikidata coverage report → build KG at t1/t2 (plus `kg_t*_dates.tsv` for Stage 2) → report numbers → KGAT export |
+| `scripts/06_build_kg_lastfm.py`, `scripts/07_report_numbers_lastfm.py` | the Last-FM counterparts of 06 and 07; 07 writes `docs/data-report-lastfm-numbers.md` (every number of the Last-FM report comes from it) |
 | `scripts/09…10` | `09_significance.py` (baseline Wilcoxon + Holm, BPR-MF training table), `10_sensitivity.py` (val-only split sensitivity), `10_rq3_table.py` (RQ3 table, pairs and val curves from the registry; Stage 2 has its own Holm family) |
 | `scripts/run.py` | train every grid point × seed, select on val, score test once |
-| `configs/data/` | `ml100k.yaml` (5-core, main), `ml100k_k10.yaml` (10-core sensitivity), `ml1m.yaml`, `ml1m_u10.yaml` / `ml1m_u05.yaml` (random 10% / 5% of the ML-1M users, decision 0008) |
+| `configs/data/` | `ml100k.yaml` (5-core, main), `ml100k_k10.yaml` (10-core sensitivity), `ml1m.yaml`, `ml1m_u10.yaml` / `ml1m_u05.yaml` (random 10% / 5% of the ML-1M users, decision 0008), `lastfm.yaml` / `lastfm_u25.yaml` (random 25% of the users, the official Last-FM run, decision 0013) / `lastfm_u10.yaml` (10%, development only) (`min_rating: 1`: listening events carry no rating) |
 | `src/tkgat/data/subsample.py` | `subsample_users`: all ratings of a seeded random sample of users (`user_fraction`, `user_seed` in a data config) |
 | `src/tkgat/export/kgat.py` | writes the official split and one KG variant in the KGAT file format (`scripts/08_export_kgat.py`, output in `data/export/`, ignored by git) |
 | `experiments/legacy_kgat_data/` | the 10k-interaction scripts of PR #20, reference only: not the project protocol, never report numbers from them |
 | `src/tkgat/kg/ckg.py`, `models/kgat.py`, `train/kgat.py` | the collaborative KG (`edge_ts`, `t_ref`, `dt_den`, `permute_train_ts`), KGAT / T-KGAT (Delta-t in the attention: Stage 1 on user-item edges, Stage 2 on KG triples via `time_on: kg`, decision 0009) and its trainer; `kg_ts`, `load_kg_dates`, `permute_kg_ts` for Stage 2 |
 | `configs/model/` | `mostpop.yaml`, `mostpop_recent.yaml`, `bprmf.yaml`, `kgat.yaml` (+ `kgat_nokg`, `kgat_drop_undated`, `kgat_static`), `tkgat.yaml` (gamma in {1, 3, 10}; (lr, l2) are read from the point the `kgat` run selected on val), `tkgat_perm.yaml` (the control: `train_ts` permuted over all train edges, one permutation per seed), `tkgat_sens.yaml` (gamma in {0.1, 0.3}, `--val-only`, decision 0010), `tkgat_kg.yaml` / `tkgat_kg_perm.yaml` (Stage 2 and its control: fact dates shuffled over the t1 KG triples) |
-| `docs/` | `plan.md`, `decisions/`, `data-dictionary.md`, `data-report.md`, `rq3-table.md`, `meetings/`, `study/` (guides; `08` theory summary, `09` study guide and `10` presenting guide for 2026-10-31), `theory/` (team notes, topics 1-7) |
+| `docs/` | `plan.md`, `decisions/`, `data-dictionary.md`, `data-report.md`, `data-report-lastfm.md`, `rq3-table.md`, `meetings/`, `study/` (guides; `08` theory summary, `09` study guide and `10` presenting guide for 2026-10-31), `theory/` (team notes, topics 1-7) |
 | `notebooks/` | `00_present_2026-10-31.ipynb`, `01_eda.ipynb`, `02_entity_linking.ipynb`, `03_kg_temporal.ipynb` |
 | `scripts/generate_ml1m_u10_kgat.py` | exports ml-1m-u10 to the folder layout of the reference KGAT code (PR #34); reference only |
 
 Planned (not run or not written yet): KGAT with the `drop_undated` and `static` KG variants, KGAT on the full ML-1M (~29 h per
 configuration), CKE baseline, 2-hop KG, one run under the paper's random split as a reference, a redesign of the Stage 2
-Delta-t scale (see Known facts), and the three directions of 2026-09-18 (rating as relation or weight, timestamp as relation,
-LLM cleaning of film metadata).
+Delta-t scale (see Known facts), the Delta-t distribution of
+the Last-FM user-item edges (the counterpart of section 3b of `notebooks/01_eda.ipynb`), and the three directions of
+2026-09-18 (rating as relation or weight, timestamp as relation, LLM cleaning of film metadata).
 
 ## Commands (Windows PowerShell, repo root)
 ```powershell
@@ -87,6 +93,9 @@ python scripts/05_wikidata_report.py
 python scripts/06_build_kg.py --data configs/data/ml100k.yaml      # also ml1m; all 3 KG variants
 python scripts/run.py --data configs/data/ml1m.yaml --model configs/model/bprmf.yaml   # --device auto|cuda|cpu
 python scripts/02_build_splits.py --data configs/data/ml1m_u10.yaml    # small dev set; then 06, then 08_export_kgat.py
+python scripts/02_build_splits.py --data configs/data/lastfm.yaml      # also lastfm_u25, lastfm_u10; needs data-last-fm/
+python scripts/06_build_kg_lastfm.py --data configs/data/lastfm.yaml   # all 3 KG variants + kg_t*_dates.tsv
+python scripts/07_report_numbers_lastfm.py                            # after 02 and 06 for all three Last-FM runs
 ruff check .; pytest                # both must pass before every commit (CI runs them)
 ```
 `data/processed/` is rebuilt from `data/raw/` by scripts 02–03; run them on a fresh machine.
@@ -122,6 +131,56 @@ ruff check .; pytest                # both must pass before every commit (CI run
 - KG triples after decision 0011 (Wikidata + MovieLens genre, release year and decade; script 06 run 2026-10-29):
   ml-100k t1 default 40,210 (3,650 MovieLens facts) / drop_undated 33,490 / static 40,757, t2 default 40,230;
   ml-1m-u10 default 71,553 (6,209 MovieLens facts) / drop_undated 59,577 / static 72,686, same at t1 and t2.
+- **Last-FM (added 2026-11-05; every number from `docs/data-report-lastfm-numbers.md`, which is generated — re-run
+  `scripts/07_report_numbers_lastfm.py` rather than quoting these).** `lastfm`: t1 2014-04-28, t2 2014-06-06;
+  1,542,856 pairs, train 1,220,988 positives, 22,040 users, 44,788 items; val 142,023 positives / 10,618 users,
+  test 133,896 / 7,149. The split reproduces `Data/last-fm-temporal/dataset_meta.json` exactly (all 21 keys).
+  `lastfm-u25` (25% of the users, seed 2019; the official Last-FM run, decision 0013): t1 2014-04-29, t2 2014-06-07;
+  train 236,053, 5,321 users, 18,665 items, val 23,708 positives / 2,319 users, test 22,419 / 1,608.
+  `lastfm-u10` (10%, same seed) is a development set only; no official number is reported on it.
+- Last-FM keeps far more of val/test than MovieLens (92.1% / 86.8% against 12.6% / 13.3% on ML-100K), because its
+  timestamps are listening events spread over time, not ratings typed in one session. **`lastfm-u25` keeps only part of
+  that property**: 28.8% of val and 28.1% of test positives are dropped as cold items (3.0% / 4.6% on full `lastfm`;
+  55.2% / 50.5% on `lastfm-u10`), so 63.9% / 60.4% are kept, and 5-core removes 60,730 of 296,783 train positives.
+  Say so whenever a `lastfm-u25` number is reported.
+- Last-FM KG: author 464,567 triples → 331,097 item-seeded → 329,804 carried (the repo's KG is 1-hop item→attribute,
+  so 1,293 triples whose head is not a train item are dropped with the reason `head_not_train_item`; all of them
+  `canonical_version` / `single.versions`). 84,585 entities (a tail sharing a Freebase id with a train item gets its
+  own id, as in MovieLens), 9 relations. Triples at t1 = t2: default 329,789 / drop_undated 259,859 / static 329,804
+  (`lastfm-u25`: 154,076 item-seeded, 1,097 dropped, 44,392 entities; 152,976 / 122,653 / 152,979). The time filter
+  removes only 15 triples (3 on u25), and no fact is dated between the two cut-offs, so Last-FM cannot show the
+  "future fact between t1 and t2" leak that Titanic shows on ML-100K; the default-vs-static comparison is near-empty
+  there. 21.2% of triples are undated (19.8% on u25).
+- Last-FM Stage 2 Delta-t scale is much better than MovieLens: 21.2% of the t1 default triples have `dt_norm < 1`
+  (24.4% on u25), against 0.7% on ml-100k and 0.0% on ml-1m-u10; 57.6% (55.7% on u25) are still capped at 1. So on Last-FM Stage 2
+  does measure old against new facts, within the 9.20-year window — still report the cap.
+- Last-FM is Freebase (dump 2015-08-09), not Wikidata: `kg_meta.json` has `wikidata_snapshot: null` and
+  `kg_snapshot: "Freebase dump 2015-08-09"`. `CKG.summary()` therefore shows a null snapshot for Last-FM runs;
+  the provenance lives in `kg_meta.json` only.
+- Last-FM timings (`scripts/measure_kgat.py`, 1 seed, 3 epochs, RTX 3050 4 GB, 2026-11-05; ad-hoc measurement, not a
+  pipeline output): `lastfm` kg:default 214.0 s/epoch, peak 1,303 MB, 106,625 nodes / 3,101,554 edges; no_kg 153.3 s,
+  1,399 MB. Memory is not the limit, time is: 5 seeds x 4 grid points x 300 epochs is ~357 h for full `lastfm`.
+  `lastfm-u25` (2026-11-06, 3 steady epochs): kg:default 49,713 nodes / 778,058 edges, 20.13 and 20.52 s/epoch (two
+  runs), peak 532 MB; T-KGAT Stage 1 gamma 3 20.29 s (same as KGAT); no_kg 23,986 / 472,106, 12.22 and 11.96 s,
+  518 MB. Two concurrent processes take 41.4 s/epoch each: no throughput gain, so run sequentially. Upper bound of all
+  KG-model runs on u25 at 300 epochs: ~122 h (~88 h without Stage 2); table in decision 0013.
+- **Decisions 0012 (Last-FM as a dataset) and 0013 (official runs on `lastfm-u25`, file `0013-lastfm-u25.md`), both
+  accepted by Triết (2026-11-06); proposed 2026-11-05, 0013 moved from u10 to u25 on 2026-11-06.** The move to Last-FM follows the advisor's
+  direction of 2026-11-01; it was taken after the MovieLens test scores were seen, which 0012 states explicitly. Full
+  `lastfm` is recorded as not feasible on the current hardware, as 0008 did for ML-1M; grids, 5 seeds, selection on
+  validation and the single test score are unchanged. 0013 also sets a gate in three bands on KGAT kg:default
+  (no more than 20 s/epoch: full run; 20 to 30 s: full run under the cut rule of item 6; above 30 s: back to
+  lastfm-u20). Measured 20.13 and 20.52 s, so u25 runs in full under the cut rule of item 6: Stage 2 is dropped first
+  if time runs out, and seeds, grids and epochs are never reduced. 0013 does not re-run option A (pairs without the April 2014 window)
+  on u25. **State on 2026-11-09:** the official `lastfm-u25` run is complete (139 rows in the registry, all at commit `ce55c0c`;
+  every learned model has 5 seeds on val and test; MostPop is deterministic). Stage 2 (`tkgat_kg`, `tkgat_kg_perm`) ran on a Kaggle Tesla T4 and every other model on
+  the laptop RTX 3050 (decision 0014, accepted 2026-11-09), so Stage 2 against KGAT or Stage 1 compares two machines. The results are
+  preliminary (no tag `v0.2-kgat`); the table is `docs/rq3-table.md` (numbers come from `scripts/10_rq3_table.py`, never copy them
+  here by hand). None of the RQ3 paired comparisons on Last-FM (KGAT vs no KG, T-KGAT vs KGAT and vs its controls, Stage 2) is significant after Holm. `docs/data-report-lastfm.md` section 7 lists what to analyse
+  next; any extra analysis needs its own decision record first.
+- 0012 records a pair-selection caveat found by Triết that no pipeline check can see: the KGAT Last-FM pair set only
+  holds pairs listened to again on or after 2014-04-01, so the pair universe itself was selected with information from
+  after the cut-off, which may favour long-lived pairs. Report it with every Last-FM result.
 - Tag `v0.1-review` = commit `0e194e3` (data, KG, baselines, data report frozen); it is also the commit of the 0011 re-run.
 - Preliminary KG-model results after 0011 (all rows from `0e194e3`, RTX 3050, 5 seeds; `docs/rq3-table.md`), test
   Recall@20: ml-100k KGAT 0.2096 ± 0.0284, KGAT no KG 0.2017 ± 0.0232, T-KGAT (gamma 3) 0.2151 ± 0.0174, permuted
