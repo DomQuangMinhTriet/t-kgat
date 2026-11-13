@@ -263,12 +263,18 @@ def main(argv: list[str] | None = None) -> None:
         help="kgat only: reuse the checkpoints of finished (grid point, seed) pairs and do not score on test a seed "
         "that already has its test row in the registry",
     )
+    ap.add_argument(
+        "--max-new-runs", type=int,
+        help="with --resume, limit new KGAT/T-KGAT grid/seed fits; select and score only after the full grid",
+    )
     args = ap.parse_args(argv)
 
     dcfg = load_config(args.data)
     mcfg = yaml.safe_load(Path(args.model).read_text(encoding="utf-8"))
     if args.resume and mcfg["name"] not in ("kgat", "tkgat"):
         ap.error("--resume is only implemented for kgat and tkgat")
+    if args.max_new_runs is not None and (not args.resume or args.max_new_runs < 1):
+        ap.error("--max-new-runs requires --resume and a positive number")
     split, meta = load_saved(dcfg, with_test=not args.val_only)
     data = encode(split)
     split_sha = registry.sha256_file(Path(dcfg["processed_dir"]) / "meta.json")
@@ -338,6 +344,7 @@ def main(argv: list[str] | None = None) -> None:
     fitted: dict[int, dict[int, object]] = {}  # kgat: the best state_dict (CPU tensors), not the model
     devices: dict[int, dict[int, str]] = {}
     val_means, val_stds = [], []
+    new_runs = 0
     for g, point in enumerate(mcfg["grid"]):
         fitted[g], devices[g] = {}, {}
         scores = []
@@ -383,7 +390,13 @@ def main(argv: list[str] | None = None) -> None:
                     )
                     resumed = True
                 else:
+                    if args.max_new_runs is not None and new_runs >= args.max_new_runs:
+                        print(
+                            "Partial grid saved. Re-run with --resume; selection/test wait until the grid is complete."
+                        )
+                        return
                     fit = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed)
+                    new_runs += 1
                     save_checkpoint(ck_path, fingerprint, fit)
                     registry.save_history(
                         out_dir / f"{tag}_{g}_seed{seed}_history.csv",

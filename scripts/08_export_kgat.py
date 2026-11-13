@@ -35,6 +35,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--timestamps", action="store_true", help="add the timestamp files and column")
     ap.add_argument("--out", help="output folder (default: data/export/kgat/<run_name>-<variant>[-timestamp])")
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument("--author-data", default=str(ROOT / "knowledge_graph_attention_network" / "Data" / "last-fm"))
     args = ap.parse_args(argv)
 
     cfg = load_config(args.data)
@@ -42,8 +43,12 @@ def main(argv: list[str] | None = None) -> None:
     split, meta = load_saved({**cfg, "processed_dir": str(ROOT / cfg["processed_dir"])})
     enc = encode(split)
     kg_dir = ROOT / cfg["processed_dir"] / "kg" / args.variant
-    link_path, item_col = LINKS[cfg["name"]]
-    links = pd.read_csv(ROOT / link_path, dtype={"freebase_id": str}).dropna(subset=[item_col, "freebase_id"])
+    if cfg["name"] == "lastfm":
+        links = pd.read_csv(Path(args.author_data) / "item_list.txt", sep=" ", dtype={"freebase_id": str})
+        item_col = "remap_id"
+    else:
+        link_path, item_col = LINKS[cfg["name"]]
+        links = pd.read_csv(ROOT / link_path, dtype={"freebase_id": str}).dropna(subset=[item_col, "freebase_id"])
     freebase = dict(zip(links[item_col].astype(int), links["freebase_id"], strict=True))
 
     out = Path(args.out) if args.out else ROOT / "data" / "export" / "kgat"
@@ -69,6 +74,8 @@ def main(argv: list[str] | None = None) -> None:
         freebase=freebase,
         timestamps=args.timestamps,
         info=info,
+        item_namespace="lastfm" if cfg["name"] == "lastfm" else "movielens",
+        relation_namespace="freebase" if cfg["name"] == "lastfm" else "wikidata",
     )
     print(f"{out}: {result['interactions']} interactions, KG {result['kg_triples']}")
 

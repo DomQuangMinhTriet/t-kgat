@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from tkgat.data.drive import join_source, open_text_source
+
 ML100K_GENRES = [
     "unknown",
     "Action",
@@ -87,7 +89,32 @@ def load_ml1m(raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     return inter, items[["item", "title", "year", "release_date", "genres"]]
 
 
-LOADERS = {"ml-100k": load_ml100k, "ml-1m": load_ml1m}
+LASTFM_INTERACTIONS = "kgat_author_earliest.tsv"
+
+
+def load_lastfm(raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Earliest timestamp per KGAT pair, from a local directory or Drive ZIP.
+
+    A listening event is implicit positive feedback (rating = 1). IDs remain
+    the author's IDs; train-only encoding happens after the temporal split.
+    """
+    source = join_source(raw_dir, LASTFM_INTERACTIONS)
+    with open_text_source(source) as handle:
+        inter = pd.read_csv(handle, sep="\t", dtype="int64")
+    if list(inter.columns) != ["user", "item", "ts"]:
+        raise ValueError("kgat_author_earliest.tsv: expected columns ['user', 'item', 'ts']")
+    if inter.duplicated(["user", "item"]).any():
+        raise ValueError("kgat_author_earliest.tsv holds duplicate (user, item) pairs")
+    inter["rating"] = 1
+    items = pd.DataFrame({"item": sorted(inter["item"].unique())})
+    items["title"] = ""
+    items["year"] = float("nan")
+    items["release_date"] = pd.NaT
+    items["genres"] = ""
+    return inter[["user", "item", "rating", "ts"]], items
+
+
+LOADERS = {"ml-100k": load_ml100k, "ml-1m": load_ml1m, "lastfm": load_lastfm}
 
 
 def load(name: str, raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:

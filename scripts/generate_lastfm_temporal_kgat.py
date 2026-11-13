@@ -1,8 +1,10 @@
 """Generate a new temporal Last-FM dataset from the published KGAT data.
 
 The author dataset is never modified. Interactions use the author's user/item
-universe, keep the earliest timestamp per pair, and follow the project's
-leakage-safe 0.8/0.1/0.1 temporal protocol.
+universe and keep the latest timestamp per pair by default. The existing
+0.8/0.1/0.1 split and boundary checks are retained. Use --timestamp-policy
+earliest to reproduce the older dataset. See decision 0015 for the changed
+timestamp semantics and the loss of earlier listening history.
 
 The original KG has no dates, so ``--kg-policy static`` is the default: only the
 interactions are made temporal and the KG is copied unchanged. ``--kg-policy strict``
@@ -23,14 +25,15 @@ from pathlib import Path
 
 import pandas as pd
 
+from tkgat.data.drive import open_text_source
 from tkgat.data.leakage import check_split
 from tkgat.data.split import SplitConfig, TemporalSplit, temporal_split
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTHOR_DEFAULT = ROOT / "knowledge_graph_attention_network" / "Data" / "last-fm"
 INTERACTIONS_DEFAULT = ROOT / "data-last-fm" / "lfm1b-tracks" / "lfm1b-tracks.inter"
-CACHE_DEFAULT = ROOT / "data-last-fm" / "lfm1b-tracks" / "kgat_author_earliest.tsv"
-OUTPUT_DEFAULT = ROOT / "knowledge_graph_attention_network" / "Data" / "last-fm-temporal"
+CACHE_DEFAULT = ROOT / "data-last-fm" / "lfm1b-tracks" / "kgat_author_latest.tsv"
+OUTPUT_DEFAULT = ROOT / "knowledge_graph_attention_network" / "Data" / "last-fm-temporal-latest"
 SHIFT = 32
 MASK = (1 << SHIFT) - 1
 
@@ -106,7 +109,14 @@ def load_author_pairs(author: Path, maps: Mappings) -> tuple[set[int], dict]:
     }
 
 
-def load_cache(path: Path, expected: set[int]) -> pd.DataFrame:
+def load_cache(path: Path, expected: set[int], timestamp_policy: str = "earliest") -> pd.DataFrame:
+    metadata = path.with_suffix(path.suffix + ".meta.json")
+    if metadata.is_file():
+        policy = json.loads(metadata.read_text(encoding="utf-8")).get("timestamp_policy")
+        if policy != timestamp_policy:
+            raise ValueError(f"timestamp cache policy differs: cache={policy}, requested={timestamp_policy}")
+    elif timestamp_policy != "earliest":
+        raise ValueError("latest timestamp cache needs policy metadata; regenerate it from raw listening events")
     frame = pd.read_csv(path, sep="\t", dtype="int64")
     if list(frame.columns) != ["user", "item", "ts"]:
         raise ValueError(f"unexpected cache columns: {list(frame.columns)}")
@@ -119,13 +129,17 @@ def load_cache(path: Path, expected: set[int]) -> pd.DataFrame:
     return frame
 
 
-def scan_interactions(path: Path, expected: set[int], maps: Mappings, progress_every: int) -> tuple[pd.DataFrame, dict]:
+def scan_interactions(
+    path: str | Path, expected: set[int], maps: Mappings, progress_every: int, timestamp_policy: str = "latest"
+) -> tuple[pd.DataFrame, dict]:
+    if timestamp_policy not in {"earliest", "latest"}:
+        raise ValueError(f"unknown timestamp policy: {timestamp_policy}")
     raw_users = {raw: old for old, raw in maps.users.items()}
     raw_items = {raw: old for old, raw in maps.items.items()}
-    earliest: dict[int, int] = {}
+    timestamps: dict[int, int] = {}
     rows = matched = 0
     started = time.monotonic()
-    with path.open(encoding="utf-8", buffering=16 * 1024 * 1024) as handle:
+    with open_text_source(path) as handle:
         header = handle.readline().rstrip().split("\t")
         if len(header) < 3 or not header[2].startswith("timestamp"):
             raise ValueError(f"unexpected interaction header: {header}")
@@ -134,7 +148,7 @@ def scan_interactions(path: Path, expected: set[int], maps: Mappings, progress_e
             if progress_every and rows % progress_every == 0:
                 elapsed = max(time.monotonic() - started, 1e-9)
                 print(
-                    f"scanned={rows:,} matched_pairs={len(earliest):,}/{len(expected):,} "
+                    f"scanned={rows:,} matched_pairs={len(timestamps):,}/{len(expected):,} "
                     f"rate={rows / elapsed:,.0f} rows/s",
                     flush=True,
                 )
@@ -151,27 +165,32 @@ def scan_interactions(path: Path, expected: set[int], maps: Mappings, progress_e
                 continue
             matched += 1
             ts = int(raw_ts)
-            if key not in earliest or ts < earliest[key]:
-                earliest[key] = ts
-    missing = expected - earliest.keys()
+            previous = timestamps.get(key)
+            if previous is None or (ts > previous if timestamp_policy == "latest" else ts < previous):
+                timestamps[key] = ts
+    missing = expected - timestamps.keys()
     if missing:
         raise RuntimeError(f"{len(missing):,} author pairs have no timestamp; examples={list(missing)[:10]}")
     frame = pd.DataFrame(
-        [(*decode_pair(key), ts, 1) for key, ts in earliest.items()],
+        [(*decode_pair(key), ts, 1) for key, ts in timestamps.items()],
         columns=["user", "item", "ts", "rating"],
     ).astype({"user": "int64", "item": "int64", "ts": "int64", "rating": "int8"})
     return frame, {
         "lfm_rows_scanned": rows,
         "lfm_candidate_rows": matched,
         "pairs_timestamped": len(frame),
+        "timestamp_policy": timestamp_policy,
         "scan_seconds": round(time.monotonic() - started, 3),
     }
 
 
-def save_cache(path: Path, frame: pd.DataFrame) -> None:
+def save_cache(path: Path, frame: pd.DataFrame, timestamp_policy: str = "latest") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame[["user", "item", "ts"]].sort_values(["user", "item"], kind="mergesort").to_csv(
         path, sep="\t", index=False, lineterminator="\n"
+    )
+    path.with_suffix(path.suffix + ".meta.json").write_text(
+        json.dumps({"timestamp_policy": timestamp_policy, "pairs": len(frame)}, indent=2), encoding="utf-8"
     )
 
 
@@ -390,7 +409,8 @@ def export(
     total = sum(counts.values())
     report = {
         "protocol": (
-            "author KGAT Last-FM user/item/pair universe; earliest event per pair; global 0.8/0.9 temporal split; "
+            f"author KGAT Last-FM user/item/pair universe; {source_stats.get('timestamp_policy', 'latest')} "
+            "event per pair; global 0.8/0.9 temporal split; "
             "train-only k-core; validation/test restricted to train users and items"
         ),
         "cutoffs": {"t1": int(split.t1), "t2": int(split.t2)},
@@ -399,6 +419,7 @@ def export(
             "q_test": split.config.q_test,
             "kcore": split.config.kcore,
             "implicit_min_rating": 1,
+            "timestamp_policy": source_stats.get("timestamp_policy", "latest"),
         },
         "n_users": len(users),
         "n_items": len(items),
@@ -417,27 +438,35 @@ def export(
     return report
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--author-data", type=Path, default=AUTHOR_DEFAULT)
-    parser.add_argument("--interactions", type=Path, default=INTERACTIONS_DEFAULT)
-    parser.add_argument("--timestamp-cache", type=Path, default=CACHE_DEFAULT)
-    parser.add_argument("--output", type=Path, default=OUTPUT_DEFAULT)
+    parser.add_argument("--interactions", default=str(INTERACTIONS_DEFAULT))
+    parser.add_argument("--timestamp-policy", choices=("latest", "earliest"), default="latest")
+    parser.add_argument("--timestamp-cache", type=Path)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--q-valid", type=float, default=0.8)
     parser.add_argument("--q-test", type=float, default=0.9)
     parser.add_argument("--kcore", type=int, default=5)
     parser.add_argument("--progress-every", type=int, default=10_000_000)
     parser.add_argument("--kg-policy", choices=("strict", "static"), default="static")
     parser.add_argument("--kg-fact-times", type=Path)
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.timestamp_cache is None:
+        args.timestamp_cache = CACHE_DEFAULT.with_name(f"kgat_author_{args.timestamp_policy}.tsv")
+    if args.output is None:
+        args.output = (
+            OUTPUT_DEFAULT if args.timestamp_policy == "latest" else OUTPUT_DEFAULT.with_name("last-fm-temporal")
+        )
+    return args
 
 
 def main() -> None:
     args = parse_args()
     if args.output.exists():
         raise FileExistsError(f"output already exists; refusing to overwrite: {args.output}")
-    if not args.author_data.is_dir() or not args.interactions.is_file():
-        raise FileNotFoundError("author dataset or LFM interaction file is missing")
+    if not args.author_data.is_dir():
+        raise FileNotFoundError("author dataset is missing")
     if args.kg_policy == "strict":
         if args.kg_fact_times is None or not args.kg_fact_times.is_file():
             raise FileNotFoundError("strict KG requires an existing --kg-fact-times file")
@@ -446,11 +475,16 @@ def main() -> None:
     pairs, author_stats = load_author_pairs(args.author_data, maps)
     if args.timestamp_cache.is_file():
         print(f"loading timestamp cache: {args.timestamp_cache}", flush=True)
-        interactions = load_cache(args.timestamp_cache, pairs)
-        scan_stats = {"timestamp_cache": str(args.timestamp_cache), "timestamp_cache_hit": True}
+        interactions = load_cache(args.timestamp_cache, pairs, args.timestamp_policy)
+        scan_stats = {
+            "timestamp_cache": str(args.timestamp_cache), "timestamp_cache_hit": True,
+            "timestamp_policy": args.timestamp_policy,
+        }
     else:
-        interactions, scan_stats = scan_interactions(args.interactions, pairs, maps, args.progress_every)
-        save_cache(args.timestamp_cache, interactions)
+        interactions, scan_stats = scan_interactions(
+            args.interactions, pairs, maps, args.progress_every, args.timestamp_policy
+        )
+        save_cache(args.timestamp_cache, interactions, args.timestamp_policy)
         scan_stats.update(timestamp_cache=str(args.timestamp_cache), timestamp_cache_hit=False)
         print(f"saved timestamp cache: {args.timestamp_cache}", flush=True)
     split = make_split(interactions, args.q_valid, args.q_test, args.kcore)

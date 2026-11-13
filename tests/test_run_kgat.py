@@ -218,6 +218,36 @@ def test_resume_trains_nothing_and_logs_nothing_twice(setup, monkeypatch):
     assert resumed["test_mean_std"] == json.loads(summary)["test_mean_std"]
 
 
+def test_bounded_resume_waits_for_all_grid_points_and_seeds_before_test(setup):
+    tmp, _, _, _ = setup
+    for completed in range(1, 4):
+        path, out = run(setup, "kgat", "--resume", "--max-new-runs", "1")
+        rows = pd.read_csv(path)
+        assert len(rows) == completed and set(rows["phase"]) == {"val"}
+        assert not (out / "kgat_summary.json").exists() and not list(out.glob("*.npz"))
+    path, out = run(setup, "kgat", "--resume", "--max-new-runs", "1")
+    rows = pd.read_csv(path)
+    assert (rows["phase"] == "val").sum() == 4 and (rows["phase"] == "test").sum() == 2
+    assert (out / "kgat_summary.json").exists()
+    reference, reference_out = run(setup, "kgat", registry="reference.csv", runs="reference-runs")
+    baseline = pd.read_csv(reference)
+    assert rows.loc[rows.phase == "test", "recall@20"].tolist() == baseline.loc[
+        baseline.phase == "test", "recall@20"
+    ].tolist()
+    assert json.loads((out / "kgat_summary.json").read_text())["selected"] == json.loads(
+        (reference_out / "kgat_summary.json").read_text()
+    )["selected"]
+    before = path.read_bytes()
+    run(setup, "kgat", "--resume", "--max-new-runs", "1")
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("arguments", [("--max-new-runs", "1"), ("--resume", "--max-new-runs", "0")])
+def test_bounded_resume_requires_a_positive_limit_and_resume(setup, arguments):
+    with pytest.raises(SystemExit):
+        run(setup, "kgat", *arguments)
+
+
 def test_resume_finishes_a_run_that_stopped_before_test(setup):
     registry, out = run(setup, "kgat", "--val-only")  # states and val rows exist, no test row
     assert set(pd.read_csv(registry)["phase"]) == {"val"}
