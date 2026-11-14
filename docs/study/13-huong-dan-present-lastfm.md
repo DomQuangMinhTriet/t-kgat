@@ -1,10 +1,10 @@
-# 13 — Hướng dẫn present kết quả Last-FM (`lastfm-u25` và `lastfm-u25-latest`) với cô, 14/11/2026 lúc 13:00
+# 13 — Hướng dẫn present kết quả Last-FM (`lastfm-u25` và `lastfm-u25-latest`) với cô, 15/11/2026 lúc 20:00 (dời từ 14/11 lúc 13:00)
 
 > **Cập nhật 14/11/2026 (trước buổi họp): Stage 2 có lỗi thiết kế chuẩn hóa.** `dt_norm` của cạnh KG chia cho cửa sổ của **tương tác** train (`dt_den`, quyết định 0009 mục 3) rồi bị chặn ở 1 (mục 10), nên fact cũ hơn cửa sổ đều có `dt_norm` = 1. `lastfm-u25` bị một phần (55,7% triple bị chặn ở 1), `lastfm-u25-latest` gần như toàn bộ (80,1%, 0,0% trong cửa sổ). Code làm đúng quyết định 0009; lỗi nằm ở thiết kế, không phải ở dữ liệu. **Hệ quả:** kết quả Stage 2 của cả hai bản không dùng để kết luận "fact cũ hay mới"; **Stage 1 không bị ảnh hưởng** (cạnh tương tác luôn nằm trong cửa sổ). Đề xuất: quyết định mới chuẩn hóa Δt của fact theo ngày của fact, báo là thêm sau khi đã thấy test, rồi chạy lại Stage 2. Các câu cũ bên dưới đã sửa theo ghi chú này. Notebook trình bày: bản rút gọn `notebooks/00_present_lastfm_short.ipynb` (bản đầy đủ `00_present_lastfm.ipynb` để tra khi cô hỏi sâu). PR của bản `latest` là **#44** (thay #43 đã đóng).
 
 Kịch bản trình bày theo bố cục đề xuất trong `12-hoc-va-bao-cao-lastfm.md` (khoảng 24 phút, chưa tính phần cô hỏi). Mạch: **`lastfm-u25` → ba vấn đề của `lastfm-u25` → bản mới `lastfm-u25-latest` (Phôn) → kế hoạch và ba câu hỏi**. Mỗi đoạn có: thời lượng, người nói, phần của notebook cần mở, lời nói mẫu, câu chuyển sang đoạn sau. Lời nói mẫu là gợi ý: hiểu ý và nói bằng lời của mình, không đọc. Nội dung để học ở `12-hoc-va-bao-cao-lastfm.md`; lý thuyết ở `11-tong-hop-ly-thuyet-lastfm.md`.
 
-Ký hiệu: **[Mở]** = phần (mục) của notebook `t-kgat/notebooks/00_present_lastfm.ipynb`; **[Chuyển]** = câu chuyển; *[ghi chú]* = không đọc.
+Ký hiệu: **[Mở]** = phần (mục) của notebook rút gọn `t-kgat/notebooks/00_present_lastfm_short.ipynb` (cùng số mục với bản đầy đủ `00_present_lastfm.ipynb`); **[Chuyển]** = câu chuyển; *[ghi chú]* = không đọc.
 
 **Lưu ý trước khi dùng:** (1) thời lượng 24 phút và cách chia người nói giữa Triết và Phôn là **đề xuất**, chưa được cô hay Phôn xác nhận; (2) present bằng notebook `00_present_lastfm.ipynb`, không làm slide; notebook giữ output đã chạy (như bản `lastfm-u25`), và kết quả KGAT/T-KGAT của **cả hai bản** còn sơ bộ; (3) phần 1 đến 3 chỉ `lastfm-u25`, phần 4 chỉ `lastfm-u25-latest`; **không trộn số**; (4) số của `lastfm-u25-latest` chưa có trong `results/registry.csv`, quyết định 0015 là nháp của Phôn, code của Phôn chưa vào repo: phải nói rõ ở phần 4.
 
@@ -13,7 +13,7 @@ Ký hiệu: **[Mở]** = phần (mục) của notebook `t-kgat/notebooks/00_pres
 ## A. Trước buổi present
 
 ### Bản đồ kịch bản và notebook
-Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người trình bày (đề xuất). Mọi số trong notebook được in từ file kết quả của repo, không gõ tay.
+Notebook trình bày là bản rút gọn (7 mục, 56 ô, trong đó 26 ô code; bản đầy đủ có 66 ô, 31 ô code, cùng số mục). Bản rút gọn bỏ: đoạn Pair selection của 0012 (nguyên văn), `check_split` và hai thử phá của `lastfm-u25`, tính toán và Kaggle (0014), learning curve, bảng điểm lưới và giờ chạy của `latest`; cần thì mở bản đầy đủ. Mọi số trong notebook được in từ file kết quả của repo, không gõ tay.
 
 | Mục notebook | Nội dung | Khớp đoạn kịch bản |
 |---|---|---|
@@ -25,17 +25,17 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 | 6. Ba vấn đề và bản `latest` | 6.0 nguồn số; 6.1 ba vấn đề A, B, C; 6.2 bảng so sánh hai bản; 6.3 Stage 1; 6.4 Stage 2; 6.5 kết quả, kiểm định, hình, đặt cạnh u25, nhận xét; 6.6 hạn chế | 4a đến 4f |
 | 7. Kế hoạch và ba câu hỏi | Ba phương án dữ liệu A, B, C; Stage 2 và phân tích bổ sung; kết quả sơ bộ | Phần 5 |
 
-### Tối trước ngày báo cáo (13/11, sau rehearsal)
+### Trước ngày báo cáo (13/11 đến 15/11)
 - [ ] Mở notebook, **Kernel → Restart & Run All** từ môi trường của `t-kgat` (`.venv`): 31 ô code chạy hết, không lỗi (đã chạy ngày 13/11, 0 lỗi). Đối chiếu vài số với Phụ lục A của tài liệu 12.
 - [ ] Ô 6.0 phải in: registry của repo có **0** dòng `lastfm-u25-latest`, file `0015-*.md` trong repo là **0**, registry gộp của Phôn 323 dòng / 132 dòng riêng biệt / commit `873ca7f` / 0 dòng `-dirty`. Nếu khác, dừng và hỏi.
 - [ ] **Hai con số 69,7% và 64,1%** (nhật ký 12/11: "cặp val/test đã được nghe lần đầu trước khi tập bắt đầu") **không tái lập được: không nói, không đưa lên màn hình.** Lưu ý: `docs/data-report-lastfm-latest-numbers.md` có khóa `val_kept_share` = 69,7% (phần positive val còn lại sau khi lọc cold user và cold item của latest): trùng giá trị nhưng **khác ý nghĩa**. Notebook không hiển thị chỉ tiêu này; nếu cô hỏi về nó, nói rõ nó là gì.
 - [ ] Số có chú thích **(tính thêm)** trong tài liệu 12 (Δt của cạnh train, giờ chạy, epoch tốt nhất): notebook tự tính lại từ `train.csv` và registry, nên trình bày được; nói rõ nguồn nếu cô hỏi.
-- [ ] Xác nhận với Phôn: ai nói 6.1 (đề xuất: Phôn), thời lượng từng mục, và Phôn nắm được vì sao 0015 và code chưa vào repo.
+- [ ] Xác nhận với Phôn: ai nói 6.1 (đã chốt: Triết), thời lượng từng mục, và Phôn nắm được vì sao 0015 và code chưa vào repo.
 - [ ] Mở sẵn: notebook đã chạy (đừng chạy lại giữa buổi), `docs/rq3-table.md`, `docs/rq3-table-lastfm-latest.md`, `docs/data-report-lastfm.md`, `docs/lastfm-latest-provenance.md`, tài liệu 12 (Phụ lục A, thẻ số).
 - [ ] Xuất notebook đã chạy ra HTML hoặc PDF làm bản dự phòng (File → Save and Export As), chép vào USB hoặc Drive.
 - [ ] Tập dượt 2 lượt, lượt 2 đổi vai; bấm giờ từng phần.
 
-### Sáng ngày báo cáo (14/11)
+### Ngay trước buổi họp (15/11, trước 20:00)
 - [ ] Máy chiếu, cáp, sạc; phóng chữ.
 - [ ] Tắt thông báo, đóng ứng dụng không cần.
 - [ ] Giấy ghi góp ý của cô; người không nói thì ghi, đặc biệt câu trả lời cho ba câu hỏi ở phần 5.
@@ -44,14 +44,14 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 
 ## B. Kịch bản
 
-### Phần 0 — Mở đầu (1,5 phút) · Phôn
+### Phần 0 — Mở đầu (1,5 phút) · Triết
 **[Mở]** mục 1.
 
-**Phôn:** "Thưa cô, hôm nay nhóm báo cáo kết quả trên bộ dữ liệu Last-FM, theo hướng cô gợi ý ngày 01/11: lặp lại các thí nghiệm của MovieLens trên một dữ liệu khác. Nhóm làm năm phần: dữ liệu và kết quả của `lastfm-u25`, ba vấn đề nhóm tự thấy ở bản đó, một bản dữ liệu mới của bạn Phôn, và cuối cùng là kế hoạch kèm ba câu hỏi xin ý kiến cô."
+**Triết:** "Thưa cô, hôm nay nhóm báo cáo kết quả trên bộ dữ liệu Last-FM, theo hướng cô gợi ý ngày 01/11: lặp lại các thí nghiệm của MovieLens trên một dữ liệu khác. Nhóm làm năm phần: dữ liệu và kết quả của `lastfm-u25`, ba vấn đề nhóm tự thấy ở bản đó, một bản dữ liệu mới của bạn Phôn, và cuối cùng là kế hoạch kèm ba câu hỏi xin ý kiến cô."
 
 "Một điểm nhóm xin nói ngay: quyết định chuyển sang Last-FM được đưa ra sau khi nhóm đã xem điểm test của MovieLens. Nhóm làm theo hướng cô chỉ, không chọn dữ liệu để cải thiện điểm số, và giữ nguyên quy trình: cùng mốc chia theo thời gian, cùng k-core chỉ trên train, cùng kiểm tra rò rỉ, cùng lưới tham số, cùng 5 seed."
 
-**[Chuyển]** "Phần dữ liệu `lastfm-u25` do bạn Triết trình bày."
+**[Chuyển]** "Tiếp theo là phần dữ liệu `lastfm-u25`."
 
 ---
 
@@ -74,21 +74,21 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 
 **Triết:** "KG của `lastfm-u25` có hơn 152 nghìn triple, 44 nghìn thực thể, 9 quan hệ. Ngày của fact lấy qua ngày tồn tại của đích trong Freebase 2015; 19,8% triple không có ngày. Bộ lọc theo thời gian gần như không cắt gì, chỉ 3 triple, và KG tại hai mốc là một, nên Last-FM không đo được hiện tượng fact tương lai rơi giữa hai mốc; câu hỏi đó vẫn trả lời bằng MovieLens. Thang Δt của Stage 2 trên `lastfm-u25` có độ phân giải một phần: 24,4% triple nằm trong cửa sổ, so với dưới 1% ở MovieLens; phần còn lại bị chặn ở 1, lát nữa nhóm sẽ nói nguyên nhân."
 
-**1d. Hạn chế của tập cặp (1 phút).** **[Mở]** mục 2, biểu đồ cạnh theo tuần và đoạn Pair selection.
+**1d. Hạn chế của tập cặp (1 phút).** **[Mở]** mục 2, biểu đồ cạnh theo tuần (đoạn Pair selection chỉ có ở bản đầy đủ).
 
 **Triết:** "Có một hạn chế nhóm phải nói rõ vì các kiểm tra tự động không thấy được: tập cặp mà KGAT công bố chỉ chứa các cặp có ít nhất một lần nghe từ 01/04/2014. Tức tập cặp được chọn bằng thông tin sau mốc, và có thể thiên về các cặp được nghe lâu dài. Dấu vết thấy ngay trong biểu đồ số cạnh theo tuần. Nhóm chưa đo ảnh hưởng lên kết quả; bạn Phôn sẽ trình bày một bản dữ liệu mới liên quan đến điểm này."
 
-**[Chuyển]** "Phần huấn luyện do bạn Phôn và mình trình bày."
+**[Chuyển]** "Tiếp theo là phần huấn luyện mô hình."
 
 ---
 
-### Phần 2 — Huấn luyện mô hình (4 phút) · Phôn, rồi Triết
+### Phần 2 — Huấn luyện mô hình (4 phút) · Triết
 
-**2a. Baseline và quy trình chung (1,5 phút) · Phôn.** **[Mở]** mục 3, bảng BPR-MF và hình `fig5_bprmf_curve_lastfm-u25.png`.
+**2a. Baseline và quy trình chung (1,5 phút) · Triết.** **[Mở]** mục 3, bảng BPR-MF và hình `fig5_bprmf_curve_lastfm-u25.png`.
 
-**Phôn:** "Nhóm có ba baseline: MostPop, MostPop gần đây chỉ đếm vài ngày cuối train, và BPR-MF. Mọi mô hình theo cùng quy trình: mỗi điểm trong lưới chạy 5 seed, đánh giá Recall@20 trên val mỗi 5 epoch, dừng sớm khi val không tăng, chọn điểm lưới có val trung bình cao nhất, rồi chấm test đúng một lần. Với BPR-MF điểm được chọn là chiều 64, l2 bằng 0,001; MostPop gần đây chọn cửa sổ 14 ngày. Mọi lần chạy ghi vào một registry chỉ thêm dòng, có mã commit; với `lastfm-u25` có 139 dòng cùng một commit, không dòng nào chạy khi code chưa sạch."
+**Triết:** "Nhóm có ba baseline: MostPop, MostPop gần đây chỉ đếm vài ngày cuối train, và BPR-MF. Mọi mô hình theo cùng quy trình: mỗi điểm trong lưới chạy 5 seed, đánh giá Recall@20 trên val mỗi 5 epoch, dừng sớm khi val không tăng, chọn điểm lưới có val trung bình cao nhất, rồi chấm test đúng một lần. Với BPR-MF điểm được chọn là chiều 64, l2 bằng 0,001; MostPop gần đây chọn cửa sổ 14 ngày. Mọi lần chạy ghi vào một registry chỉ thêm dòng, có mã commit; với `lastfm-u25` có 139 dòng cùng một commit, không dòng nào chạy khi code chưa sạch."
 
-**2b. KGAT, T-KGAT và tính toán (2,5 phút) · Triết.** **[Mở]** mục 3, lưới, learning curve, giờ chạy và 0014.
+**2b. KGAT, T-KGAT và tính toán (2,5 phút) · Triết.** **[Mở]** mục 3, lưới và learning curve (giờ chạy và 0014 chỉ có ở bản đầy đủ).
 
 **Triết:** "KGAT gộp tương tác và KG thành một đồ thị, dùng attention để quyết định hàng xóm nào quan trọng, học bằng hai loss: BPR và TransR. T-KGAT chỉ khác một chỗ: trước khi chuẩn hóa attention, trừ γ nhân Δt cho cạnh người dùng–bài hát; γ bằng 0 là đúng KGAT; γ chọn trên val trong 1, 3, 10. Để biết cải thiện có nhờ thời gian không, nhóm chạy bản hoán vị timestamp. Stage 2 đặt Δt lên fact của KG, cũng có bản hoán vị ngày fact."
 
@@ -100,11 +100,11 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 
 ---
 
-### Phần 3 — Kết quả `lastfm-u25`, minh bạch và hạn chế (4,5 phút) · Phôn, rồi Triết
+### Phần 3 — Kết quả `lastfm-u25`, minh bạch và hạn chế (4,5 phút) · Triết
 
-**3a. Baseline (1 phút) · Phôn.** **[Mở]** mục 4, bảng test (hàng baseline) và bảng baseline.
+**3a. Baseline (1 phút) · Triết.** **[Mở]** mục 4, bảng test (hàng baseline) và bảng baseline.
 
-**Phôn:** "Tất cả là Recall@20 trên 1.608 người dùng test. BPR-MF đạt 0,0520, gần gấp đôi MostPop với 0,0238, và thắng có ý nghĩa mạnh sau kiểm định Wilcoxon cặp và hiệu chỉnh Holm. Ngược với ML-100K, MostPop gần đây với cửa sổ 14 ngày đạt 0,0211, thấp hơn MostPop thường. Giả thuyết của nhóm, chưa kiểm: cửa sổ neo ở cuối train, còn test bắt đầu khoảng 39 ngày sau và kéo dài khoảng 86 ngày."
+**Triết:** "Tất cả là Recall@20 trên 1.608 người dùng test. BPR-MF đạt 0,0520, gần gấp đôi MostPop với 0,0238, và thắng có ý nghĩa mạnh sau kiểm định Wilcoxon cặp và hiệu chỉnh Holm. Ngược với ML-100K, MostPop gần đây với cửa sổ 14 ngày đạt 0,0211, thấp hơn MostPop thường. Giả thuyết của nhóm, chưa kiểm: cửa sổ neo ở cuối train, còn test bắt đầu khoảng 39 ngày sau và kéo dài khoảng 86 ngày."
 
 **3b. KGAT và T-KGAT (2,5 phút) · Triết.** **[Mở]** mục 4, bảng kiểm định cặp và nhận xét 2 đến 4.
 
@@ -116,18 +116,18 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 
 **Triết:** "Nhóm tóm các điểm cần báo rõ. Một: quyết định chuyển sang Last-FM đưa ra sau khi đã xem test của MovieLens. Hai: KGAT và T-KGAT là sơ bộ, chạy trước khi cô duyệt giao thức chia theo mốc, chưa có tag đóng băng, chưa tái lập độc lập. Ba: tập cặp có thiên lệch chọn mẫu chưa đo; chỉ 25% người dùng; Freebase là bản chụp 2015; KG tại hai mốc giống nhau; một số điểm được chọn nằm ở mép lưới. Bốn: các phân tích bổ sung nhóm đã đề xuất chưa chạy; mỗi cái cần quyết định riêng và sẽ được ghi là thêm sau khi đã thấy test."
 
-**[Chuyển]** "Từ hạn chế về tập cặp, bạn Phôn sẽ nói về ba vấn đề của `lastfm-u25` và bản dữ liệu mới."
+**[Chuyển]** "Từ hạn chế về tập cặp, mình gom lại thành ba vấn đề của `lastfm-u25`; sau đó bạn Phôn nói về bản dữ liệu mới."
 
 ---
 
-### Phần 4 — Ba vấn đề của `lastfm-u25` và bản `lastfm-u25-latest` (6 phút) · Phôn
+### Phần 4 — Ba vấn đề của `lastfm-u25` và bản `lastfm-u25-latest` (6 phút) · Triết (4a), Phôn (4b đến 4f)
 **[Mở]** mục 6.
 
-**4a. Ba vấn đề (1 phút).** **[Mở]** 6.1.
+**4a. Ba vấn đề (1 phút) · Triết.** **[Mở]** 6.1.
 
-**Phôn:** "Nhóm gom hạn chế của `lastfm-u25` thành ba vấn đề. Một, tập cặp chỉ chứa cặp còn được nghe từ 01/04/2014, tức được chọn bằng thông tin sau mốc. Hai, dấu vết của nó: số cạnh train theo tuần nhảy từ 2.494 lên 12.416, gấp 5 lần, và 21,7% cạnh train có timestamp từ 01/04/2014 dù cửa sổ train dài 3.361 ngày. Ba, `check_split` báo 0 vấn đề, tức các kiểm tra tự động không thấy được hai điều trên."
+**Triết:** "Nhóm gom hạn chế của `lastfm-u25` thành ba vấn đề. Một, tập cặp chỉ chứa cặp còn được nghe từ 01/04/2014, tức được chọn bằng thông tin sau mốc. Hai, dấu vết của nó: số cạnh train theo tuần nhảy từ 2.494 lên 12.416, gấp 5 lần, và 21,7% cạnh train có timestamp từ 01/04/2014 dù cửa sổ train dài 3.361 ngày. Ba, `check_split` báo 0 vấn đề, tức các kiểm tra tự động không thấy được hai điều trên."
 
-**4b. Bản latest là gì (1 phút).** **[Mở]** 6.0 và 6.2.
+**4b. Bản latest là gì (1 phút) · Phôn.** **[Mở]** 6.2 (6.0 nếu cô hỏi nguồn số).
 
 **Phôn:** "Bản `lastfm-u25-latest` chỉ đổi một thứ: timestamp của cặp là lần nghe muộn nhất thay vì sớm nhất. Cùng 370.979 cặp, cùng người dùng, nhưng t1 và t2 dời sang 23/06 và 19/07/2014; cửa sổ train chỉ 83 ngày, val 26 ngày, test 45 ngày; test có 1.341 người dùng. Em xin nói rõ tình trạng: quyết định 0015 là bản nháp của em, chưa được duyệt; code xuất dữ liệu và các dòng registry nằm ngoài repo, với commit riêng; PR 43 chỉ chứa bảng tóm tắt và nguồn gốc. Nên kết quả của bản này là sơ bộ và chưa tái lập được chỉ từ repo."
 
@@ -139,7 +139,7 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 
 **Phôn:** "Stage 2 trên bản này không có độ phân giải: 0,0% triple nằm trong cửa sổ, 80,1% bị chặn ở 1, 19,9% không có ngày. Lý do: fact có ngày mới nhất là 31/12/2013, sớm hơn ngày đầu của cửa sổ train 91 ngày. Nên mọi fact có ngày có cùng Δt chuẩn hóa bằng 1; Stage 2 chỉ còn phân biệt có ngày hay không có ngày, và bản hoán vị ngày fact chỉ xáo xem triple nào là không có ngày. Nguyên nhân là cách chuẩn hóa: cửa sổ lấy theo tương tác rồi áp cho fact, như Triết vừa nói; bản `lastfm-u25` cũng bị, một phần."
 
-**4e. Kết quả (1,5 phút).** **[Mở]** 6.5, bảng, kiểm định, hình, bảng đặt cạnh `lastfm-u25`, nhận xét.
+**4e. Kết quả (1,5 phút).** **[Mở]** 6.5, bảng, kiểm định (hình learning curve chỉ có ở bản đầy đủ), bảng đặt cạnh `lastfm-u25`, nhận xét.
 
 **Phôn:** "Recall@20 trên 1.341 người dùng test, 5 seed; mọi mô hình học sâu chạy trên cùng một loại máy, Tesla T4. KGAT 0,0673, KGAT không KG 0,0633: ở Recall hiệu có ý nghĩa sau Holm, p 0,028; ở NDCG thì không, p 0,225. Khác `lastfm-u25`, nơi cả hai không có ý nghĩa; nhóm coi là sơ bộ. T-KGAT 0,0676 không khác KGAT, p Holm 0,733. T-KGAT thật hơn bản hoán vị có ý nghĩa, p 0,033 và 0,0046, nhưng bản hoán vị thấp hơn KGAT 0,0021, nên điều đó không chứng minh thời gian giúp. Stage 2: không so sánh nào có ý nghĩa và, như vừa nói, không có độ phân giải. Nhóm không so điểm tuyệt đối với `lastfm-u25` vì test khác nhau."
 

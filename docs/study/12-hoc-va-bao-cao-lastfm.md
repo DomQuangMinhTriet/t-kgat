@@ -1,10 +1,10 @@
-# 12 — Học để báo cáo kết quả Last-FM (`lastfm-u25` và `lastfm-u25-latest`) với cô, 14/11/2026 (13:00)
+# 12 — Học để báo cáo kết quả Last-FM (`lastfm-u25` và `lastfm-u25-latest`) với cô, 15/11/2026 (20:00; dời từ 14/11 lúc 13:00)
 
 > **Cập nhật 14/11/2026 (trước buổi họp): Stage 2 có lỗi thiết kế chuẩn hóa.** `dt_norm` của cạnh KG chia cho cửa sổ của **tương tác** train (`dt_den`, quyết định 0009 mục 3) rồi bị chặn ở 1 (mục 10), nên fact cũ hơn cửa sổ đều có `dt_norm` = 1. `lastfm-u25` bị một phần (55,7% triple bị chặn ở 1), `lastfm-u25-latest` gần như toàn bộ (80,1%, 0,0% trong cửa sổ). Code làm đúng quyết định 0009; lỗi nằm ở thiết kế, không phải ở dữ liệu. **Hệ quả:** kết quả Stage 2 của cả hai bản không dùng để kết luận "fact cũ hay mới"; **Stage 1 không bị ảnh hưởng** (cạnh tương tác luôn nằm trong cửa sổ). Đề xuất: quyết định mới chuẩn hóa Δt của fact theo ngày của fact, báo là thêm sau khi đã thấy test, rồi chạy lại Stage 2. Các câu cũ bên dưới đã sửa theo ghi chú này. Notebook trình bày: bản rút gọn `notebooks/00_present_lastfm_short.ipynb` (bản đầy đủ `00_present_lastfm.ipynb` để tra khi cô hỏi sâu). PR của bản `latest` là **#44** (thay #43 đã đóng).
 
-Tài liệu này đi theo cùng khung với `docs/study/09-hoc-va-bao-cao-31-10.md`: **mở đầu → dữ liệu → huấn luyện → kết quả → (mới) ba vấn đề và bản `latest` → kế hoạch và câu hỏi**. Mỗi phần có: điều cần nói được, số liệu kèm nguồn, hình dùng, và câu cô có thể hỏi kèm đáp án. Lý thuyết nền ở `11-tong-hop-ly-thuyet-lastfm.md` (ghi số mục để tra). Kịch bản nói từng câu ở `13-huong-dan-present-lastfm.md`. Notebook trình bày: `notebooks/00_present_lastfm.ipynb`.
+Tài liệu này đi theo cùng khung với `docs/study/09-hoc-va-bao-cao-31-10.md`: **mở đầu → dữ liệu → huấn luyện → kết quả → (mới) ba vấn đề và bản `latest` → kế hoạch và câu hỏi**. Mỗi phần có: điều cần nói được, số liệu kèm nguồn, hình dùng, và câu cô có thể hỏi kèm đáp án. Lý thuyết nền ở `11-tong-hop-ly-thuyet-lastfm.md` (ghi số mục để tra). Kịch bản nói từng câu ở `13-huong-dan-present-lastfm.md`. Notebook trình bày: bản rút gọn `notebooks/00_present_lastfm_short.ipynb` (bản đầy đủ `notebooks/00_present_lastfm.ipynb`, cùng số mục).
 
-**Phạm vi:** phần 0 đến 3 chỉ `lastfm-u25` (Triết, và Phôn ở baseline và quy trình); phần 4 là bản mới `lastfm-u25-latest` (Phôn): timestamp của cặp là lần nghe **muộn nhất**; phần 5 là kế hoạch và ba câu hỏi. **Không trộn số của hai bản**: mọi bảng ghi rõ tên run.
+**Phạm vi:** phần 0 đến 3 chỉ `lastfm-u25` (Triết); phần 4 là ba vấn đề của `lastfm-u25` (4.1, Triết) và bản mới `lastfm-u25-latest` (4.2 đến 4.7, Phôn): timestamp của cặp là lần nghe **muộn nhất**; phần 5 là kế hoạch và ba câu hỏi. **Không trộn số của hai bản**: mọi bảng ghi rõ tên run.
 
 **Quy ước:** số của `lastfm-u25` lấy từ `results/registry.csv` (qua `scripts/10_rq3_table.py`, `scripts/09_significance.py`), `docs/rq3-table.md`, `docs/data-report-lastfm.md`, `docs/data-report-lastfm-numbers.md`, `docs/bprmf-training-table.md`, các quyết định 0012–0014. Số của `lastfm-u25-latest` lấy từ `docs/data-report-lastfm-latest-numbers.md`, `docs/rq3-table-lastfm-latest.md`, `results/rq3_models_lastfm-latest.csv`, `results/rq3_pairs_lastfm-latest.csv`, `results/lastfm-latest-provenance.json` (PR #44), hoặc được notebook tính từ `data/processed/lastfm-u25-latest/`. "std" là độ lệch chuẩn mẫu qua 5 seed. Kết quả KGAT và T-KGAT của cả hai bản là **sơ bộ**. Số có dấu **(tính thêm)** do notebook tính từ `train.csv`, chưa nằm trong báo cáo dữ liệu của repo.
 
@@ -14,15 +14,15 @@ Tài liệu này đi theo cùng khung với `docs/study/09-hoc-va-bao-cao-31-10.
 
 ---
 
-## Bố cục đề xuất (khoảng 24 phút; chưa chốt với cô, chia người nói là đề xuất)
+## Bố cục (khoảng 24 phút; chia người nói đã chốt giữa Triết và Phôn ngày 14/11)
 
-| # | Phần | Thời lượng | Người trình bày (đề xuất) | Mục notebook |
+| # | Phần | Thời lượng | Người trình bày | Mục notebook |
 |---|---|---|---|---|
-| 0 | Mở đầu: vì sao Last-FM, protocol không đổi | 1,5' | Phôn | 1 |
+| 0 | Mở đầu: vì sao Last-FM, protocol không đổi | 1,5' | Triết | 1 |
 | 1 | Dữ liệu `lastfm-u25`: nguồn, chia, KG, hạn chế của tập cặp | 5,5' | Triết | 2 |
-| 2 | Huấn luyện: quy trình, siêu tham số, tính toán, Kaggle | 4' | Phôn (baseline, quy trình) + Triết (KGAT, T-KGAT) | 3 |
-| 3 | Kết quả `lastfm-u25`, minh bạch, hạn chế | 4,5' | Phôn (baseline) + Triết (KGAT, T-KGAT) | 4, 5 |
-| 4 | Ba vấn đề của `lastfm-u25` và bản `lastfm-u25-latest` | 6' | Phôn | 6 |
+| 2 | Huấn luyện: quy trình, siêu tham số, tính toán, Kaggle | 4' | Triết | 3 |
+| 3 | Kết quả `lastfm-u25`, minh bạch, hạn chế | 4,5' | Triết | 4, 5 |
+| 4 | Ba vấn đề của `lastfm-u25` và bản `lastfm-u25-latest` | 6' | Triết (4.1, ba vấn đề), Phôn (4.2 đến 4.7) | 6 |
 | 5 | Kế hoạch và ba câu hỏi | 2,5' | Cả hai | 7 |
 
 **Bốn thông điệp phải còn lại trong đầu cô:**
@@ -253,7 +253,7 @@ Baseline: BPR-MF > MostPop và BPR-MF > MostPop recent, đều rất có ý ngh�
 
 ---
 
-## Phần 4 — Ba vấn đề của `lastfm-u25` và bản `lastfm-u25-latest` (6 phút) · Phôn
+## Phần 4 — Ba vấn đề của `lastfm-u25` và bản `lastfm-u25-latest` (6 phút) · Triết (4.1), Phôn (4.2 đến 4.7)
 
 Phân bổ thời gian đề xuất: 4.1 (1'), 4.2 và 4.3 (1'), 4.4 (1'), 4.5 (1'), 4.6 (1,5'), 4.7 (0,5').
 
@@ -418,10 +418,10 @@ Recall@20 / NDCG@20 trên test, 1.341 user, trung bình ± std mẫu qua 5 seed 
 | Registry gộp | 323 dòng, 132 riêng biệt, commit `873ca7f`, 0 `-dirty`; không có trong `results/registry.csv` |
 | Thiết bị | Tesla T4 cho mọi mô hình học sâu (tổng 55,1 giờ, dòng val); MostPop trên CPU |
 
-## Phụ lục B — Lịch ôn đến buổi báo cáo (rehearsal 13/11, báo cáo 14/11 lúc 13:00)
+## Phụ lục B — Lịch ôn đến buổi báo cáo (rehearsal 13/11; báo cáo dời sang 15/11 lúc 20:00)
 
 | Khi nào | Việc |
 |---|---|
 | Chiều 13/11 | Đọc tài liệu 11 mục 0, 2.8, 5.3–5.4, 6 và **mục 12**; đọc kỹ phần 1.4, 2.4 và **phần 4** của tài liệu này |
 | Tối 13/11 | Thuộc Phụ lục A (cả hai khối); tự trả lời 42 câu cuối tài liệu 11; tập dượt theo tài liệu 13, bấm giờ; lượt 2 đổi vai |
-| Sáng 14/11 | Đọc lại bốn thông điệp, bốn nhận xét của `lastfm-u25` và bốn nhận xét của `latest`, các hạn chế, ba câu hỏi |
+| Ngày 15/11, trước 20:00 | Đọc lại bốn thông điệp, bốn nhận xét của `lastfm-u25` và bốn nhận xét của `latest`, các hạn chế, ba câu hỏi |
