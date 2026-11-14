@@ -1,5 +1,7 @@
 # 13 — Hướng dẫn present kết quả Last-FM (`lastfm-u25` và `lastfm-u25-latest`) với cô, 14/11/2026 lúc 13:00
 
+> **Cập nhật 14/11/2026 (trước buổi họp): Stage 2 có lỗi thiết kế chuẩn hóa.** `dt_norm` của cạnh KG chia cho cửa sổ của **tương tác** train (`dt_den`, quyết định 0009 mục 3) rồi bị chặn ở 1 (mục 10), nên fact cũ hơn cửa sổ đều có `dt_norm` = 1. `lastfm-u25` bị một phần (55,7% triple bị chặn ở 1), `lastfm-u25-latest` gần như toàn bộ (80,1%, 0,0% trong cửa sổ). Code làm đúng quyết định 0009; lỗi nằm ở thiết kế, không phải ở dữ liệu. **Hệ quả:** kết quả Stage 2 của cả hai bản không dùng để kết luận "fact cũ hay mới"; **Stage 1 không bị ảnh hưởng** (cạnh tương tác luôn nằm trong cửa sổ). Đề xuất: quyết định mới chuẩn hóa Δt của fact theo ngày của fact, báo là thêm sau khi đã thấy test, rồi chạy lại Stage 2. Các câu cũ bên dưới đã sửa theo ghi chú này. Notebook trình bày: bản rút gọn `notebooks/00_present_lastfm_short.ipynb` (bản đầy đủ `00_present_lastfm.ipynb` để tra khi cô hỏi sâu). PR của bản `latest` là **#44** (thay #43 đã đóng).
+
 Kịch bản trình bày theo bố cục đề xuất trong `12-hoc-va-bao-cao-lastfm.md` (khoảng 24 phút, chưa tính phần cô hỏi). Mạch: **`lastfm-u25` → ba vấn đề của `lastfm-u25` → bản mới `lastfm-u25-latest` (Phôn) → kế hoạch và ba câu hỏi**. Mỗi đoạn có: thời lượng, người nói, phần của notebook cần mở, lời nói mẫu, câu chuyển sang đoạn sau. Lời nói mẫu là gợi ý: hiểu ý và nói bằng lời của mình, không đọc. Nội dung để học ở `12-hoc-va-bao-cao-lastfm.md`; lý thuyết ở `11-tong-hop-ly-thuyet-lastfm.md`.
 
 Ký hiệu: **[Mở]** = phần (mục) của notebook `t-kgat/notebooks/00_present_lastfm.ipynb`; **[Chuyển]** = câu chuyển; *[ghi chú]* = không đọc.
@@ -70,7 +72,7 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 
 **1c. KG và ngày của fact (1 phút).** **[Mở]** mục 2, phần KG.
 
-**Triết:** "KG của `lastfm-u25` có hơn 152 nghìn triple, 44 nghìn thực thể, 9 quan hệ. Ngày của fact lấy qua ngày tồn tại của đích trong Freebase 2015; 19,8% triple không có ngày. Bộ lọc theo thời gian gần như không cắt gì, chỉ 3 triple, và KG tại hai mốc là một, nên Last-FM không đo được hiện tượng fact tương lai rơi giữa hai mốc; câu hỏi đó vẫn trả lời bằng MovieLens. Đổi lại, thang Δt của Stage 2 trên `lastfm-u25` có độ phân giải: 24,4% triple nằm trong cửa sổ, so với dưới 1% ở MovieLens."
+**Triết:** "KG của `lastfm-u25` có hơn 152 nghìn triple, 44 nghìn thực thể, 9 quan hệ. Ngày của fact lấy qua ngày tồn tại của đích trong Freebase 2015; 19,8% triple không có ngày. Bộ lọc theo thời gian gần như không cắt gì, chỉ 3 triple, và KG tại hai mốc là một, nên Last-FM không đo được hiện tượng fact tương lai rơi giữa hai mốc; câu hỏi đó vẫn trả lời bằng MovieLens. Thang Δt của Stage 2 trên `lastfm-u25` có độ phân giải một phần: 24,4% triple nằm trong cửa sổ, so với dưới 1% ở MovieLens; phần còn lại bị chặn ở 1, lát nữa nhóm sẽ nói nguyên nhân."
 
 **1d. Hạn chế của tập cặp (1 phút).** **[Mở]** mục 2, biểu đồ cạnh theo tuần và đoạn Pair selection.
 
@@ -108,7 +110,7 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 
 **Triết:** "Đây là kết quả sơ bộ. KGAT đạt 0,0534, KGAT không KG 0,0518; hiệu 0,0016, p Holm 0,80 cho Recall và 0,51 cho NDCG. Chưa có bằng chứng KG giúp trên `lastfm-u25`. KGAT chỉ nhỉnh hơn BPR-MF 0,0013, nhỏ hơn độ lệch chuẩn qua seed của BPR-MF, và cặp này chưa nằm trong họ kiểm định."
 
-"Về thời gian: T-KGAT Stage 1 đạt 0,0529, KGAT 0,0534, bản hoán vị 0,0534. T-KGAT không khác KGAT, p Holm 0,42; không khác bản hoán vị, p Holm 0,80. Δt trên `lastfm-u25` có biến thiên thật và test có 1.608 người dùng, nên không thể giải thích âm tính này bằng việc thời gian gần như bằng không hay mẫu quá nhỏ. Nhưng p lớn không chứng minh bằng nhau. Stage 2: 0,0513, thấp hơn KGAT và bản hoán vị, không có ý nghĩa, p Holm 0,28; kèm lưu ý hơn hai phần ba fact có ngày vẫn bị chặn ở mức tối đa và so sánh với KGAT là giữa hai máy."
+"Về thời gian: T-KGAT Stage 1 đạt 0,0529, KGAT 0,0534, bản hoán vị 0,0534. T-KGAT không khác KGAT, p Holm 0,42; không khác bản hoán vị, p Holm 0,80. Δt trên `lastfm-u25` có biến thiên thật và test có 1.608 người dùng, nên không thể giải thích âm tính này bằng việc thời gian gần như bằng không hay mẫu quá nhỏ. Nhưng p lớn không chứng minh bằng nhau. Stage 2: 0,0513, thấp hơn KGAT và bản hoán vị, không có ý nghĩa, p Holm 0,28; kèm lưu ý so sánh với KGAT là giữa hai máy. Và một phát hiện nhóm xin báo cô: Stage 2 có lỗi thiết kế chuẩn hóa. `dt_norm` của fact chia cho cửa sổ của tương tác nên phần lớn fact bị chặn ở 1, ở đây 55,7%. Vì vậy kết quả Stage 2 không dùng để kết luận về thời gian của KG. Stage 1 không bị ảnh hưởng."
 
 **3c. Minh bạch và hạn chế (1 phút) · Triết.** **[Mở]** mục 5.
 
@@ -135,7 +137,7 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 
 **4d. Stage 2 (1 phút).** **[Mở]** 6.4.
 
-**Phôn:** "Stage 2 trên bản này không có độ phân giải: 0,0% triple nằm trong cửa sổ, 80,1% bị chặn ở 1, 19,9% không có ngày. Lý do: fact có ngày mới nhất là 31/12/2013, sớm hơn ngày đầu của cửa sổ train 91 ngày. Nên mọi fact có ngày có cùng Δt chuẩn hóa bằng 1; Stage 2 chỉ còn phân biệt có ngày hay không có ngày, và bản hoán vị ngày fact chỉ xáo xem triple nào là không có ngày."
+**Phôn:** "Stage 2 trên bản này không có độ phân giải: 0,0% triple nằm trong cửa sổ, 80,1% bị chặn ở 1, 19,9% không có ngày. Lý do: fact có ngày mới nhất là 31/12/2013, sớm hơn ngày đầu của cửa sổ train 91 ngày. Nên mọi fact có ngày có cùng Δt chuẩn hóa bằng 1; Stage 2 chỉ còn phân biệt có ngày hay không có ngày, và bản hoán vị ngày fact chỉ xáo xem triple nào là không có ngày. Nguyên nhân là cách chuẩn hóa: cửa sổ lấy theo tương tác rồi áp cho fact, như Triết vừa nói; bản `lastfm-u25` cũng bị, một phần."
 
 **4e. Kết quả (1,5 phút).** **[Mở]** 6.5, bảng, kiểm định, hình, bảng đặt cạnh `lastfm-u25`, nhận xét.
 
@@ -154,7 +156,7 @@ Notebook có 7 mục (66 ô, trong đó 31 ô code), mỗi mục ghi người tr
 
 **Phôn:** "Kế hoạch tiếp theo: chốt bản dữ liệu chính thức; nếu cô chọn bản của em, đưa code xuất dữ liệu và quyết định 0015 vào repo bằng một PR riêng để duyệt, rồi thêm dòng registry theo một quyết định riêng; hoàn tất tái lập độc lập và đóng băng kết quả; chọn một số phân tích bổ sung theo ý cô; rồi viết khóa luận."
 
-**Triết:** "Nhóm xin ý kiến cô ba câu. Một: bản dữ liệu chính thức. Phương án A là giữ `lastfm-u25`, đã chạy đủ, giữ hai vấn đề đầu kèm lời báo. Phương án B là dùng `lastfm-u25-latest`: hết bước nhảy, nhưng tập cặp vẫn thiên lệch theo hình thức khác, Stage 2 không có độ phân giải, và cần duyệt quyết định 0015 cùng đưa code vào repo. Phương án C là dựng lại tập cặp từ sự kiện thô của LFM-1b, không giới hạn bởi cửa sổ tháng 4/2014, xử lý gốc của vấn đề nhưng cần quyết định mới và thêm thời gian tính toán. Hai: Stage 2 còn đáng chạy trên bản nào, và trong các phân tích bổ sung đã đề xuất cô ưu tiên cái nào. Ba: giữ kết quả của bản được chọn làm chính thức sau khi tái lập độc lập và gắn tag, hay cô muốn chỉnh giao thức rồi chạy lại."
+**Triết:** "Nhóm xin ý kiến cô ba câu. Một: bản dữ liệu chính thức. Phương án A là giữ `lastfm-u25`, đã chạy đủ, giữ hai vấn đề đầu kèm lời báo. Phương án B là dùng `lastfm-u25-latest`: hết bước nhảy, nhưng tập cặp vẫn thiên lệch theo hình thức khác, Stage 2 không có độ phân giải, và cần duyệt quyết định 0015 cùng đưa code vào repo. Phương án C là dựng lại tập cặp từ sự kiện thô của LFM-1b, không giới hạn bởi cửa sổ tháng 4/2014, xử lý gốc của vấn đề nhưng cần quyết định mới và thêm thời gian tính toán. Hai: nhóm có nên sửa cách chuẩn hóa Δt của Stage 2 theo ngày của fact, bằng một quyết định mới và báo là thêm sau khi đã thấy test, rồi chạy lại Stage 2, trên bản nào; và trong các phân tích bổ sung đã đề xuất cô ưu tiên cái nào. Ba: giữ kết quả của bản được chọn làm chính thức sau khi tái lập độc lập và gắn tag, hay cô muốn chỉnh giao thức rồi chạy lại."
 
 **Cả hai (chốt):** "Tóm lại: quy trình đã sạch rò rỉ và kiểm tra được; trên `lastfm-u25` chưa có bằng chứng KG hay thời gian giúp; nhóm tự thấy ba vấn đề của tập dữ liệu, thử một bản mới nhưng nó chỉ đổi hình thức thiên lệch; mọi kết quả là sơ bộ và được báo kèm đủ hạn chế. Nhóm cảm ơn cô và xin nghe góp ý."
 

@@ -1,12 +1,14 @@
 # 11 — Tổng hợp lý thuyết T-KGAT, bản cho Last-FM (`lastfm-u25` và `lastfm-u25-latest`), cập nhật 13/11/2026
 
+> **Cập nhật 14/11/2026 (trước buổi họp): Stage 2 có lỗi thiết kế chuẩn hóa.** `dt_norm` của cạnh KG chia cho cửa sổ của **tương tác** train (`dt_den`, quyết định 0009 mục 3) rồi bị chặn ở 1 (mục 10), nên fact cũ hơn cửa sổ đều có `dt_norm` = 1. `lastfm-u25` bị một phần (55,7% triple bị chặn ở 1), `lastfm-u25-latest` gần như toàn bộ (80,1%, 0,0% trong cửa sổ). Code làm đúng quyết định 0009; lỗi nằm ở thiết kế, không phải ở dữ liệu. **Hệ quả:** kết quả Stage 2 của cả hai bản không dùng để kết luận "fact cũ hay mới"; **Stage 1 không bị ảnh hưởng** (cạnh tương tác luôn nằm trong cửa sổ). Đề xuất: quyết định mới chuẩn hóa Δt của fact theo ngày của fact, báo là thêm sau khi đã thấy test, rồi chạy lại Stage 2. Các câu cũ bên dưới đã sửa theo ghi chú này. Notebook trình bày: bản rút gọn `notebooks/00_present_lastfm_short.ipynb` (bản đầy đủ `00_present_lastfm.ipynb` để tra khi cô hỏi sâu). PR của bản `latest` là **#44** (thay #43 đã đóng).
+
 Tài liệu này là bản ôn lý thuyết dành riêng cho buổi báo cáo kết quả **Last-FM** với cô (14/11/2026, 13:00). Đây là bản cập nhật của tài liệu `lastfm-u25` ngày 12/11: mục 1 đến 11 giữ nội dung của bản 12/11 (chỉ thêm vài dòng ở mục 0, 2.8, 5.3, 8, 10 và 11 để trỏ sang bản mới), **mục 12 mới** nói về bản dữ liệu `lastfm-u25-latest` của Phôn, và từ điển (mục 10) và các câu tự kiểm (mục 11) có thêm phần của bản mới. Cấu trúc giống `docs/study/08-tong-hop-ly-thuyet.md` (bản 29/10 cho MovieLens): phần lý thuyết chung (mục 1, 3, 4, 7) giữ nguyên ý, các phần gắn với dữ liệu (mục 0, 2, 5, 6, 8, 9, 10, 11) viết lại cho Last-FM. Lý thuyết hôm nay **không đổi** so với bản 29/10; thứ đổi là dữ liệu, số liệu và những gì phải nói thêm.
 
 **Phạm vi:** `lastfm-u25` (25% user của Last-FM, quyết định 0013; mục 0 đến 11) và `lastfm-u25-latest` (cùng user, timestamp là lần nghe **muộn nhất**; mục 12). Hai bản **không được trộn số**: mọi bảng ghi rõ tên run.
 
-**Nguồn số liệu:** `results/registry.csv` (139 dòng của `lastfm-u25`, commit `ce55c0c`, không dòng `-dirty`), `results/significance.csv`, `results/rq3_models.csv`, `results/rq3_pairs.csv`, `docs/rq3-table.md`, `docs/data-report-lastfm.md`, `docs/data-report-lastfm-numbers.md`, `docs/bprmf-training-table.md`, `results/runs/lastfm-u25/*_summary.json`, quyết định 0012, 0013, 0014. Các số ở **mục 5.3**: số cạnh theo tuần và độ trải thời gian theo user, item có trong `docs/data-report-lastfm-numbers.md`; phân bố Δt_norm và tỷ lệ cạnh trong 30, 365 ngày cuối được notebook `notebooks/00_present_lastfm.ipynb` tính lại từ `train.csv` (đã kiểm ngày 13/11). Số của bản `lastfm-u25-latest` (mục 12) đến từ `docs/data-report-lastfm-latest-numbers.md`, `results/rq3_models_lastfm-latest.csv`, `results/rq3_pairs_lastfm-latest.csv` và `results/lastfm-latest-provenance.json` (PR #43, xếp chồng lên PR #42); các dòng registry của bản này **không nằm** trong `results/registry.csv` của repo.
+**Nguồn số liệu:** `results/registry.csv` (139 dòng của `lastfm-u25`, commit `ce55c0c`, không dòng `-dirty`), `results/significance.csv`, `results/rq3_models.csv`, `results/rq3_pairs.csv`, `docs/rq3-table.md`, `docs/data-report-lastfm.md`, `docs/data-report-lastfm-numbers.md`, `docs/bprmf-training-table.md`, `results/runs/lastfm-u25/*_summary.json`, quyết định 0012, 0013, 0014. Các số ở **mục 5.3**: số cạnh theo tuần và độ trải thời gian theo user, item có trong `docs/data-report-lastfm-numbers.md`; phân bố Δt_norm và tỷ lệ cạnh trong 30, 365 ngày cuối được notebook `notebooks/00_present_lastfm.ipynb` tính lại từ `train.csv` (đã kiểm ngày 13/11). Số của bản `lastfm-u25-latest` (mục 12) đến từ `docs/data-report-lastfm-latest-numbers.md`, `results/rq3_models_lastfm-latest.csv`, `results/rq3_pairs_lastfm-latest.csv` và `results/lastfm-latest-provenance.json` (PR #44, xếp chồng lên PR #42); các dòng registry của bản này **không nằm** trong `results/registry.csv` của repo.
 
-**Trạng thái kết quả:** *sơ bộ* (cả hai bản). PR #42 còn là draft, PR #43 (bản `latest`) xếp chồng lên #42, chưa có tag `v0.2-kgat`, chưa kiểm tra tái lập độc lập trên máy khác. Mọi chỗ trình bày số của KGAT và T-KGAT phải nói chữ "sơ bộ".
+**Trạng thái kết quả:** *sơ bộ* (cả hai bản). PR #42 còn là draft, PR #44 (bản `latest`) xếp chồng lên #42, chưa có tag `v0.2-kgat`, chưa kiểm tra tái lập độc lập trên máy khác. Mọi chỗ trình bày số của KGAT và T-KGAT phải nói chữ "sơ bộ".
 
 ---
 
@@ -248,7 +250,7 @@ Ba cách: sở thích trôi (user đổi gu), độ phổ biến đổi (bài h�
 - Mỗi cạnh KG mang ngày từ đó fact đúng. δ_r = 1 cho quan hệ KG, 0 cho Interact (so sánh với Stage 1, không cộng dồn).
 - Fact không ngày: Δt = 0. Δt âm cắt về 0. **Δt_norm của cạnh KG bị chặn ở 1.**
 - **Trên Last-FM (`lastfm-u25`, KG default tại t1, 152.976 triple; `docs/data-report-lastfm.md` bảng 4):** 24,4% triple nằm trong cửa sổ (`dt_norm < 1`); 55,7% bị chặn ở 1; 19,8% không có ngày. Tính riêng trên các fact **có ngày**: 30,5% nằm trong cửa sổ, 69,5% bị chặn ở 1 (hai tỷ lệ này mình tính từ ba số trên). Trung vị `dt_norm` của fact có ngày là 1,45.
-- So với MovieLens (0,7% ở ML-100K và 0,0% ở `ml-1m-u10`), Stage 2 trên Last-FM **có độ phân giải để so fact cũ với fact mới**; nhưng hơn 2/3 fact có ngày vẫn bị chặn ở 1, nên kết luận chỉ áp dụng cho phần fact đủ mới.
+- So với MovieLens (0,7% ở ML-100K và 0,0% ở `ml-1m-u10`), Stage 2 trên Last-FM có độ phân giải **chỉ với phần fact nằm trong cửa sổ**; hơn 2/3 fact có ngày vẫn bị chặn ở 1 vì `dt_den` lấy theo cửa sổ của tương tác (lỗi thiết kế, xem ghi chú đầu tài liệu), nên đây chưa phải phép thử đầy đủ về fact cũ hay mới.
 - Ngày của fact ở đây là ngày tồn tại của đích (ngày phát hành, ngày nghệ sĩ bắt đầu hoạt động, ngày sinh), **không phải lúc fact vào KG**.
 
 ### 5.5 Đối chứng hoán vị (bắt buộc)
@@ -350,7 +352,7 @@ KG gốc 464.567 triple → lọc theo item 154.076 → chở được trong 1-h
 - **Hệ quả:** so sánh Stage 2 với KGAT hoặc Stage 1 là so sánh giữa **hai máy** (T4 và RTX 3050); so sánh `tkgat_kg` với `tkgat_kg_perm` là cùng một máy.
 - **Thiết bị:** mọi model và trainer nhận `device`; `seed_all(seed)` đầu mỗi lần chạy.
 - **Dữ liệu không vào git** (giấy phép).
-- **Bản `lastfm-u25-latest` (PR #43):** chưa có dòng nào trong `results/registry.csv` (chỉ thêm dòng, cần quyết định riêng). Số của nó lấy từ registry gộp của năm zip kết quả của Phôn (323 dòng, 132 dòng riêng biệt, commit `873ca7f` của lịch sử riêng, 0 dòng `-dirty`) và được tóm tắt trong `results/rq3_*_lastfm-latest.csv`; nguồn gốc ở `docs/lastfm-latest-provenance.md`. Code xuất của Phôn và quyết định 0015 (nháp, chưa accepted) chưa vào repo.
+- **Bản `lastfm-u25-latest` (PR #44):** chưa có dòng nào trong `results/registry.csv` (chỉ thêm dòng, cần quyết định riêng). Số của nó lấy từ registry gộp của năm zip kết quả của Phôn (323 dòng, 132 dòng riêng biệt, commit `873ca7f` của lịch sử riêng, 0 dòng `-dirty`) và được tóm tắt trong `results/rq3_*_lastfm-latest.csv`; nguồn gốc ở `docs/lastfm-latest-provenance.md`. Code xuất của Phôn và quyết định 0015 (nháp, chưa accepted) chưa vào repo.
 - **Tag:** `v0.1-review` (commit `0e194e3`) đóng băng dữ liệu, KG, baseline MovieLens. **Chưa có `v0.2-kgat`**; các số Last-FM vẫn là sơ bộ, chưa tái lập độc lập.
 
 **Các quyết định (đọc tên là phải nhớ nội dung):**
@@ -477,7 +479,7 @@ p Holm (Wilcoxon cặp theo user, 1.608 user), Recall@20 / NDCG@20, hiệu = tr�
 20. Hoán vị để làm gì? — Nếu bản hoán vị tốt bằng bản thật thì cải thiện không đến từ thời gian.
 21. Ngày của một fact trên Last-FM lấy ở đâu? — Ngày tồn tại của đích, từ Freebase 09/08/2015 (ngày phát hành, bắt đầu hoạt động, ngày sinh).
 22. Vì sao bộ lọc thời gian của KG gần như không cắt gì ở Last-FM? — Chỉ 3 triple (15 trên bản đầy đủ) có ngày sau t1; KG t1 = KG t2.
-23. Stage 2 trên Last-FM khác MovieLens thế nào? — 24,4% triple trong cửa sổ Δt (MovieLens 0,7% và 0,0%), nên có độ phân giải; 69,5% fact có ngày vẫn bị chặn ở 1.
+23. Stage 2 trên Last-FM khác MovieLens thế nào? — 24,4% triple trong cửa sổ Δt (MovieLens 0,7% và 0,0%), nên có độ phân giải một phần; 69,5% fact có ngày vẫn bị chặn ở 1 do chuẩn hóa theo cửa sổ tương tác (lỗi thiết kế, Stage 1 không bị).
 24. Thiên lệch chọn mẫu của tập cặp là gì? — Tập cặp của KGAT chỉ có cặp còn được nghe từ 01/04/2014, chọn bằng thông tin sau mốc; tác động chưa đo.
 25. Vì sao kết quả KGAT/T-KGAT là "sơ bộ"? — Chưa có tag `v0.2-kgat`, chưa tái lập độc lập, PR #42 còn draft; bảng RQ3 ghi rõ "chạy trước khi cô duyệt giao thức t1/t2".
 26. Kết quả RQ3 trên `lastfm-u25`? — T-KGAT không khác KGAT (p Holm 0,420 / 0,230) và không khác hoán vị (0,803 / 0,506); Stage 2 cũng không.
@@ -508,7 +510,7 @@ p Holm (Wilcoxon cặp theo user, 1.608 user), Recall@20 / NDCG@20, hiệu = tr�
 - **Giữ nguyên:** 25% user (cùng seed 2019), phân vị 0,8 / 0,9 cho t1/t2, 5-core chỉ trên train, quy trình KG, lưới, 5 seed, `check_split`. Cùng 370.979 cặp.
 - **Đổi một thứ:** timestamp của cặp (user, item) là **lần nghe muộn nhất** (không phải sớm nhất) trong LFM-1b. Chính sách ghi trong `meta.json` của bản này là `timestamp_policy: latest`.
 - **Vì sao:** `lastfm-u25` có ba vấn đề (mục 2.8 và 12.2): **A** tập cặp chọn bằng thông tin sau 01/04/2014; **B** số cạnh train nhảy lên quanh 01/04/2014 (từ khoảng 2.494 lên khoảng 12.416 cạnh mỗi tuần, gấp 5,0 lần; 21,7% cạnh train có timestamp từ 01/04/2014); **C** `check_split` báo 0 vấn đề nên không thấy A và B.
-- **Tình trạng:** quyết định 0015 (nháp của Phôn) chưa accepted và chưa vào repo; code xuất và registry của bản này nằm ngoài repo. Phần repo có: bảng tóm tắt và nguồn gốc (PR #43).
+- **Tình trạng:** quyết định 0015 (nháp của Phôn) chưa accepted và chưa vào repo; code xuất và registry của bản này nằm ngoài repo. Phần repo có: bảng tóm tắt và nguồn gốc (PR #44).
 
 ### 12.2 Hai quy tắc timestamp: lý thuyết
 - **Sớm nhất:** Δt đo từ lần nghe đầu của cặp. Cặp nằm ở train nếu lần nghe đầu < t1. Một cặp được nghe đều đặn suốt nhiều tháng có thể có timestamp từ rất lâu (u25: cửa sổ train gần chín năm, từ 14/02/2005).
@@ -589,7 +591,7 @@ p Holm (Wilcoxon cặp theo user, 1.341 user, `n_nonzero` từ 643 đến 855, k
 7. Freebase là bản chụp 09/08/2015; 19,9% triple không có ngày; KGAT không tái lập từng bit trên GPU; điểm chọn của hai giai đoạn ở mép lưới γ.
 8. Hoán vị toàn cục chỉ là một dạng đối chứng; kết quả sơ bộ, chưa có tag `v0.2-kgat`.
 
-### 12.8 Nguồn gốc dữ liệu và kết quả của bản latest (PR #43)
+### 12.8 Nguồn gốc dữ liệu và kết quả của bản latest (PR #44)
 - Năm zip kết quả của Phôn, gộp bằng `scripts/12_merge_latest_zips.py`: 323 dòng registry, 132 dòng riêng biệt, 0 dòng `-dirty`, commit `873ca7f` (lịch sử riêng, ngoài repo). Thiết bị: CPU (MostPop) và Tesla T4 (mọi mô hình học sâu; tổng 55,1 giờ ở dòng val).
 - Bảng RQ3 và kiểm định do `scripts/10_rq3_table.py` (script của repo, không sửa) ghi từ registry gộp; số của bản `latest` do `scripts/11_numbers_latest_lastfm.py` ghi.
 - `results/registry.csv` **không** có dòng nào của `lastfm-u25-latest`. Bản `latest` chưa được duyệt (0015 nháp). Muốn dùng làm kết quả chính thức cần: duyệt 0015, đưa code của Phôn vào repo bằng PR riêng, quyết định cách thêm dòng registry.
