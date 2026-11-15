@@ -1,0 +1,38 @@
+{
+  "zips": {
+    "tkgat-lastfm-results.zip": {
+      "sha256": "241ec7d38ad36da18921bf81c64d26b10cf64d5f88892d403b8210c08af8632d",
+      "bytes": 249422247,
+      "registry_rows": 47
+    },
+    "tkgat-lastfm-nokg-results.zip": {
+      "sha256": "f5430456aeb890c3f0c06230aacbfd554eae4e89e0422153596cd1f216f551dd",
+      "bytes": 218910499,
+      "registry_rows": 55
+    },
+    "tkgat-lastfm-stage1-results.zip": {
+      "sha256": "d6ec4957239d2ecbdfd700ed8b62e73c66c5956a99f221ae95f31999c9d09938",
+      "bytes": 436285661,
+      "registry_rows": 67
+    },
+    "tkgat-lastfm-stage1-control-results.zip": {
+      "sha256": "a03a20aa2d3d54701a4bee85e4424cddddfdc60cbdd5b5dd0ab1f0c8b87ae0d1",
+      "bytes": 498604321,
+      "registry_rows": 77
+    },
+    "tkgat-lastfm-stage2-perm-results.zip": {
+      "sha256": "389ad585f0e16cc3be3d51547f8cc060f0bfad636f47f35e3081dd2c0c892518",
+      "bytes": 498644789,
+      "registry_rows": 77
+    }
+  },
+  "registry_rows_all_zips": 323,
+  "registry_rows_distinct": 132,
+  "git_commits": [
+    "873ca7f"
+  ],
+  "datasets": [
+    "lastfm-u25-latest"
+  ],
+  "dirty_rows": 0
+}
