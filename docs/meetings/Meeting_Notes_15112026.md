@@ -73,8 +73,8 @@ Tất cả gom vào một quyết định mới (0016), ghi rõ các thay đổi
 | Ai | Việc | Mốc |
 |---|---|---|
 | Triết | Biên bản, đóng PR #42, dừng PR #44, quyết định 0016 | 17/11 |
-| Triết | Tập nhỏ; bảng epoch; lịch learning rate; huấn luyện lại train + val; cắt quan hệ; cổng tập nhỏ | 21/11 |
-| Phôn | Script cắt LFM-1b thô (tách riêng), loader, chạy 02 → 06 → 07 trên dữ liệu mới | 24/11 (Phôn bận 2–3 ngày đầu tuần) |
+| Triết | Tập nhỏ; bảng epoch; lịch learning rate; huấn luyện lại train + val; cắt quan hệ; cổng tập nhỏ | 21/11 (Triết bận 2–3 ngày đầu tuần) |
+| Phôn | Script cắt LFM-1b thô (tách riêng), loader, chạy 02 → 06 → 07 trên dữ liệu mới | 24/11 |
 | Phôn | Tài liệu công thức Δt chung hai giai đoạn (Triết hiện thực, Phôn review) | 20/11 |
 | Cả hai | Ghép, chạy chính thức (laptop + Kaggle), bảng kết quả mới, tái lập, tag `v0.2-kgat`, báo cô | cuối tháng 11 |
 | Cả hai | Bắt đầu viết khóa luận (chương 1–3) song song | từ 18/11 |
