@@ -1,0 +1,10 @@
+dataset,model,label,split_sha256,status,point,n_seeds,n_users,recall@20_mean,recall@20_std,ndcg@20_mean,ndcg@20_std
+lastfm-u25-latest,mostpop,MostPop,9e095ba0acb2,ok,window_days = None,1.0,1341.0,0.0296399648537358,,0.0267958618488362,
+lastfm-u25-latest,mostpop_recent,MostPop recent,9e095ba0acb2,chưa chạy,,,,,,,
+lastfm-u25-latest,bprmf,BPR-MF,9e095ba0acb2,ok,"dim = 64, l2 = 0.001, lr = 0.001",5.0,1341.0,0.06094688001651468,0.005139311743727944,0.06178995504622932,0.005432964010205291
+lastfm-u25-latest,kgat,KGAT,9e095ba0acb2,ok,"l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1",5.0,1341.0,0.06725561513832332,0.0028704659037596353,0.06717008464595539,0.0021531705759877634
+lastfm-u25-latest,kgat_nokg,KGAT không KG,9e095ba0acb2,ok,"l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1",5.0,1341.0,0.06327327535731296,0.004621768751771064,0.065824221616918,0.004373255819234674
+lastfm-u25-latest,tkgat,T-KGAT,9e095ba0acb2,ok,"gamma = 1, l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1",5.0,1341.0,0.06758004988351392,0.0036624455168980975,0.06692320708324564,0.0031122332944157143
+lastfm-u25-latest,tkgat_perm,T-KGAT (đối chứng hoán vị),9e095ba0acb2,ok,"gamma = 1, l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1",5.0,1341.0,0.06514219437280816,0.004862014890521182,0.06445944556280628,0.003438584103054903
+lastfm-u25-latest,tkgat_kg,T-KGAT giai đoạn 2 (Δt trên KG),9e095ba0acb2,ok,"gamma = 10, l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1, time_on = kg",5.0,1341.0,0.06610722750542,0.0018448343656219744,0.0652856912266622,0.0015170867955983834
+lastfm-u25-latest,tkgat_kg_perm,T-KGAT giai đoạn 2 (đối chứng hoán vị ngày fact),9e095ba0acb2,ok,"gamma = 10, l2 = 0.0001, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1, time_on = kg",5.0,1341.0,0.06501376253891603,0.003348570828092526,0.06448379819854555,0.0017044061723583087

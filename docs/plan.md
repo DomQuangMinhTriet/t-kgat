@@ -301,3 +301,12 @@ Tuần này dày việc. Nó khả thi vì code nháp đã có sẵn: phần l�
 2. Nhóm giữ thiết kế T-KGAT ngày 07/08 (giảm attention theo Δt trên cạnh user–item) làm mô hình chính, và thêm biến thể đưa thời gian vào các triple của KG (theo ngày của fact) để so sánh. Cả hai đều có thí nghiệm kiểm soát hoán vị timestamp.
 3. Fact trong KG không có ngày: giữ nếu cả hai thực thể đã tồn tại trước mốc, bỏ nếu thực thể đích là tác phẩm ra đời sau mốc, và chạy thêm biến thể bỏ toàn bộ fact không ngày để đo ảnh hưởng.
 4. Tên đề tài bỏ chữ "Confidence": T-KGAT — Temporal Knowledge Graph Attention Network for Recommendation.
+
+## 13. Sau buổi họp 15/11 (Last-FM, giao thức mới)
+
+Mục 12 là kế hoạch đến 31/10 và được giữ nguyên làm lịch sử. Từ 01/11 nhóm chuyển sang Last-FM (quyết định 0012–0014, biên bản
+`docs/meetings/Meeting_Notes_01112026.md`); ngày 15/11 cô góp ý 12 điểm về cách lấy dữ liệu và cách huấn luyện
+(`docs/meetings/Meeting_Notes_15112026.md`). Các góp ý đó được gom vào quyết định 0016; kế hoạch từng bước (giai đoạn 0 đến 5,
+phân công Triết/Phôn, mốc đến cuối tháng 11) nằm trong tài liệu kế hoạch của nhóm ngoài repo và được tóm tắt trong 0016.
+Thứ tự: đóng mốc kết quả `lastfm-u25` (PR #42, tag `v0.1b-u25`) → 0016 → tối ưu trên tập nhỏ (Triết) song song với dựng dữ liệu
+từ LFM-1b (Phôn) → ghép, chạy chính thức, tái lập, tag `v0.2-kgat` → viết khóa luận (chương 1–3 bắt đầu từ 18/11).

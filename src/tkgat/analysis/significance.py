@@ -172,7 +172,9 @@ def draw_curve(curve: Curve, path: Path, label: str) -> None:
 
     t = curve.table
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.0))
-    ink, accent, muted = "#1f2933", "#2b6cb0", "#9aa5b1"
+    # accent: mean curve and band; best: the best epoch of each seed (a warm colour, so it stands out from the blue);
+    # muted: the dashed mean over the seeds that are still running (darker than before, to be readable)
+    ink, accent, muted, best = "#1f2933", "#1c4e9b", "#52606d", "#d9480f"
     panels = (
         (axes[0], t, "loss_mean", "loss_std", "n_seeds", "loss huấn luyện BPR", "loss"),
         (
@@ -196,15 +198,15 @@ def draw_curve(curve: Curve, path: Path, label: str) -> None:
         )
         if len(rest):
             tail = pd.concat([full.tail(1), rest])
-            ax.plot(tail["epoch"], tail[mean], color=muted, lw=1.4, ls="--", label=f"ít hơn {n_all} seed còn chạy")
+            ax.plot(tail["epoch"], tail[mean], color=muted, lw=1.6, ls="--", label=f"ít hơn {n_all} seed còn chạy")
         for ep in curve.best_epochs.values():
-            ax.axvline(ep, color=muted, lw=0.8, ls=":")
+            ax.axvline(ep, color=best, lw=1.1, ls=":", alpha=0.9)
         ax.set_title(f"{label}: {title}", fontsize=9, color=ink)
         ax.set_xlabel("epoch")
         ax.set_ylabel(ylab)
         ax.grid(True, color="#e4e7eb", lw=0.6)
         ax.spines[["top", "right"]].set_visible(False)
-    axes[0].plot([], [], color=muted, ls=":", lw=0.8, label="epoch tốt nhất của từng seed")
+    axes[0].plot([], [], color=best, ls=":", lw=1.1, label="epoch tốt nhất của từng seed")
     axes[0].legend(fontsize=7, frameon=False)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)

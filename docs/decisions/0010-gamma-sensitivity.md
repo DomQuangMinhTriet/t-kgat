@@ -1,6 +1,6 @@
 # 0010 — gamma at the edge of the grid: a validation-only sensitivity analysis, not a new grid
 
-- Status: proposed (2026-10-28 by Triết); becomes accepted when Phôn approves the pull request
+- Status: accepted (the pull request that carried it, #39, was merged on 2026-10-30; status line updated 2026-11-16); proposed 2026-10-28 by Triết
 - Builds on 0009 (T-KGAT Stage 1, the gamma grid {1, 3, 10}) and on 0007 (a selected value at the edge of its grid is
   reported, and the grid is not widened after the fact). Changes nothing in 0009.
 - Context: decision 0009, item 4, registered the grid `gamma in {1, 3, 10}` before any official T-KGAT run, with
