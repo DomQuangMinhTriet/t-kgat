@@ -1,5 +1,9 @@
 # `lastfm-u25-latest`: provenance and how to regenerate
 
+> **Dropped on 2026-11-15.** At the meeting of 2026-11-15 the advisor asked for the earliest listen as the pair timestamp
+> (no new-item task), so `lastfm-u25-latest` is not pursued: decision 0015 stays a draft, no row of it enters the registry, and the
+> tables below are kept only as the record of what was shown at that meeting (`docs/meetings/Meeting_Notes_15112026.md`).
+
 `lastfm-u25-latest` is Phôn's dataset. It has the same users (seed 2019, 25%), the same t1/t2 quantiles (0.8 / 0.9), the same 5-core (train only)
 and the same KG pipeline as `lastfm-u25`. The only change: the timestamp of a (user, item) pair is the **latest** listen, not the earliest
 (`timestamp_policy: latest` in its `meta.json`). Decision 0015 (Phôn's draft) describes this; it is **not accepted** and **not in this repository**
