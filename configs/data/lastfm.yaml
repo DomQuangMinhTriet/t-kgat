@@ -1,0 +1,13 @@
+# Last-FM (LFM-1b tracks) in the user/item universe of the published KGAT data, same protocol as ml100k.yaml
+# (decision 0002): global 0.8 / 0.9 quantile cut-offs, 5-core on train positives only, no unknown users or
+# items in val/test, check_split must pass. Only the dataset differs.
+name: lastfm           # selects the loader
+run_name: lastfm       # registry "dataset" column and results/runs/<run_name>/ (default: name)
+raw_dir: data-last-fm/lfm1b-tracks
+processed_dir: data/processed/lastfm
+clean: false           # no titles to clean: listening events carry no item metadata
+split:
+  q_val: 0.8           # t1 = 80th percentile of all timestamps
+  q_test: 0.9          # t2 = 90th percentile
+  min_rating: 1        # listening events have no rating: every interaction is a positive
+  kcore: 5             # iterative 5-core, computed on train positives only

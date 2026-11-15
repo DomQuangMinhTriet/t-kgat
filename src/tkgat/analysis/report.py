@@ -67,12 +67,19 @@ class Numbers:
     def value(self, key: str) -> str:
         return next(v for _, k, v, _ in self.rows if k == key)
 
-    def render(self) -> str:
+    def render(
+        self,
+        title: str = "Số liệu của báo cáo dữ liệu",
+        script: str = "scripts/07_report_numbers.py",
+        report: str = "docs/data-report.md",
+        test: str = "tests/test_data_report.py",
+    ) -> str:
+        """The numbers file. The defaults are the MovieLens report; the Last-FM report passes its own names."""
         out = [
-            "# Số liệu của báo cáo dữ liệu",
+            f"# {title}",
             "",
-            "Sinh tự động bởi `scripts/07_report_numbers.py` từ các file do pipeline ghi ra. **Không sửa tay.**",
-            "Mọi con số trong `docs/data-report.md` phải có trong file này (kiểm tra bởi `tests/test_data_report.py`).",
+            f"Sinh tự động bởi `{script}` từ các file do pipeline ghi ra. **Không sửa tay.**",
+            f"Mọi con số trong `{report}` phải có trong file này (kiểm tra bởi `{test}`).",
             f'Giá trị "{MISSING}" nghĩa là nguồn chưa tồn tại; script điền số khi nguồn xuất hiện.',
             "Định dạng: dấu chấm ngăn hàng nghìn, dấu phẩy thập phân; phần trăm có ký hiệu %.",
         ]

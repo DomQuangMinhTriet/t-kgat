@@ -1,0 +1,84 @@
+{
+  "selected": {
+    "lr": 0.001,
+    "l2": 1e-05,
+    "l2_kg": 1e-05,
+    "mess_dropout": 0.1,
+    "gamma": 10
+  },
+  "val_means_recall@20": [
+    0.055815570243203626
+  ],
+  "test_mean_std": {
+    "recall@10": [
+      0.03377824555799362,
+      0.0011744249213758826
+    ],
+    "recall@20": [
+      0.05343581703993243,
+      0.0024121215112533514
+    ],
+    "ndcg@10": [
+      0.03941642194924203,
+      0.0018472189863498099
+    ],
+    "ndcg@20": [
+      0.0440725033597664,
+      0.0016976577347337439
+    ]
+  },
+  "kg": {
+    "t1": {
+      "kg_variant": "default",
+      "cutoff": "t1",
+      "time_consistent": true,
+      "wikidata_snapshot": null,
+      "n_users": 5321,
+      "n_items": 18665,
+      "n_entities": 44392,
+      "n_relations": 9,
+      "n_rel": 20,
+      "n_nodes": 49713,
+      "n_interactions": 236053,
+      "n_triples": 152976,
+      "n_triples_dropped_unseen_tail": 0,
+      "n_edges": 778058,
+      "n_isolated_entities": 2,
+      "t_ref": 1398783364.0,
+      "dt_den": 290426881.0
+    },
+    "t2": {
+      "kg_variant": "default",
+      "cutoff": "t2",
+      "time_consistent": true,
+      "wikidata_snapshot": null,
+      "n_users": 5321,
+      "n_items": 18665,
+      "n_entities": 44392,
+      "n_relations": 9,
+      "n_rel": 20,
+      "n_nodes": 49713,
+      "n_interactions": 236053,
+      "n_triples": 152976,
+      "n_triples_dropped_unseen_tail": 0,
+      "n_edges": 778058,
+      "n_isolated_entities": 2,
+      "t_ref": 1398783364.0,
+      "dt_den": 290426881.0
+    }
+  },
+  "tkgat": {
+    "from": "tkgat",
+    "base_point": {
+      "lr": 0.001,
+      "l2": 1e-05,
+      "l2_kg": 1e-05,
+      "mess_dropout": 0.1,
+      "gamma": 10
+    },
+    "t_ref": 1398783364,
+    "dt_den": 290426881,
+    "control": "permute_train_ts",
+    "time_on": "interact"
+  }
+}
