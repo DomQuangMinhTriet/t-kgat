@@ -37,6 +37,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from tkgat.data.drive import open_text_source
 from tkgat.kg.temporal import VARIANTS, cutoff_day, end_of_period, is_undated
 
 FREEBASE_SNAPSHOT = "2015-08-09"
@@ -102,10 +103,9 @@ def read_freebase_subset(path: str | Path, subjects: set[str]) -> pd.DataFrame:
     Freebase id, with the raw literals in :data:`DATE_COLUMNS` and ``tail_label``. The literals are kept
     raw so that :func:`check_kg` can parse them again independently.
     """
-    path = Path(path)
     wanted = {p: c for p, c in zip(DATE_PREDICATES, DATE_COLUMNS, strict=True)}
     rows: dict[str, dict[str, str]] = {}
-    with path.open(encoding="utf-8", buffering=1 << 24) as f:
+    with open_text_source(path) as f:
         header = f.readline().rstrip("\r\n").split("\t")
         if header[:3] != ["subject", "predicate", "object"]:
             raise ValueError(f"{path}: expected the header 'subject predicate object', got {header[:3]}")

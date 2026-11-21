@@ -21,6 +21,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from tkgat.data.drive import join_source, open_text_source
+
 ML100K_GENRES = [
     "unknown",
     "Action",
@@ -101,13 +103,11 @@ def load_lastfm(raw_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     The dataset ships no item metadata we use, so ``items`` carries the item ids with empty columns; it
     exists only so that the pipeline sees the same two-frame schema as the MovieLens loaders.
+    Input can come from a local directory or a Drive ZIP; train-only encoding follows the temporal split.
     """
-    raw_dir = Path(raw_dir)
-    inter = pd.read_csv(
-        raw_dir / LASTFM_INTERACTIONS,
-        sep="\t",
-        dtype={"user": "int64", "item": "int64", "ts": "int64"},
-    )
+    source = join_source(raw_dir, LASTFM_INTERACTIONS)
+    with open_text_source(source) as handle:
+        inter = pd.read_csv(handle, sep="\t", dtype={"user": "int64", "item": "int64", "ts": "int64"})
     if list(inter.columns) != ["user", "item", "ts"]:
         raise ValueError(f"{LASTFM_INTERACTIONS} has columns {list(inter.columns)}, expected ['user', 'item', 'ts']")
     if inter.duplicated(["user", "item"]).any():

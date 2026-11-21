@@ -8,6 +8,8 @@ data-for-Phon (1)/
 data-for-Phon (1).zip
 /data-last-fm/
 /data-last-fm.zip
+# Local training result archives are kept outside Git history.
+/tkgat-lastfm*results.zip
 /knowledge_graph_attention_network/
 __pycache__/
 *.egg-info/

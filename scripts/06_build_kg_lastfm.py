@@ -35,6 +35,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from tkgat.data.drive import open_binary_source
 from tkgat.data.encode import encode
 from tkgat.kg.lastfm import (
     DATE_COLUMNS,
@@ -69,9 +70,9 @@ DROPPED_COLUMNS = [
 ]
 
 
-def md5(path: Path) -> str:
+def md5(path: str | Path) -> str:
     h = hashlib.md5()
-    with path.open("rb") as f:
+    with open_binary_source(path) as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
@@ -100,7 +101,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
     ap.add_argument("--author-data", default=str(AUTHOR_DEFAULT), help="the published KGAT Data/last-fm folder")
-    ap.add_argument("--freebase", default=str(FREEBASE_DEFAULT), help="Freebase facts of the KG entities")
+    ap.add_argument("--freebase", help="Freebase facts of the KG entities (local path or gdrive:// source)")
     ap.add_argument("--variant", choices=[*VARIANTS, "all"], default="all")
     args = ap.parse_args()
 
@@ -108,7 +109,7 @@ def main() -> None:
     s, meta = load_saved(cfg)
     enc = encode(s)
     author = Path(args.author_data)
-    freebase_path = Path(args.freebase)
+    freebase_path = args.freebase or str(cfg.get("freebase", FREEBASE_DEFAULT))
 
     items = item_entities(enc.item_ids, author / "item_list.txt")
     triples, entity_ids, relations = read_author_kg(author)
@@ -160,7 +161,7 @@ def main() -> None:
             "variant": variant,
             "decisions": ["0004", "0006"],
             "wikidata_snapshot": None,  # Last-FM uses Freebase, not Wikidata
-            "kg_snapshot": f"Freebase dump {FREEBASE_SNAPSHOT} ({freebase_path.as_posix()})",
+            "kg_snapshot": f"Freebase dump {FREEBASE_SNAPSHOT} ({freebase_path})",
             "kg_source": "knowledge graph published with KGAT (Data/last-fm), no statement dates",
             "time_consistent": variant != "static",
             "note": STATIC_NOTE if variant == "static" else "",
@@ -174,7 +175,7 @@ def main() -> None:
                 "author_entities_md5": md5(author / "entity_list.txt"),
                 "author_items": (author / "item_list.txt").as_posix(),
                 "author_items_md5": md5(author / "item_list.txt"),
-                "freebase": freebase_path.as_posix(),
+                "freebase": freebase_path,
                 "freebase_md5": md5(freebase_path),
                 "split_sha256": meta.get("sha256", {}),
             },

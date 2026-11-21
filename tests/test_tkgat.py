@@ -311,6 +311,19 @@ def test_the_full_run_scores_the_selected_gamma_once_with_the_same_anchor(tsetup
     assert "test_mean_std" in selected and (tsetup.runs / "tkgat_seed1.npz").exists()
 
 
+def test_partial_gamma_grid_does_not_select_or_score_test_early(tsetup):
+    for _ in range(3):
+        reg = run_tag(tsetup, "tkgat", "--resume", "--max-new-runs", "1")
+        mine = reg[reg["model"] == "tkgat"]
+        assert set(mine["phase"]) == {"val"}
+        assert not (tsetup.runs / "tkgat_summary.json").exists()
+    reg = run_tag(tsetup, "tkgat", "--resume", "--max-new-runs", "1")
+    val_rows = configs(reg, "tkgat", "val")
+    test_rows = configs(reg, "tkgat", "test")
+    assert len(val_rows) == 4 and {c["gamma"] for _, c in val_rows} == {1, 3}
+    assert len(test_rows) == 2 and len({c["gamma"] for _, c in test_rows}) == 1
+
+
 def test_control_permutes_train_ts_per_seed_and_records_the_permutation_seed(tsetup):
     run_tag(tsetup, "tkgat")
     seen = {}

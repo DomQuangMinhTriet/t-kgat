@@ -23,8 +23,21 @@ def load_config(path: str | Path) -> dict:
         return yaml.safe_load(f)
 
 
-def build_split(cfg: dict) -> tuple[TemporalSplit, dict]:
-    inter, items = load(cfg["name"], cfg["raw_dir"])
+def build_split(cfg: dict, *, interactions: pd.DataFrame | None = None) -> tuple[TemporalSplit, dict]:
+    if interactions is None:
+        if cfg.get("timestamp_policy", "earliest") != "earliest":
+            raise ValueError("Latest Last-FM timestamps require raw events; use scripts/generate_lastfm_drive.py")
+        inter, items = load(cfg["name"], cfg["raw_dir"])
+    else:
+        if cfg["name"] != "lastfm" or cfg.get("clean"):
+            raise ValueError("Preloaded interactions require Last-FM with clean: false")
+        inter, items = interactions, None
+        if cfg.get("timestamp_policy") == "latest" and inter.duplicated(["user", "item"]).any():
+            inter = (
+                inter.sort_values(["ts", "user", "item"], kind="mergesort")
+                .drop_duplicates(["user", "item"], keep="last")
+                .reset_index(drop=True)
+            )
     clean_report = {}
     if cfg.get("clean"):
         inter, items, clean_report = clean(inter, items)

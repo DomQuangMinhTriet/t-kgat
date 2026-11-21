@@ -1,0 +1,23 @@
+# Latest listen per published KGAT pair (decision 0015); no use of earliest cache.
+name: lastfm
+run_name: lastfm-u25-latest
+timestamp_policy: latest
+# data-last-fm.zip from the source documented in docs/lastfm-temporal-setup.md:
+# https://drive.google.com/drive/folders/1NMkts7TVcFc9dDj1OsvsYXxK9Ms31Mfc
+# Expected member: data-last-fm/lfm1b-tracks/lfm1b-tracks.inter.
+# A basename matches the .inter member regardless of its enclosing directory.
+raw_interactions: gdrive-stream://1tXtohvT8RAFmz2vJo4vH90kkrpwD75jW/lfm1b-tracks.inter
+# The small support ZIP supplies Freebase only; its earliest-only pair cache is unused.
+freebase: gdrive://1C4dqi4zzv8KCUwq2fucR9stHqYG-85R2/freebase/freebase-subset.tsv
+drive_zip_id: 1C4dqi4zzv8KCUwq2fucR9stHqYG-85R2
+drive_zip_sha256: ea50bd4d82d51744a54be9d0a3069294b2221e719ef3d19f4af3a6565eb91466
+processed_dir: data/processed/lastfm-u25-latest
+clean: false
+user_fraction: 0.25
+user_seed: 2019
+progress_every: 10000000
+split:
+  q_val: 0.8
+  q_test: 0.9
+  min_rating: 1
+  kcore: 5

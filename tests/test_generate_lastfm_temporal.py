@@ -76,6 +76,46 @@ def test_load_cache_rejects_duplicate_pairs_and_bad_columns(tmp_path):
         script.load_cache(bad, {script.pair_key(0, 1)})
 
 
+def test_scan_keeps_maximum_timestamp_independent_of_event_order(tmp_path):
+    source = tmp_path / "events.inter"
+    source.write_text(
+        "user_id\ttracks_id\ttimestamp\nraw-u\traw-i\t200\nraw-u\traw-i\t100\n"
+        "raw-u\traw-i\t300\nraw-u\traw-i\t250\nother\traw-i\t999\n",
+        encoding="utf-8",
+    )
+    maps = script.Mappings(users={0: "raw-u"}, items={1: "raw-i"}, freebase={}, entities={}, relations={})
+    pairs = {script.pair_key(0, 1)}
+    latest, stats = script.scan_interactions(source, pairs, maps, progress_every=0)
+    earliest, _ = script.scan_interactions(source, pairs, maps, 0, "earliest")
+    assert latest[["user", "item", "ts"]].values.tolist() == [[0, 1, 300]]
+    assert earliest.ts.tolist() == [100]
+    assert stats["timestamp_policy"] == "latest" and stats["lfm_candidate_rows"] == 4
+
+
+def test_latest_cache_requires_matching_policy_metadata(tmp_path):
+    source = tmp_path / "kgat_author_latest.tsv"
+    expected = {script.pair_key(0, 1)}
+    _write_cache(source, [(0, 1, 10)])
+    with pytest.raises(ValueError, match="needs policy metadata"):
+        script.load_cache(source, expected, "latest")
+    frame = pd.DataFrame({"user": [0], "item": [1], "ts": [10]})
+    script.save_cache(source, frame, "earliest")
+    with pytest.raises(ValueError, match="policy differs"):
+        script.load_cache(source, expected, "latest")
+    script.save_cache(source, frame, "latest")
+    assert script.load_cache(source, expected, "latest").ts.tolist() == [10]
+
+
+def test_latest_is_default_and_does_not_reuse_old_cache_or_output():
+    latest = script.parse_args([])
+    earliest = script.parse_args(["--timestamp-policy", "earliest"])
+    assert latest.timestamp_policy == "latest"
+    assert latest.timestamp_cache.name == "kgat_author_latest.tsv"
+    assert latest.output.name == "last-fm-temporal-latest"
+    assert earliest.timestamp_cache.name == "kgat_author_earliest.tsv"
+    assert earliest.output.name == "last-fm-temporal"
+
+
 def test_read_kg_reads_triples_and_rejects_bad_input(tmp_path):
     ok = tmp_path / "kg.txt"
     ok.write_text("0 1 5\n2 0 6\n", encoding="utf-8")
