@@ -70,6 +70,37 @@ Nguồn: `results/registry.csv` qua `registry.load`, chỉ dòng `phase = test` 
 
 ![Learning curve val của KGAT, T-KGAT và T-KGAT hoán vị trên ml-1m-u10](figures/rq3_curves_ml-1m-u10.png)
 
+## lastfm-u25 (user test: 1608)
+
+| Mô hình | Cấu hình | Recall@20 (test) | NDCG@20 (test) | Số seed |
+|---|---|---|---|---|
+| MostPop | window_days = None | 0,0238 | 0,0191 | 1 |
+| MostPop recent | window_days = 14 | 0,0211 | 0,0169 | 1 |
+| BPR-MF | dim = 64, l2 = 0.001, lr = 0.001 | 0,0520 ± 0,0028 | 0,0435 ± 0,0030 | 5 |
+| KGAT [sơ bộ] | l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,0534 ± 0,0008 | 0,0444 ± 0,0008 | 5 |
+| KGAT không KG [sơ bộ] | l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,0518 ± 0,0016 | 0,0426 ± 0,0004 | 5 |
+| T-KGAT [sơ bộ] | gamma = 10, l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,0529 ± 0,0025 | 0,0431 ± 0,0016 | 5 |
+| T-KGAT (đối chứng hoán vị) [sơ bộ] | gamma = 10, l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1 | 0,0534 ± 0,0024 | 0,0441 ± 0,0017 | 5 |
+| T-KGAT giai đoạn 2 (Δt trên KG) [sơ bộ] | gamma = 1, l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1, time_on = kg | 0,0513 ± 0,0018 | 0,0426 ± 0,0014 | 5 |
+| T-KGAT giai đoạn 2 (đối chứng hoán vị ngày fact) [sơ bộ] | gamma = 1, l2 = 1e-05, l2_kg = 1e-05, lr = 0.001, mess_dropout = 0.1, time_on = kg | 0,0537 ± 0,0020 | 0,0436 ± 0,0016 | 5 |
+
+**So sánh cặp** (hiệu = trước − sau):
+
+| So sánh | Metric | Seed chung | n_pairs | n_nonzero | Hiệu trung bình | p thô | p Holm | Ghi chú |
+|---|---|---|---|---|---|---|---|---|
+| T-KGAT so với KGAT | Recall@20 | 5 | 1608 | 682 | -0,0005 | 0,140 | 0,420 | — |
+| T-KGAT thật so với hoán vị | Recall@20 | 5 | 1608 | 720 | -0,0005 | 0,675 | 0,803 | — |
+| KGAT so với KGAT không KG | Recall@20 | 5 | 1608 | 783 | 0,0016 | 0,402 | 0,803 | — |
+| T-KGAT giai đoạn 2 so với KGAT | Recall@20 | 5 | 1608 | 745 | -0,0021 | 0,184 | 0,278 | — |
+| T-KGAT giai đoạn 2 thật so với hoán vị | Recall@20 | 5 | 1608 | 651 | -0,0024 | 0,139 | 0,278 | — |
+| T-KGAT so với KGAT | NDCG@20 | 5 | 1608 | 901 | -0,0012 | 0,077 | 0,230 | — |
+| T-KGAT thật so với hoán vị | NDCG@20 | 5 | 1608 | 910 | -0,0009 | 0,381 | 0,506 | — |
+| KGAT so với KGAT không KG | NDCG@20 | 5 | 1608 | 929 | 0,0017 | 0,253 | 0,506 | — |
+| T-KGAT giai đoạn 2 so với KGAT | NDCG@20 | 5 | 1608 | 921 | -0,0018 | 0,523 | 0,523 | — |
+| T-KGAT giai đoạn 2 thật so với hoán vị | NDCG@20 | 5 | 1608 | 878 | -0,0010 | 0,221 | 0,442 | — |
+
+![Learning curve val của KGAT, T-KGAT và T-KGAT hoán vị trên lastfm-u25](figures/rq3_curves_lastfm-u25.png)
+
 ## Phụ lục: KG chỉ có Wikidata (bị thay bởi quyết định 0011)
 
 > Các dòng này chạy trước quyết định 0011, trên KG chưa có metadata MovieLens. Chúng **không phải kết quả chính thức**; giữ lại để người đọc thấy cả hai, vì KG được đổi sau khi điểm test của chúng đã được xem.

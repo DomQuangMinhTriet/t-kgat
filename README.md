@@ -1,10 +1,10 @@
 # t-kgat
 
-Leakage-safe, time-aware knowledge-graph recommendation on MovieLens.
+Leakage-safe, time-aware knowledge-graph recommendation on MovieLens and Last-FM.
 Graduation thesis, HCMUS (advisor: Dr. Nguyễn Ngọc Minh Châu; students: Đởm Quang Minh Triết, Nguyễn Đăng Phôn).
 
 ## Research questions
-- **RQ1** What do MovieLens interactions and the linked knowledge graph look like over time
+- **RQ1** What do the interactions (MovieLens, Last-FM) and the linked knowledge graph look like over time
   (link coverage, dated facts, facts from the future)?
 - **RQ2** Once leakage is removed (validation set, time-consistent KG), does the KG still help KGAT beat
   pure collaborative filtering?

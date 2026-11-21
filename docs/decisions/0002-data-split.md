@@ -1,6 +1,8 @@
 # 0002 — Leakage-safe temporal split
 
-- Status: accepted (2026-10-17); cut-offs to be confirmed with the advisor on 2026-10-31
+- Status: accepted (2026-10-17). Cut-offs: the t1/t2 quantile rule was presented to the advisor at the meetings of 2026-11-01
+  and 2026-11-15 (`docs/meetings/`); the notes record no objection and no explicit approval of the cut-offs themselves.
+  Item 7 (no retraining on train+val) is superseded by 0016 item 4 (2026-11-15).
 - Decision:
   1. Deduplicate (user, item) pairs, keep the earliest.
   2. Global cut-offs: `t1` = 80th, `t2` = 90th percentile of all timestamps. train `< t1`, val `[t1, t2)`,

@@ -75,10 +75,14 @@ def require_stage1_inputs(suite):
 
 '''
 preparation = preparation.replace("input_root = Path('/kaggle/input')", guard + "input_root = Path('/kaggle/input')")
-preparation = preparation.replace("require_baselines(suite)\nsuite['backup']", "require_stage1_inputs(suite)\nsuite['backup']")
+preparation = preparation.replace(
+    "require_baselines(suite)\nsuite['backup']", "require_stage1_inputs(suite)\nsuite['backup']"
+)
 preparation = preparation.replace('Recovery verified. KGAT is the only model enabled.',
                                   'Recovery verified. T-KGAT Stage 1 is the only model enabled.')
-preparation = preparation.replace('Refusing to restart MostPop/BPR-MF.', 'Refusing to start Stage 1 without KGAT Recovery.')
+preparation = preparation.replace(
+    'Refusing to restart MostPop/BPR-MF.', 'Refusing to start Stage 1 without KGAT Recovery.'
+)
 set_cell(3, preparation)
 
 set_cell(4, '''
