@@ -1,0 +1,4 @@
+# Official set of decision 0016: copied unchanged from configs/model/mostpop.yaml (no training, so no epoch settings).
+name: mostpop
+grid:
+  - {window_days: null}

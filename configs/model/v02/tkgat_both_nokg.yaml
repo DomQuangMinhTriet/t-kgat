@@ -1,0 +1,14 @@
+# Official configuration of decision 0016 (protocol after 2026-11-15). Copied from configs/model/tkgat_both_nokg.yaml with the values
+# fixed by the small-set gate (docs/lr-schedule.md, docs/small-set-gate.md): max_epochs 150, patience 10 evaluations,
+# eval_every 5, learning-rate schedule none, no lr 1e-4 grid points. The old files stay as they are (their registry rows
+# belong to the first protocol). `from_kgat` / `from_tkgat` resolve inside this directory.
+# Ablation of the combined T-KGAT (decision 0016, item 7): the point that `tkgat_both` selected, with gamma_kg = 0: only the user-item term stays.
+# Same seeds and fixed settings as tkgat_both; it is a re-run of one point, not a new search.
+name: tkgat
+time_on: both
+ablate: kg
+seeds: [2019, 2020, 2021, 2022, 2023]
+kg: {variant: default}
+from_tkgat: tkgat_both
+fixed: {dim: 64, kge_dim: 64, layers: [64, 32, 16], batch_size: 1024, batch_size_kg: 2048,
+        max_epochs: 150, eval_every: 5, patience: 10, select_metric: recall@20}
