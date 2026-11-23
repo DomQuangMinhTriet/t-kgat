@@ -1,7 +1,7 @@
 # 0016 — Protocol changes after the advisor meeting of 2026-11-15
 
-- Status: proposed (2026-11-15, Triết; draft written the night of the meeting). Becomes accepted when Phôn approves the
-  pull request. Follows the meeting notes `docs/meetings/Meeting_Notes_15112026.md` (12 points from the advisor).
+- Status: accepted (2026-11-23: Phôn approved the pull request; proposed 2026-11-15 by Triết, draft written the night of
+  the meeting). Follows the meeting notes `docs/meetings/Meeting_Notes_15112026.md` (12 points from the advisor).
 - Supersedes in part: 0002 item 7 (no retraining on train+val); 0013 (user subset as the way to get a small dataset);
   the pair-set part of 0012 (the KGAT pair set); 0009 items 7 to 10 as far as the combined model is concerned (Stage 1
   and Stage 2 stay as ablations, see item 7). Supersedes the draft 0015 (`lastfm-u25-latest`), which is dropped.

@@ -23,6 +23,7 @@ import pandas as pd
 
 CHECKPOINTS = (25, 50, 100, 150, 200)
 METRIC = "recall@20"
+SMALL_SETS = ("lastfm-w3", "lastfm-w2")  # chosen-by-validation sets of decision 0016 item 9; see 15_small_set_gate.py
 
 
 def _config(raw: str) -> dict:
@@ -74,7 +75,7 @@ def read_run(path: Path) -> dict | None:
 def collect(runs_dir: Path, datasets: list[str] | None = None) -> pd.DataFrame:
     records = []
     for path in sorted(Path(runs_dir).glob("*/*_history.csv")):
-        if datasets and path.parent.name not in datasets:
+        if (datasets and path.parent.name not in datasets) or (not datasets and path.parent.name in SMALL_SETS):
             continue
         record = read_run(path)
         if record is not None:
@@ -159,7 +160,12 @@ def markdown(runs: pd.DataFrame, summary: pd.DataFrame) -> str:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs-dir", default="results/runs")
-    ap.add_argument("--datasets", nargs="+", default=None, help="run_name of the data configs; default: all found")
+    ap.add_argument(
+        "--datasets",
+        nargs="+",
+        default=None,
+        help="run_name of the data configs; default: all found but the small sets",
+    )
     ap.add_argument("--out-md", default="docs/epoch-budget.md")
     ap.add_argument("--out-csv", default="results/epoch_budget.csv")
     args = ap.parse_args(argv)
