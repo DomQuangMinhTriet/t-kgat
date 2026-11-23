@@ -1,6 +1,8 @@
 """Interrupted HTTP streams must resume compressed bytes without loss or duplication."""
 
 import io
+import runpy
+from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
@@ -190,6 +192,37 @@ def test_confirmation_form_uses_the_existing_gdown_parser():
     assert drive._confirmation_url(html) == "https://drive.usercontent.google.com/download?id=test-id"
 
 
+def test_quota_html_stops_cut_cli_without_retries_or_partial_output(http, monkeypatch, tmp_path, capsys):
+    pytest.importorskip("gdown")
+    pytest.importorskip("stream_unzip")
+    install, sleeps = http
+    monkeypatch.delenv("TKGAT_DRIVE_ACCESS_TOKEN")
+    response = Response(headers={"Content-Type": "text/html"}, text=(
+        '<p class="uc-error-subcaption">Too many users have viewed or downloaded this file recently.</p>'
+    ))
+    session = install([response])
+    script = Path(__file__).resolve().parents[1] / "scripts/01b_cut_lastfm.py"
+    main = runpy.run_path(str(script))["main"]
+    output = tmp_path / "pairs.tsv"
+    with pytest.raises(SystemExit) as error:
+        main(["--all-history", "--out", str(output)])
+    assert error.value.code == 2
+    message = capsys.readouterr().err
+    assert "download quota exceeded" in message and "using the same command" in message
+    assert "no source ZIP was saved locally" in message and "Local ZIP option" not in message
+    assert "Traceback" not in message and "IndexError" not in message
+    assert len(session.calls) == 1 and not sleeps and response.closed
+    assert not list(tmp_path.iterdir())
+
+
+def test_nonquota_confirmation_failures_are_not_misclassified():
+    pytest.importorskip("gdown")
+    from gdown.exceptions import FileURLRetrievalError
+
+    with pytest.raises(FileURLRetrievalError):
+        drive._confirmation_url('<p class="uc-error-subcaption">You need permission.</p>')
+
+
 def test_response_is_closed_when_the_zip_reader_finishes_early(http):
     install, _ = http
     response = first([b"abc", b"def"])
@@ -198,3 +231,38 @@ def test_response_is_closed_when_the_zip_reader_finishes_early(http):
     assert next(stream) == b"abc"
     stream.close()
     assert response.closed
+
+
+def test_freebase_gzip_stream_resumes_compressed_bytes_and_hashes_the_whole_source(http):
+    import gzip
+    import hashlib
+
+    from tkgat.kg.freebase_dump import dump_text
+
+    install, sleeps = http
+    text = '<http://rdf.freebase.com/ns/m.a>\t<http://rdf.freebase.com/ns/type.object.name>\t"name"\t.\n'
+    payload = gzip.compress(text.encode())
+    split = len(payload) // 2
+
+    class DumpResponse(Response):
+        def iter_content(self, chunk_size):
+            assert chunk_size == 1024 * 1024
+            for chunk in self.chunks:
+                if isinstance(chunk, Exception):
+                    raise chunk
+                yield chunk
+
+    broken = DumpResponse([payload[:split], requests.exceptions.ChunkedEncodingError("broken")],
+                          headers={"Content-Length": str(len(payload)), "ETag": '"dump"'})
+    resumed = DumpResponse([payload[split:]], status=206, headers={
+        "Content-Range": f"bytes {split}-{len(payload)-1}/{len(payload)}",
+        "Content-Length": str(len(payload)-split), "ETag": '"dump"',
+    })
+    session = install([broken, resumed])
+    fingerprint = {}
+    with dump_text("https://example.test/freebase.gz", fingerprint) as handle:
+        assert handle.read() == text
+    assert fingerprint == {"size": len(payload), "sha1": hashlib.sha1(payload).hexdigest(),
+                           "sha256": hashlib.sha256(payload).hexdigest()}
+    assert session.calls[1][1]["headers"]["Range"] == f"bytes={split}-"
+    assert broken.closed and resumed.closed and sleeps == [1]

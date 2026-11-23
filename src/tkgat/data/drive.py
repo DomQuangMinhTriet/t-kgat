@@ -28,10 +28,25 @@ class DriveResumeError(RuntimeError):
     """The server cannot safely continue the same compressed byte stream."""
 
 
+class DriveQuotaError(RuntimeError):
+    """Drive refused a download because the file's download quota was exceeded."""
+
+
 def _confirmation_url(html: str) -> str:
     from gdown.download import get_url_from_gdrive_confirmation
+    from gdown.exceptions import FileURLRetrievalError
 
-    url = get_url_from_gdrive_confirmation(html)
+    try:
+        url = get_url_from_gdrive_confirmation(html)
+    except FileURLRetrievalError as exc:
+        message = str(exc).lower()
+        if "too many users" in message or "download quota" in message:
+            raise DriveQuotaError(
+                "Google Drive download quota exceeded for this file. Retry after Drive restores access, "
+                "using the same command. Direct streaming is also subject to Drive's file quota; "
+                "no source ZIP was saved locally."
+            ) from exc
+        raise
     parsed = urlsplit(url)
     host = parsed.hostname or ""
     if parsed.scheme != "https" or not (host.endswith(".google.com") or host.endswith(".googleusercontent.com")):

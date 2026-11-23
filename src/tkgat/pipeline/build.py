@@ -56,7 +56,7 @@ def save_split(s: TemporalSplit, cfg: dict, clean_report: dict) -> Path:
     out = Path(cfg["processed_dir"])
     out.mkdir(parents=True, exist_ok=True)
     for part in PARTS:
-        getattr(s, part).to_csv(out / f"{part}.csv", index=False)
+        getattr(s, part).to_csv(out / f"{part}.csv", index=False, lineterminator=cfg.get("csv_lineterminator"))
     meta = {
         "dataset": cfg["name"],
         **s.summary(),

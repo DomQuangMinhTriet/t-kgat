@@ -14,19 +14,11 @@ Model only: the samplers, the alternating training loop and early stopping belon
 * Losses and regularisers follow the TF1 code (Q9): ``l2`` on the propagated vectors of the CF batch, ``l2_kg`` on the
   projected vectors of the KG batch (2.1, 2.4).
 
-T-KGAT (decisions 0005 and 0009, Stage 1): the term ``gamma * delta_r[r] * dt_norm`` is subtracted from ``pi`` before
-the per-head softmax. ``delta_r`` is 1 for Interact and Interact^-1 and 0 for every KG relation; ``dt_norm = max(0,
-t_ref - ts) / dt_den`` from the graph's ``edge_ts`` (train timestamps only, NaN on KG edges), with ``t_ref`` and
-``dt_den`` taken from the CKG (``tkgat.kg.ckg``): the same two numbers for the t1 and the t2 graph. ``gamma`` and
-``delta_r`` are hyper-parameters: no gradient reaches them. With ``gamma = 0`` the term is skipped, so the tensors are
-exactly those of plain KGAT; ``dt_den = 0`` (every train timestamp equal) gives ``dt_norm = 0``. The NaN of a KG edge
-is masked, never multiplied: it cannot reach ``pi`` whatever ``delta_r`` is.
-
-T-KGAT Stage 2 (decision 0009, items 8-10; ``time_on = "kg"``): the same term on the KG edges instead. ``delta_r`` is 1
-for every KG relation and its inverse and 0 for Interact, so the variant compares time on triples with time on
-interactions (Stage 1) rather than adding the two. ``edge_ts`` of a KG edge is the date from which its fact holds;
-an undated fact (NaN) gets ``Delta-t = 0``, and ``dt_norm`` is capped at 1 because fact dates often lie decades before
-``t_ref``, on another time scale than the interactions (item 10).
+T-KGAT: ``pi_time = pi - gamma * delta_r[r] * dt_norm`` before the same per-head softmax. With ``time_on = "both"``,
+all relations participate, and ``dt_norm = clip((max_train[type] - ts) / (max_train[type] - min_train[type]), 0, 1)``.
+Interaction bounds use train interactions; fact bounds use finite dates of the t1 KG. Both windows are frozen on
+construction and reused on the t2 graph. Undated facts or a zero-width window give zero penalty. ``gamma = 0`` skips
+the term exactly. Legacy ``interact`` and ``kg`` modes retain their original formula for old experiments.
 
 Graph tensors, ``A`` and ``edge_ts`` are non-persistent buffers: ``state_dict`` holds the parameters only, so one set
 of weights can be loaded and then scored on the graph of another cut-off (``set_graph``, which recomputes ``A``).
@@ -46,7 +38,7 @@ from tkgat.device import resolve_device
 from tkgat.kg.ckg import CKG, INTERACT, inverse_relation_id
 
 LEAKY_SLOPE = 0.2  # tf.nn.leaky_relu default; torch's default is 0.01
-TIME_ON = ("interact", "kg")
+TIME_ON = ("interact", "kg", "both")
 
 
 @dataclass(frozen=True)
@@ -58,7 +50,7 @@ class KGATConfig:
     l2: float = 1e-5  # regulariser of the CF loss
     l2_kg: float = 1e-5  # regulariser of the KG loss
     gamma: float = 0.0  # time decay of the attention, >= 0; 0 = plain KGAT
-    time_on: str = "interact"  # edges that carry Delta-t: "interact" (Stage 1) or "kg" (Stage 2, fact dates)
+    time_on: str = "interact"  # "both": joint time attention; other modes preserve legacy experiments
     attention_chunk: int = 65536  # edges per block when the attention scores are computed
 
     def __post_init__(self) -> None:
@@ -115,10 +107,12 @@ class KGAT(nn.Module):
         if cfg.time_on == "interact":  # Stage 1: Interact and its inverse carry Delta-t (decision 0009, item 1)
             delta_r[INTERACT] = 1.0
             delta_r[inverse_relation_id(INTERACT, self.n_relations)] = 1.0
-        else:  # Stage 2: every KG relation and its inverse (item 8), Interact not
+        elif cfg.time_on == "kg":  # legacy KG-only time attention
             delta_r.fill_(1.0)
             delta_r[INTERACT] = 0.0
             delta_r[inverse_relation_id(INTERACT, self.n_relations)] = 0.0
+        else:
+            delta_r.fill_(1.0)  # interaction and fact edges share the same attention formula
         self.register_buffer("delta_r", delta_r, persistent=False)
         self.set_graph(ckg)
 
@@ -148,7 +142,14 @@ class KGAT(nn.Module):
         self._buffer("relation", relation)
         self._buffer("tail", torch.tensor(ckg.tail, device=dev))
         self._buffer("edge_ts", torch.tensor(ckg.edge_ts, device=dev))  # float64: a float32 rounds to ~1 minute
-        self._t_ref, self._dt_den = ckg.t_ref, ckg.dt_den
+        if self.cfg.time_on != "both" or not hasattr(self, "_fact_window"):
+            if self.cfg.time_on == "both":
+                if self.cfg.gamma > 0.0 and ckg.cutoff != "t1":
+                    raise ValueError("joint time windows must be fitted on the t1 training graph first")
+                fact = (ckg.relation != INTERACT) & (ckg.relation != inverse_relation_id(INTERACT, self.n_relations))
+                dates = ckg.edge_ts[fact & np.isfinite(ckg.edge_ts)]
+                self._fact_window = (float(dates.max()), float(np.ptp(dates))) if len(dates) else (0.0, 0.0)
+            self._t_ref, self._dt_den = ckg.t_ref, ckg.dt_den
         if self.cfg.gamma > 0.0:
             self._check_time_inputs()
         _, counts = torch.unique_consecutive(head, return_counts=True)
@@ -187,21 +188,29 @@ class KGAT(nn.Module):
             raise ValueError("gamma > 0 needs t_ref and dt_den in the graph (build it with tkgat.kg.ckg.build_ckg)")
         if self.cfg.time_on == "kg":  # NaN on a KG edge is an undated fact: Delta-t = 0 (item 8), not an error
             return
-        timed = self.delta_r[self.relation] > 0
-        if bool(torch.isnan(self.edge_ts[timed]).any()):
+        timed = self._interaction_edges() if self.cfg.time_on == "both" else self.delta_r[self.relation] > 0
+        if bool((~torch.isfinite(self.edge_ts[timed])).any()):
             raise ValueError("an edge with delta_r > 0 has no timestamp (NaN edge_ts)")
 
+    def _interaction_edges(self) -> torch.Tensor:
+        return (self.relation == INTERACT) | (self.relation == inverse_relation_id(INTERACT, self.n_relations))
+
     def _time_penalty(self, dtype: torch.dtype) -> torch.Tensor:
-        """``gamma * delta_r[relation] * dt_norm`` per edge: 0 on KG edges, whose NaN ``edge_ts`` is masked out."""
+        """``gamma * delta_r[relation] * dt_norm`` per edge; undated facts are masked out."""
         if self.edge_ts.dtype != torch.float64:
             raise TypeError("edge_ts must stay float64 (do not cast the model with .float() when gamma > 0)")
         weight = self.delta_r[self.relation].to(torch.float64)
         dt = (self._t_ref - self.edge_ts).clamp_min(0.0)  # dt = max(0, t_ref - ts); NaN on KG edges
         dt_norm = dt / self._dt_den if self._dt_den > 0 else torch.zeros_like(dt)
+        if self.cfg.time_on == "both":
+            fact_ref, fact_den = self._fact_window
+            fact_dt = (fact_ref - self.edge_ts).clamp_min(0.0)
+            fact_norm = fact_dt / fact_den if fact_den > 0 else torch.zeros_like(fact_dt)
+            dt_norm = torch.where(self._interaction_edges(), dt_norm, fact_norm)
         use = weight > 0
-        if self.cfg.time_on == "kg":
+        if self.cfg.time_on in ("kg", "both"):
             dt_norm = dt_norm.clamp_max(1.0)  # fact dates live on another time scale (item 10)
-            use = use & ~torch.isnan(self.edge_ts)  # undated fact: Delta-t = 0 (item 8)
+            use = use & torch.isfinite(self.edge_ts)  # undated fact: Delta-t = 0
         timed = torch.where(use, dt_norm, torch.zeros_like(dt_norm))  # NaN only in the unselected branch
         return (self.cfg.gamma * weight * timed).to(dtype)
 

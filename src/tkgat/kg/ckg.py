@@ -59,7 +59,9 @@ def inverse_relation_id(rid: int, n_relations: int) -> int:
 class KGTriples:
     """Integer triples ``(h, r, t)`` of one KG at one cut-off, without inverse relations.
 
-    Heads are items (``h < n_items``) and tails are other entities (``n_items <= t < n_entities``): the KG is 1-hop.
+    The default scope has item heads and non-item tails. Explicit ``two-hop`` scope
+    permits either endpoint anywhere in the shared entity namespace; legacy guards
+    remain unchanged for datasets without this scope flag.
     """
 
     variant: str
@@ -70,6 +72,7 @@ class KGTriples:
     relations: tuple[str, ...]
     time_consistent: bool
     wikidata_snapshot: str | None
+    graph_scope: str = "item_attributes"
 
     def __post_init__(self) -> None:
         if self.cutoff not in CUTOFFS:
@@ -78,14 +81,20 @@ class KGTriples:
         if tri.ndim != 2 or tri.shape[1] != 3 or tri.dtype != np.int64:
             raise ValueError("triples must be an int64 array of shape (T, 3)")
         problems = []
+        if self.graph_scope not in {"item_attributes", "two-hop"}:
+            problems.append("unknown KG graph scope")
         if self.n_entities < self.n_items:
             problems.append("fewer entities than items")
         if len(tri):
             h, r, t = tri[:, 0], tri[:, 1], tri[:, 2]
-            if h.min() < 0 or h.max() >= self.n_items:
-                problems.append("head outside the item range")
-            if t.min() < self.n_items or t.max() >= self.n_entities:
-                problems.append("tail is an item or outside the entity range")
+            if self.graph_scope == "two-hop":
+                if min(h.min(), t.min()) < 0 or max(h.max(), t.max()) >= self.n_entities:
+                    problems.append("two-hop endpoint outside the entity range")
+            else:
+                if h.min() < 0 or h.max() >= self.n_items:
+                    problems.append("head outside the item range")
+                if t.min() < self.n_items or t.max() >= self.n_entities:
+                    problems.append("tail is an item or outside the entity range")
             if r.min() < 0 or r.max() >= self.n_relations:
                 problems.append("relation id outside relations.csv")
             if len(np.unique(tri, axis=0)) != len(tri):
@@ -117,6 +126,9 @@ def no_kg(enc: EncodedSplit, cutoff: str = "t1") -> KGTriples:
 
 def used_tails(kg: KGTriples) -> np.ndarray:
     """Sorted unique tail entities of a KG; applied to the t1 KG it is the set of tails seen in training."""
+    if kg.graph_scope == "two-hop":
+        # Items are trained by interactions; other nodes must occur at either end of t1 KG edges.
+        return np.union1d(np.arange(kg.n_items), np.unique(kg.triples[:, [0, 2]]))
     return np.unique(kg.triples[:, 2])
 
 
@@ -193,6 +205,7 @@ def load_kg(
         relations=tuple(relations["name"]),
         time_consistent=bool(info["time_consistent"]),
         wikidata_snapshot=info["wikidata_snapshot"],
+        graph_scope=info.get("graph_scope", "item_attributes"),
     )
 
 
@@ -333,6 +346,8 @@ def build_ckg(
     dropped = 0
     if known_tails is not None:
         keep = np.isin(tri[:, 2], known_tails)
+        if kg.graph_scope == "two-hop":
+            keep &= np.isin(tri[:, 0], known_tails)
         dropped = int((~keep).sum())
         tri, fact_ts = tri[keep], fact_ts[keep]
 

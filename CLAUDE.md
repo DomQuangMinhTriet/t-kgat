@@ -81,6 +81,20 @@ the Last-FM user-item edges (the counterpart of section 3b of `notebooks/01_eda.
 2026-09-18 (rating as relation or weight, timestamp as relation, LLM cleaning of film metadata).
 
 ## Commands (Windows PowerShell, repo root)
+
+For the new raw Last-FM preparation, interactions remain from the supplied Drive
+archive. On 2026-11-22 the user explicitly allowed a complete Freebase dump outside
+Drive for facts (decision 0018). Workflow: 01b raw cut -> 01c Freebase extraction ->
+02b split/two-hop export. Do not read published KGAT triples or pairs. Keep the
+supplied partial Drive track-to-MID mapping and document its paper lineage; do not
+claim all-track title matching. The default mirror's metadata date is 2015-04-16,
+not the old subset's 2015-08-09. See docs/study/14-dung-lastfm-tu-lfm1b.md.
+
+On Phôn's machine, use the existing Conda environment `python` (Python at
+`$env:USERPROFILE\anaconda3\envs\python\python.exe`). Do not create, recreate or
+activate a project `.venv` unless Phôn explicitly asks. The generic venv setup
+below is for other machines; in Phôn's terminal use `conda activate python` instead.
+
 ```powershell
 python -m venv .venv; .venv\Scripts\Activate.ps1
 pip install torch --index-url https://download.pytorch.org/whl/cu128   # GPU build first (RTX 3050, 4 GB)

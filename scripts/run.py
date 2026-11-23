@@ -28,15 +28,16 @@ the checkpoints of finished (grid point, seed) pairs and does not score a seed o
 already holds its test row. The file name selects the KG variant in the registry, so a variant is never mixed with
 another; ``static`` is a leakage reference, flagged ``time_consistent: false`` in the summary.
 
-T-KGAT Stage 1 (decision 0009; ``configs/model/tkgat.yaml``, ``name: tkgat``): the same run with Delta-t in the
+T-KGAT (``configs/model/tkgat.yaml``, ``name: tkgat``, ``time_on: both``): the same run with Delta-t in the
 attention. ``from_kgat: kgat`` takes (lr, l2, l2_kg, mess_dropout) from the point that ``kgat`` selected on validation
 for this same ``run_name`` (``kgat_summary.json`` or ``kgat_val_summary.json``), and the grid only holds ``gamma``;
 ``fixed``, ``kg`` and ``seeds`` must equal those of ``kgat.yaml``. Its registry rows hold gamma, ``t_ref`` and
 ``dt_den`` in ``config``. ``configs/model/tkgat_perm.yaml`` (``control: permute_train_ts``, ``from_tkgat: tkgat``)
 re-runs the point that ``tkgat`` selected with ``train_ts`` permuted over all train edges, one permutation per seed
-(``perm_seed`` in ``config``).
+(``perm_seed`` in ``config``). Interaction and fact dates use separate train-only windows in one attention formula;
+this control shuffles interaction dates only, leaving fact dates unchanged.
 
-T-KGAT Stage 2 (decision 0009 items 7-10; ``configs/model/tkgat_kg.yaml``, ``time_on: kg``): Delta-t on the KG edges,
+Legacy KG-only T-KGAT (``configs/model/tkgat_kg.yaml``, ``time_on: kg``): Delta-t on the KG edges,
 from the fact dates of ``kg_t*_dates.tsv`` (script 06), instead of on the user-item edges; ``config`` of its rows holds
 ``time_on = kg``. Its control ``tkgat_kg_perm.yaml`` (``control: permute_kg_ts``, ``from_tkgat: tkgat_kg``) shuffles the
 fact dates over the t1 triples with ``numpy.random.default_rng(seed)``; the t1 triples keep those dates at test.
@@ -126,6 +127,20 @@ def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = F
     is copied by hand. An official run (not ``val_only``) needs ``<tag>_summary.json``, the run that was scored on
     test; ``<tag>_val_summary.json`` (a ``--val-only`` run) is only accepted by a ``--val-only`` run.
     """
+    if mcfg.get("standalone"):
+        # Explicit parameters, fixed before training: no baseline run or summary is consulted.
+        if any(mcfg.get(key) for key in ("control", "from_kgat", "from_tkgat")):
+            raise ValueError("standalone T-KGAT cannot depend on a baseline or control")
+        if mcfg.get("time_on") != "both" or mcfg.get("kg", {}).get("variant") != "default":
+            raise ValueError("standalone T-KGAT requires time_on: both and kg.variant: default")
+        base = mcfg.get("base_point", {})
+        if set(base) != {"lr", "l2", "l2_kg", "mess_dropout"}:
+            raise ValueError("standalone base_point must specify lr, l2, l2_kg and mess_dropout")
+        if not mcfg.get("grid") or any(set(p) != {"gamma"} or not p["gamma"] > 0 for p in mcfg["grid"]):
+            raise ValueError("a standalone T-KGAT grid holds gamma > 0 only")
+        if set(mcfg.get("fixed", {})) & {*base, "gamma", "time_on"}:
+            raise ValueError("fixed must not override the standalone point or time_on")
+        return [{**base, **point, "time_on": "both"} for point in mcfg["grid"]], base
     control = mcfg.get("control")
     if control not in (None, *TKGAT_CONTROLS):
         raise ValueError(f"control must be one of {TKGAT_CONTROLS}, got {control!r}")
@@ -145,10 +160,10 @@ def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = F
         raise ValueError(f"time_on must be one of {TIME_ON}, got {time_on!r}")
     if control and ref.get("time_on", "interact") != time_on:
         raise ValueError(f"time_on differs from {tag}.yaml")
-    if control and CONTROL_TIME_ON[control] != time_on:
+    if control and time_on != "both" and CONTROL_TIME_ON[control] != time_on:
         raise ValueError(f"control {control} shuffles the dates of time_on = {CONTROL_TIME_ON[control]}, not {time_on}")
-    if time_on == "kg" and mcfg.get("kg", {}).get("variant", "default") == "none":
-        raise ValueError("time_on = kg needs a KG (kg.variant none has no triple to date)")
+    if time_on in ("kg", "both") and mcfg.get("kg", {}).get("variant", "default") == "none":
+        raise ValueError(f"time_on = {time_on} needs a KG (kg.variant none has no triple to date)")
     names = [f"{tag}_summary.json"] + ([f"{tag}_val_summary.json"] if val_only else [])
     for name in names:
         if (out_dir / name).exists():
@@ -168,13 +183,15 @@ def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = F
     if control:
         if mcfg.get("grid"):
             raise ValueError("a control run takes its point from the T-KGAT run: remove grid")
+        if time_on == "both" and base.get("time_on") != "both":
+            raise ValueError(f"the selected point is from an older time mode: rerun {tag} with time_on: both")
         return [base], base
     if "gamma" in base:
         raise ValueError(f"the point selected by {tag} already has a gamma: it is not a KGAT point")
     for point in mcfg["grid"]:
         if set(point) != {"gamma"} or not point["gamma"] > 0:
             raise ValueError(f"a T-KGAT grid point holds gamma > 0 only, got {point}")
-    extra = {"time_on": "kg"} if time_on == "kg" else {}  # Stage 1 points stay exactly what they were
+    extra = {"time_on": time_on} if time_on != "interact" else {}  # preserve legacy interaction-only points
     return [{**base, **point, **extra} for point in mcfg["grid"]], base
 
 
@@ -293,7 +310,7 @@ def main(argv: list[str] | None = None) -> None:
         mcfg = {**mcfg, "grid": grid}
     control = mcfg.get("control") if tkgat else None
     perm = control is not None
-    time_kg = tkgat and mcfg.get("time_on", "interact") == "kg"  # Stage 2: fact dates on the KG edges
+    time_kg = tkgat and mcfg.get("time_on", "interact") in ("kg", "both")
     kg_t1 = ckg_t1 = ts_t1 = None
     if kgat:
         kg_t1, ckg_t1 = kgat_train_graph(mcfg, dcfg, data, meta, args.val_only)
@@ -332,12 +349,12 @@ def main(argv: list[str] | None = None) -> None:
         ckg = graph_for(seeds[0])[1]
         return {
             "tkgat": {
-                "from": mcfg.get("from_tkgat") or mcfg.get("from_kgat"),
+                "from": "standalone" if mcfg.get("standalone") else mcfg.get("from_tkgat") or mcfg.get("from_kgat"),
                 "base_point": base_point,
                 "t_ref": round(ckg.t_ref),
                 "dt_den": round(ckg.dt_den),
                 "control": control,
-                "time_on": "kg" if time_kg else "interact",
+                "time_on": mcfg.get("time_on", "interact"),
             }
         }
 
