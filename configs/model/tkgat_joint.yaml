@@ -1,4 +1,6 @@
-# Standalone joint T-KGAT. These parameters are fixed a priori, not selected by a baseline run.
+# Standalone joint T-KGAT: common settings from Triet's small-set gate (2026-11-23).
+# Constant LR, max_epochs=150. Local window-normalized attention; no absolute tau or refit.
+# The base point is fixed for this run, not selected by a KGAT run on this dataset.
 name: tkgat
 standalone: true
 time_on: both
@@ -10,4 +12,4 @@ grid:
   - {gamma: 3}
   - {gamma: 10}
 fixed: {dim: 64, kge_dim: 64, layers: [64, 32, 16], batch_size: 1024, batch_size_kg: 2048,
-        max_epochs: 300, eval_every: 5, patience: 10, select_metric: recall@20}
+        max_epochs: 150, eval_every: 5, patience: 10, select_metric: recall@20}

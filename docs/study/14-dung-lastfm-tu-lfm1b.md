@@ -153,10 +153,34 @@ Kết quả/checkpoint mới có `time_on: both`, không resume checkpoint hai s
    đặt `RESTORE_FROM` tới thư mục đó; khôi phục cả registry/checkpoint/identity.
 
 Cấu hình riêng `configs/model/tkgat_joint.yaml` không phụ thuộc baseline:
-`lr=0.001`, `l2=l2_kg=0.00001`, dropout `0.1` được cố định trước thí nghiệm;
+`lr=0.001`, `l2=l2_kg=0.00001`, dropout `0.1` được cố định cho lần chạy này,
+theo điểm Triết báo từ cổng tập nhỏ; chưa chọn lại bằng KGAT trên dữ liệu mới;
 chọn gamma `{1,3,10}` trên validation trung bình 5 seed. Không chạy KGAT/BPR/MostPop
 hay đối chứng; test chỉ chấm gamma được chọn sau khi hoàn tất đủ 15 lượt.
 Resume chỉ ở ranh giới lượt hoàn tất, chưa khôi phục giữa epoch.
+
+### Tham số Kaggle đã chuẩn bị theo tin Triết (23/11/2026)
+
+| Tham số | Giá trị |
+| --- | --- |
+| Learning rate / schedule | `0.001`, cố định (`none`; trainer hiện không dùng scheduler) |
+| `l2` / `l2_kg` | `0.00001` / `0.00001` |
+| Message dropout | `0.1` |
+| Embedding / layers | `dim=64`, `kge_dim=64`, layers `[64,32,16]` |
+| Batch CF / KG | `1024` / `2048` |
+| `max_epochs` | **150** theo tin đính chính cuối của Triết, thay cho 300 |
+| Validation / patience | Mỗi 5 epoch; dừng sau 10 lần đánh giá không cải thiện |
+| Gamma / seed | `{1,3,10}` × `{2019,2020,2021,2022,2023}`; đủ 15 lượt |
+| Chọn cấu hình | Recall@20 validation trung bình 5 seed; từng lượt giữ best epoch trên validation |
+
+**Phạm vi:** dùng `time_on: both` và công thức cửa sổ train riêng hiện tại của Phôn.
+Chưa thêm `tau_ui_days`/`tau_kg_years`, chưa thay bộ chọn relation theo `delta_kg` của
+PR #48 và chưa refit train+val. Vì vậy đây là **T-KGAT theo công thức hiện tại với
+bộ tham số nền Triết đã chốt**, chưa phải bản chạy đầy đủ protocol 0016.
+Khi thống nhất đổi công thức/protocol thì chuẩn bị lại config/code trước khi train.
+
+ZIP code phải được tạo lại sau khi sửa YAML. Notebook in cấu hình thực tế trước khi
+train; giữ output mới cho cấu hình 150 epoch, không khôi phục checkpoint 300 epoch cũ.
 
 **Giới hạn:** script mới vẫn dùng trainer full-graph hiện tại. Với bộ full cũ đã dựng,
 riêng graph và trạng thái embedding khi train có cận dưới khoảng **37 GiB VRAM**,
