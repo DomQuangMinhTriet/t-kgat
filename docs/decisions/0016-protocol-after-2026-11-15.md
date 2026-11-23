@@ -110,7 +110,15 @@
   refit runs). The gate of item 9 and the hour measurement of 0013 are the controls.
 
 ## Update sections (to be added before the official run, from the small set and validation only)
-- Values of `window_months` and `min_events_user`, with the event and seconds-per-epoch numbers they came from.
-- `max_epochs`, `patience` and the learning rate schedule (items 5, 6).
-- The list of relations kept (item 8) and of relations with `delta_kg = 1` (item 7).
-- The reduced grid of item 7.
+- Values of `window_months` and `min_events_user`, with the event and seconds-per-epoch numbers they came from. *(pending: official window and 5-core are fixed in the data PR)*
+- **Update 2026-11-23, items 5, 6, 9** (`docs/lr-schedule.md`, from `docs/small-set-gate.md`): learning-rate schedule `none`
+  for all models (cosine is not better than seed noise on KGAT and KGAT without KG and is worse on BPR-MF and pruned KGAT).
+  `max_epochs = 150`, `patience = 10` evaluations, `eval_every = 5`, same for all models. The pooled rule of the gate script gives
+  100, but BPR-MF at its selected point reaches only 94% (median) of its best by epoch 100 and 100% by 150, so the rule read
+  per grid point gives 150. Official files: `configs/model/v02/`.
+- **Update 2026-11-23, item 8**: `default` relations stay. `pruned` was not better on validation (Recall@20 0.0629 against
+  0.0630 with schedule none, 0.0618 against 0.0638 with cosine) and removes only 1,105 of 61,002 triples. *(`delta_kg = 1`
+  list: pending Phôn, from `docs/relation-report-lastfm-w3.md`.)*
+- **Update 2026-11-23, reduced grid** (items 7, 9): lr 1e-4 points dropped from every grid. KGAT and KGAT without KG have 2 points
+  (lr 1e-3, l2 in {1e-5, 1e-4}); BPR-MF has 3. The T-KGAT grid of item 7 (12 points) is unchanged. *(Whether `tau` stays in the
+  grid or is fixed a priori: pending Phôn.)*

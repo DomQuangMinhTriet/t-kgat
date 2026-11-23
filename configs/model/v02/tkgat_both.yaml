@@ -1,0 +1,33 @@
+# Official configuration of decision 0016 (protocol after 2026-11-15). Copied from configs/model/tkgat_both.yaml with the values
+# fixed by the small-set gate (docs/lr-schedule.md, docs/small-set-gate.md): max_epochs 150, patience 10 evaluations,
+# eval_every 5, learning-rate schedule none, no lr 1e-4 grid points. The old files stay as they are (their registry rows
+# belong to the first protocol). `from_kgat` / `from_tkgat` resolve inside this directory.
+# T-KGAT combined (decision 0016, item 7): Delta-t on the user-item edges and on the dated KG facts at once,
+#   pi_time = pi - gamma * delta_ui * dt_ui / tau_ui - gamma * delta_kg * dt_kg / tau_kg
+# dt = max(0, t_ref - ts) in seconds with an ABSOLUTE tau per edge kind (tau_ui in days, tau_kg in years): no division by
+# the training window, no cap. An undated fact has dt = 0. gamma is tied between the two terms. The grid is 3 x 2 x 2 = 12
+# points; (lr, l2, l2_kg, mess_dropout) are the point `kgat` selected on validation. `fixed`, `kg` and `seeds` equal those
+# of kgat.yaml. delta_kg_relations (names) is left out = every KG relation carries delta_kg; it is one of the four open
+# points of 0016 for Phon (which relations date the fact's own start). Registry rows hold time_on = both in `config`.
+# Ablations at the selected point: tkgat_both_nokg.yaml (gamma_kg = 0), tkgat_both_noui.yaml (gamma_ui = 0); control:
+# tkgat_both_perm.yaml.
+name: tkgat
+time_on: both
+seeds: [2019, 2020, 2021, 2022, 2023]
+kg: {variant: default}
+from_kgat: kgat
+grid:
+  - {gamma: 1, tau_ui_days: 90, tau_kg_years: 5}
+  - {gamma: 1, tau_ui_days: 90, tau_kg_years: 20}
+  - {gamma: 1, tau_ui_days: 365, tau_kg_years: 5}
+  - {gamma: 1, tau_ui_days: 365, tau_kg_years: 20}
+  - {gamma: 3, tau_ui_days: 90, tau_kg_years: 5}
+  - {gamma: 3, tau_ui_days: 90, tau_kg_years: 20}
+  - {gamma: 3, tau_ui_days: 365, tau_kg_years: 5}
+  - {gamma: 3, tau_ui_days: 365, tau_kg_years: 20}
+  - {gamma: 10, tau_ui_days: 90, tau_kg_years: 5}
+  - {gamma: 10, tau_ui_days: 90, tau_kg_years: 20}
+  - {gamma: 10, tau_ui_days: 365, tau_kg_years: 5}
+  - {gamma: 10, tau_ui_days: 365, tau_kg_years: 20}
+fixed: {dim: 64, kge_dim: 64, layers: [64, 32, 16], batch_size: 1024, batch_size_kg: 2048,
+        max_epochs: 150, eval_every: 5, patience: 10, select_metric: recall@20}
