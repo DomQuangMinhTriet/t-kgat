@@ -14,7 +14,7 @@ jobs:
       - name: Install (CPU-only torch)
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -e ".[dev]"
+          pip install -e ".[dev,drive]"
       - name: Ruff is the version pinned in pyproject.toml and the pre-commit hook
         run: |
           pin=$(grep -A1 'ruff-pre-commit' .pre-commit-config.yaml | grep rev | sed 's/.*v//')
