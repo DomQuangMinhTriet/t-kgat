@@ -32,6 +32,7 @@ from tkgat.eval.metrics import evaluate
 from tkgat.kg.ckg import CKG
 from tkgat.models.kgat import KGAT, KGATConfig
 from tkgat.train.bpr import METRICS, NegativeSampler
+from tkgat.train.schedule import check_schedule, lr_at, set_lr
 
 MAX_REDRAWS = 100
 
@@ -48,6 +49,8 @@ class KGATFitConfig:
     patience: int = 10  # in evaluations: 10 x 5 epochs = the paper's 50 epochs
     select_metric: str = "recall@20"
     device: str = "auto"
+    lr_schedule: str = "none"  # "none" (constant, decision 0013) or "cosine" (decision 0016 item 5)
+    lr_final_ratio: float = 0.01  # cosine: the rate at ``max_epochs`` is ``lr * lr_final_ratio``
 
 
 def split_params(params: dict, device: str = "auto") -> tuple[KGATConfig, KGATFitConfig]:
@@ -114,14 +117,31 @@ def _sync(device: torch.device) -> float:
     return time.perf_counter()
 
 
-def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitConfig, seed: int) -> KGATFitResult:
-    """Train KGAT on ``ckg`` (train interactions + KG at t1) and keep the best epoch by validation ``select_metric``."""
+def fit_kgat(
+    data: EncodedSplit,
+    ckg: CKG,
+    model_cfg: KGATConfig,
+    cfg: KGATFitConfig,
+    seed: int,
+    fixed_epochs: int | None = None,
+) -> KGATFitResult:
+    """Train KGAT on ``ckg`` (train interactions + KG at t1) and keep the best epoch by validation ``select_metric``.
+
+    With ``fixed_epochs`` (the refit of decision 0016 item 4: ``ckg`` then holds train and validation interactions and
+    the KG at t2) it trains exactly that many epochs, never evaluates and never stops early: the result is the state
+    of the last epoch, ``best_epoch == fixed_epochs`` and ``best_val`` is empty. The schedule horizon stays
+    ``cfg.max_epochs``. ``data.val`` and ``data.mask_val`` are not read in that mode.
+    """
+    check_schedule(cfg.lr_schedule, cfg.lr_final_ratio)
+    if fixed_epochs is not None and not 1 <= fixed_epochs <= cfg.max_epochs:
+        raise ValueError(f"fixed_epochs must be in [1, max_epochs={cfg.max_epochs}], got {fixed_epochs}")
+    n_epochs = cfg.max_epochs if fixed_epochs is None else fixed_epochs
     device = resolve_device(cfg.device)
     seed_all(seed)
     gen = torch.Generator(device=device).manual_seed(seed)
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
-    model = KGAT(ckg, model_cfg, device=device)
+    model = KGAT(ckg, model_cfg, device=device, **({"refit": True} if fixed_epochs is not None else {}))
     opt_cf = torch.optim.Adam(model.cf_parameters(), lr=cfg.lr)
     opt_kg = torch.optim.Adam(model.kg_parameters(), lr=cfg.lr)
 
@@ -133,7 +153,9 @@ def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitCo
     best, best_state, best_epoch, best_val, bad = -1.0, None, 0, {}, 0
     history = []
     t0 = time.perf_counter()
-    for epoch in range(1, cfg.max_epochs + 1):
+    for epoch in range(1, n_epochs + 1):
+        lr = lr_at(epoch, cfg.lr, cfg.lr_schedule, cfg.max_epochs, cfg.lr_final_ratio)
+        set_lr([opt_cf, opt_kg], lr)  # both Adam optimisers follow the same schedule
         model.train()
         start = _sync(device)
 
@@ -166,11 +188,12 @@ def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitCo
 
         row = {
             "epoch": epoch,
+            "lr": lr,
             "loss_cf": float(total_cf) / len(train),
             "loss_kg": float(total_kg) / len(edges),
         }
         t_eval = t_att
-        if epoch % cfg.eval_every == 0:
+        if fixed_epochs is None and epoch % cfg.eval_every == 0:
             res = evaluate(model.scorer(), data.val, data.mask_val)
             t_eval = _sync(device)
             row.update({k: res[k] for k in METRICS})
@@ -190,6 +213,9 @@ def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitCo
         history.append(row)
         if bad >= cfg.patience:
             break
+    if fixed_epochs is not None:
+        best_epoch, best_val = fixed_epochs, {}
+        best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     if best_state is None:
         raise ValueError("no validation evaluation happened; max_epochs must be >= eval_every")
     model.load_state_dict(best_state)

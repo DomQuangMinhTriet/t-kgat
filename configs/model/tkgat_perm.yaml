@@ -1,9 +1,8 @@
 # Control of decision 0009 (item 5): the point that `tkgat` selected, re-run with train_ts permuted over ALL train edges
 # (one permutation per seed, numpy.random.default_rng(seed); only train_ts is shuffled, the multiset is unchanged).
 # The point is read from results/runs/<run_name>/tkgat_summary.json by scripts/run.py. If this run is as good as `tkgat`,
-# the gain does not come from interaction time. Fact dates remain unchanged. Report real against permuted.
+# the gain does not come from time. Report real against permuted.
 name: tkgat
-time_on: both
 control: permute_train_ts
 seeds: [2019, 2020, 2021, 2022, 2023]
 kg: {variant: default}

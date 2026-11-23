@@ -1,0 +1,11 @@
+# Small-set gate (decision 0016 items 5, 6, 9): BPR-MF on lastfm-w3, validation only, 3 seeds, schedule = none.
+# Run: python scripts/run.py --data configs/data/lastfm_w3.yaml --model configs/model/small/bprmf_w3_none.yaml --val-only
+# Never read for a reported number: the small set is for choosing protocol options only.
+name: bprmf
+seeds: [2019, 2020, 2021]
+grid:
+  - {dim: 64, lr: 0.001, l2: 0.0001}
+  - {dim: 64, lr: 0.001, l2: 0.001}
+  - {dim: 32, lr: 0.001, l2: 0.0001}
+  - {dim: 64, lr: 0.0001, l2: 0.0001}
+fixed: {batch_size: 2048, max_epochs: 200, eval_every: 5, patience: 5, select_metric: recall@20}

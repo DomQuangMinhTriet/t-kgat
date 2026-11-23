@@ -1,0 +1,40 @@
+{
+  "val_only": true,
+  "selected": {
+    "lr": 0.001,
+    "l2": 0.0001,
+    "l2_kg": 1e-05,
+    "mess_dropout": 0.1
+  },
+  "val_means_recall@20": [
+    0.0602373182619175,
+    0.06183660401047389,
+    0.03533206281456613
+  ],
+  "val_stds_recall@20": [
+    0.0015655823954276954,
+    0.0009642807056166968,
+    0.0012361902620479008
+  ],
+  "kg": {
+    "t1": {
+      "kg_variant": "pruned",
+      "cutoff": "t1",
+      "time_consistent": true,
+      "wikidata_snapshot": null,
+      "n_users": 4146,
+      "n_items": 6799,
+      "n_entities": 21375,
+      "n_relations": 5,
+      "n_rel": 12,
+      "n_nodes": 25521,
+      "n_interactions": 67757,
+      "n_triples": 59897,
+      "n_triples_dropped_unseen_tail": 0,
+      "n_edges": 255308,
+      "n_isolated_entities": 807,
+      "t_ref": 1407053800.0,
+      "dt_den": 5373165.0
+    }
+  }
+}

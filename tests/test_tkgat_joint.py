@@ -139,9 +139,12 @@ def test_runner_loads_fact_dates_for_joint_training_and_test_and_keeps_control_w
 
 def test_primary_configs_enable_joint_attention():
     root = Path(__file__).resolve().parents[1]
-    for tag in ("tkgat", "tkgat_perm"):
+    for tag in ("tkgat_joint", "tkgat_both"):
         cfg = yaml.safe_load((root / "configs" / "model" / f"{tag}.yaml").read_text())
         assert cfg["time_on"] == "both"
+    for tag in ("tkgat", "tkgat_perm"):
+        cfg = yaml.safe_load((root / "configs" / "model" / f"{tag}.yaml").read_text())
+        assert cfg.get("time_on", "interact") == "interact"  # historical Stage 1 notebooks keep their semantics
 
 
 def test_joint_validation_does_not_open_test_or_t2_files(s2setup):

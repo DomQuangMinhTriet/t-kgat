@@ -59,7 +59,7 @@ def package_code(root: Path, output: Path) -> None:
     print(f"Code only: {output} ({output.stat().st_size:,} bytes)")
 
 
-def memory_report(processed: Path, model_cfg: dict, device: str) -> dict:
+def memory_report(processed: Path, model_cfg: dict, device: str, *, refit=False) -> dict:
     """Metadata-only lower bounds, not a peak-memory prediction."""
     import torch
 
@@ -67,7 +67,9 @@ def memory_report(processed: Path, model_cfg: dict, device: str) -> dict:
     kg = json.loads((processed / "kg/default/kg_meta.json").read_text(encoding="utf-8"))
     train_pairs = int(split["train_pos"])
     entities, users = int(kg["n_entities"]), int(split["n_users"])
-    edges = 2 * (train_pairs + int(kg["n_triples"]["t1"]))
+    fit_pairs = train_pairs + int(split.get("val_pos", 0)) if refit else train_pairs
+    kg_pairs = int(kg["n_triples"].get("t2", kg["n_triples"]["t1"])) if refit else int(kg["n_triples"]["t1"])
+    edges = 2 * (fit_pairs + kg_pairs)
     # Graph head/relation/tail int64 + edge_ts float64. Embeddings are shared by
     # two Adam optimizers: parameters + gradients + four moment tensors.
     graph = edges * 32
@@ -75,6 +77,8 @@ def memory_report(processed: Path, model_cfg: dict, device: str) -> dict:
     lower_bound = graph + embedding_states
     report = {
         "train_pairs": train_pairs,
+        "refit": refit,
+        "fit_pairs": fit_pairs,
         "entities": entities,
         "ckg_edges": edges,
         "graph_GiB": graph / GIB,
@@ -133,7 +137,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--processed", type=Path, help="directory containing meta.json, train.csv and kg/default/")
     parser.add_argument("--out", type=Path, default=Path("/kaggle/working/tkgat-joint"))
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--max-new-runs", type=int, default=1, help="new completed gamma/seed fits per call")
+    parser.add_argument("--max-new-runs", type=int, default=1, help="new selection/refit fits per call")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--refit", dest="refit", action="store_true", default=True, help="refit on train+val before test (default)"
+    )
+    mode.add_argument("--no-refit", dest="refit", action="store_false", help="legacy best-checkpoint test scoring")
     parser.add_argument("--restore", type=Path, help="saved tkgat-joint output directory from a previous session")
     parser.add_argument("--check-only", action="store_true", help="only report metadata and memory constraints")
     parser.add_argument("--val-only", action="store_true", help="never open test/t2 files or score test")
@@ -156,7 +165,7 @@ def main(argv: list[str] | None = None) -> None:
         )
     output.mkdir(parents=True, exist_ok=True)
     model_cfg = yaml.safe_load((ROOT / MODEL).read_text(encoding="utf-8"))
-    report = memory_report(processed, model_cfg, args.device)
+    report = memory_report(processed, model_cfg, args.device, refit=args.refit and not args.val_only)
     (output / "memory-report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2), flush=True)
     if args.check_only:
@@ -168,6 +177,7 @@ def main(argv: list[str] | None = None) -> None:
         "source_sha256": source_identity(ROOT),
         "model": MODEL.as_posix(),
         "run_name": run_name,
+        "refit": args.refit,
         "split_meta_sha256": sha(processed / "meta.json"),
         "kg_meta_sha256": sha(processed / "kg/default/kg_meta.json"),
     }
@@ -201,6 +211,8 @@ def main(argv: list[str] | None = None) -> None:
     ]
     if args.val_only:
         command.append("--val-only")
+    elif args.refit:
+        command.append("--refit")
     env = {**os.environ, "PYTHONPATH": str(ROOT / "src") + os.pathsep + os.environ.get("PYTHONPATH", "")}
     with (output / "training.log").open("a", encoding="utf-8") as log:
         log.write(json.dumps(command) + "\n")

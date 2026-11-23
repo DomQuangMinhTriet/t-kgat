@@ -123,7 +123,11 @@ def load(path: str | Path = "results/registry.csv", latest: bool = True) -> pd.D
     merge of two branches may interleave their rows.
     """
     # identifiers stay strings: a hash such as "347285991e48" would otherwise be read as the float 3.47e+56
-    df = pd.read_csv(path, dtype={"git_commit": str, "config": str, "device": str, "dataset": str, "split_sha256": str})
+    df = pd.read_csv(
+        path,
+        float_precision="round_trip",
+        dtype={"git_commit": str, "config": str, "device": str, "dataset": str, "split_sha256": str},
+    )
     return newest(df) if latest else df
 
 

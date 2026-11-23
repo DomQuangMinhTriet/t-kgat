@@ -105,7 +105,7 @@ của nhóm đã chọn. Tổng train/val/test có thể lệch mục tiêu vì 
 
 ## Attention gộp interaction và facts (23/11/2026)
 
-`configs/model/tkgat.yaml` dùng `time_on: both`: mỗi model/seed học thời gian của
+`configs/model/tkgat_joint.yaml` dùng `time_on: both`: mỗi model/seed học thời gian của
 interaction và facts trong **cùng một lần train**, không cần chạy hai stage thời gian.
 Chỉ mở rộng cách tính độ cũ; giữ nguyên điểm KGAT, một γ chung và softmax chung:
 
@@ -129,14 +129,16 @@ Chỉ mở rộng cách tính độ cũ; giữ nguyên điểm KGAT, một γ ch
 - Fact thiếu ngày có `Δ=0`; không có fact có ngày hoặc cửa sổ rộng 0 thì loại đó
   có `Δ=0`, không ảnh hưởng cửa sổ của loại còn lại.
 - Chốt **cả hai cửa sổ tại train/t1**, giữ nguyên khi dùng KG t2 để test;
-  không tính lại min/max từ val/test. Các rule cutoff của dữ liệu vẫn áp dụng.
+  không tính lại min/max khi chỉ đổi graph để đánh giá. Với **refit**, khởi tạo model
+  mới trên train+val/KG t2 và tính lại hai cửa sổ từ chính phần refit đó; không dùng
+  interaction test. Các rule cutoff của dữ liệu vẫn áp dụng.
 - `γ=0` khớp KGAT. Chỉ đổi công thức không cần generate lại dữ liệu;
   riêng thay đổi quy mô/10-core thì chạy lại 02b. Không đổi loss, sampler,
   vòng tối ưu CF/KG; việc chọn γ trên validation giữ nguyên.
 
-Khi train, chọn `--model configs/model/tkgat.yaml`; các mode `interact`/`kg` cũ còn
-để đối chiếu kết quả trước đây. `tkgat_perm.yaml` cũng dùng `both`, nhưng chỉ tráo
-timestamp interaction, giữ ngày facts: đây là control riêng cho thời gian interaction.
+Khi train trên Kaggle, chọn `configs/model/tkgat_joint.yaml` qua wrapper bên dưới.
+`tkgat.yaml` / `tkgat_perm.yaml` giữ mode Stage 1 cũ để đối chiếu lịch sử; mode gộp
+và đối chứng tráo cả hai timestamp nằm ở `tkgat_both.yaml` / `tkgat_both_perm.yaml`.
 Kết quả/checkpoint mới có `time_on: both`, không resume checkpoint hai stage cũ.
 
 ## Kaggle: chỉ chạy T-KGAT
@@ -156,8 +158,10 @@ Cấu hình riêng `configs/model/tkgat_joint.yaml` không phụ thuộc baselin
 `lr=0.001`, `l2=l2_kg=0.00001`, dropout `0.1` được cố định cho lần chạy này,
 theo điểm Triết báo từ cổng tập nhỏ; chưa chọn lại bằng KGAT trên dữ liệu mới;
 chọn gamma `{1,3,10}` trên validation trung bình 5 seed. Không chạy KGAT/BPR/MostPop
-hay đối chứng; test chỉ chấm gamma được chọn sau khi hoàn tất đủ 15 lượt.
-Resume chỉ ở ranh giới lượt hoàn tất, chưa khôi phục giữa epoch.
+hay đối chứng trong notebook này. Sau đủ 15 lượt, chọn gamma rồi refit 5 seed trên
+train+val với số epoch là median best epoch validation, không early stopping, rồi
+chấm test bằng model refit. Mỗi lần chạy ô train thêm tối đa một lượt selection/refit;
+resume chỉ ở ranh giới lượt hoàn tất, chưa khôi phục giữa epoch.
 
 ### Tham số Kaggle đã chuẩn bị theo tin Triết (23/11/2026)
 
@@ -173,14 +177,17 @@ Resume chỉ ở ranh giới lượt hoàn tất, chưa khôi phục giữa epoc
 | Gamma / seed | `{1,3,10}` × `{2019,2020,2021,2022,2023}`; đủ 15 lượt |
 | Chọn cấu hình | Recall@20 validation trung bình 5 seed; từng lượt giữ best epoch trên validation |
 
-**Phạm vi:** dùng `time_on: both` và công thức cửa sổ train riêng hiện tại của Phôn.
-Chưa thêm `tau_ui_days`/`tau_kg_years`, chưa thay bộ chọn relation theo `delta_kg` của
-PR #48 và chưa refit train+val. Vì vậy đây là **T-KGAT theo công thức hiện tại với
-bộ tham số nền Triết đã chốt**, chưa phải bản chạy đầy đủ protocol 0016.
-Khi thống nhất đổi công thức/protocol thì chuẩn bị lại config/code trước khi train.
+**Phạm vi tích hợp #48/#50:** giữ `time_on: both`, công thức cửa sổ riêng của Phôn,
+bản dữ liệu khoảng 3 triệu/10-core và cấu hình chạy riêng T-KGAT. Không dùng tau.
+Đã thêm refit train+val và lưu checkpoint cho các lượt refit. Mặc định mọi relation
+có ngày được decay; vẫn công bố đó là proxy endpoint, không phải ngày bắt đầu statement.
+Các đối chứng/ablation và bộ công cụ tập nhỏ của Triết được giữ để chạy riêng khi cần.
+Xem [quyết định tích hợp 0019](../decisions/0019-joint-windows-and-refit-integration.md).
 
 ZIP code phải được tạo lại sau khi sửa YAML. Notebook in cấu hình thực tế trước khi
-train; giữ output mới cho cấu hình 150 epoch, không khôi phục checkpoint 300 epoch cũ.
+train; giữ output mới cho cấu hình 150 epoch có refit, không khôi phục checkpoint cũ
+khác source/config/mode. Wrapper mặc định `--refit`; `--no-refit` dành cho cách đánh giá
+checkpoint cũ. `--val-only` chỉ chọn trên validation, không refit/chấm test.
 
 **Giới hạn:** script mới vẫn dùng trainer full-graph hiện tại. Với bộ full cũ đã dựng,
 riêng graph và trạng thái embedding khi train có cận dưới khoảng **37 GiB VRAM**,

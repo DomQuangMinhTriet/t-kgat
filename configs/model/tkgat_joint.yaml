@@ -1,5 +1,6 @@
 # Standalone joint T-KGAT: common settings from Triet's small-set gate (2026-11-23).
-# Constant LR, max_epochs=150. Local window-normalized attention; no absolute tau or refit.
+# Constant LR, max_epochs=150. Local window-normalized attention; no absolute tau.
+# The Kaggle wrapper refits on train+val by default after validation selection (decision 0019).
 # The base point is fixed for this run, not selected by a KGAT run on this dataset.
 name: tkgat
 standalone: true

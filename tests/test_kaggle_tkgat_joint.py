@@ -133,6 +133,41 @@ def test_restore_rejects_another_source_or_dataset(tmp_path):
     assert not (output / "registry.csv").exists()
 
 
+@pytest.mark.parametrize("extra, refit", [([], True), (["--no-refit"], False), (["--val-only"], False)])
+def test_kaggle_wrapper_enables_refit_except_for_validation_only(tmp_path, monkeypatch, extra, refit):
+    wrapper = load_wrapper()
+    processed = tmp_path / "lastfm-3m-k10"
+    (processed / "kg/default").mkdir(parents=True)
+    for name in ("meta.json", "kg/default/kg_meta.json"):
+        (processed / name).write_text("{}")
+    monkeypatch.setattr(wrapper, "memory_report", lambda *args, **kwargs: {"blockers": []})
+    commands = []
+
+    class FakeProcess:
+        stdout = ()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def wait(self):
+            return 0
+
+    def launch(command, **kwargs):
+        commands.append(command)
+        return FakeProcess()
+
+    monkeypatch.setattr(wrapper.subprocess, "Popen", launch)
+    wrapper.main(["--processed", str(processed), "--out", str(tmp_path / "output"), *extra])
+    assert len(commands) == 1 and ("--refit" in commands[0]) == refit
+    assert ("--val-only" in commands[0]) == ("--val-only" in extra)
+    assert str(ROOT / "configs/model/tkgat_joint.yaml") in commands[0]
+    identity = json.loads((tmp_path / "output/run-identity.json").read_text())
+    assert identity["run_name"] == "lastfm-3m-k10-joint"
+
+
 def test_shipped_notebook_has_valid_python_and_only_uses_the_joint_runner():
     notebook = json.loads((ROOT / "notebooks/10_kaggle_tkgat_joint.ipynb").read_text(encoding="utf-8"))
     source = ""

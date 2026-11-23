@@ -1,0 +1,25 @@
+# 0019 — Integrate the small-set tooling with joint train-window attention and refit
+
+- Status: accepted (2026-11-23, Phon explicitly requested integration of PRs #48 and #50 into #49 using the choices in this session).
+- Supersedes parts of 0016 items 1, 2, 4 and 7 for Phon's raw Last-FM experiment. Historical experiments and accepted records remain unchanged.
+
+## Context
+
+PR #48 introduces refit, schedules, relation reports, the small-set gate, joint attention and controls. PR #50 adds the gate-selected 150-epoch configurations. Phon's branch independently rebuilds raw LFM-1b interactions and original Freebase facts, and uses separate interaction/fact training windows instead of absolute time constants. This integration keeps that formula and the user's explicit data and standalone-run choices.
+
+## Decision
+
+1. **Data:** keep the raw-source rebuild of 0017/0018 and the user-approved train-only sampling profile. Freeze global t1/t2 before sampling. A deterministic SHA-256 user prefix is chosen using only the training core, targeting about 3 million total interactions through a training-pair budget. Apply iterative 10-core on train; retain warm validation/test targets and complete past-only masks for sampled users. No paper interactions or paper KG triples are imported. Compact unused entity IDs. Do not replace this with the legacy three-month, 5-core gate dataset.
+2. **One formula, no tau:** for each edge type, `age = clip((b_type - ts) / (b_type - a_type), 0, 1)`. The interaction window uses the fitted interaction timestamps, and the fact window uses finite dates of the fitted KG. Attention is `pi - gamma_ui * delta_ui * age_ui - gamma_kg * delta_kg * age_kg`, followed by the existing shared per-head softmax. The main model ties both strengths to `gamma`; zero-strength ablations and the joint timestamp-permutation control remain supported. Undated facts, an empty dated-fact set or a zero-width window give zero penalty. Remove absolute tau fields and reduce the joint grid to gamma `{1,3,10}`.
+3. **Fact semantics:** retain the supplied endpoint-existence proxy dates, the conservative cutoff rules and the explicit source limitations. By default all retained dated KG relations participate, as requested in the current implementation; this is not a claim that those dates are statement-validity starts. The optional relation mask from #48 remains available. Its use requires an explicit configuration change; the stricter relation-start eligibility proposal from 0016 is not silently imposed.
+4. **Training:** adopt constant learning rate, `max_epochs=150`, `eval_every=5`, patience of 10 validation evaluations and seeds 2019–2023. Phon's `tkgat_joint.yaml` fixes the base point to `lr=1e-3`, `l2=l2_kg=1e-5`, dropout `0.1`, as reported by Triet's gate. It runs T-KGAT only, without requiring a baseline summary. The separate `v02` suite can still inherit its base point from a KGAT run; neither mode is presented as the other's selection procedure.
+5. **Refit:** enable it by default in the standalone Kaggle wrapper. Select the grid point by mean validation Recall@20 across seeds, then take the rounded-up median validation best epoch. For each seed initialize a fresh model on train + validation, with original train user/item vocabularies and KG t2. Fit both time windows afresh from these refit inputs, then keep them frozen. Train for exactly that epoch count without validation evaluation or early stopping; score the unchanged test targets with the pre-t2 mask once per completed seed. No test score selects an epoch, a time window or a grid point.
+6. **Resume:** bound both selection and refit fits by the session's fit budget. Persist refit weights, histories and test rows; resume completed work without retraining or rescoring it. Keep refit and non-refit registry keys distinct. The Kaggle source/split identity includes refit mode. Core `scripts/run.py` retains its explicit `--refit` / `--no-refit` options for historical reproduction; `--val-only` never refits or reads test/t2 files.
+
+## Consequences
+
+- PRs #48/#50 are integrated through their shared history; their small-set validation evidence stays archived under its original dataset name.
+- The joint `v02` grid has three points rather than twelve. Phon's formula and data profile are documented deviations from the original 0016 proposal, not a claim to reproduce its absolute-scale experiment.
+- Historical `tkgat.yaml` and `tkgat_perm.yaml` retain Stage 1 semantics so old Kaggle notebooks cannot silently switch models. The active joint configurations are `tkgat_joint.yaml` and `tkgat_both.yaml` (including `v02`).
+- No generated data needs rebuilding for refit. The Kaggle code ZIP and notebook must be refreshed. Old source snapshots, tau checkpoints and non-refit result identities cannot be mixed into the new run.
+- Refit adds five fixed-epoch fits after the fifteen standalone selection fits. A session can stop at a completed fit boundary; an interrupted epoch still restarts that fit.
