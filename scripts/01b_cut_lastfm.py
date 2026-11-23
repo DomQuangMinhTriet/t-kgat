@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
 from tkgat.data.drive import DriveQuotaError
-from tkgat.data.lastfm_raw import cut_pairs, utc_seconds
+from tkgat.data.lastfm_raw import cut_pairs, utc_seconds, validate_pair_cache
 
 RAW_DRIVE = "gdrive-stream://14cMEh6U9zxu8dv8lfnwEmdI8ldT_Zvff/lfm1b-tracks.inter"
 
@@ -23,11 +24,21 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--min-events-user", type=int, default=0)
     parser.add_argument("--chunksize", type=int, default=250_000)
     parser.add_argument("--scratch-dir", help="disk space for SQLite and sorting")
-    parser.add_argument("--overwrite", action="store_true")
+    reuse = parser.add_mutually_exclusive_group()
+    reuse.add_argument("--overwrite", action="store_true")
+    reuse.add_argument("--reuse-existing", action="store_true", help="verify and reuse an identical pair cache")
     args = parser.parse_args(argv)
     if args.all_history and args.start is not None:
         parser.error("--all-history cannot be combined with --start")
     try:
+        if args.reuse_existing and Path(args.out).is_file():
+            print("[01b] Verifying existing pair cache; no Drive scan", flush=True)
+            meta = validate_pair_cache(
+                args.out, args.interactions, start=args.start, end=args.end, window_months=args.window_months,
+                min_events_user=args.min_events_user,
+            )
+            print(json.dumps(meta, indent=2))
+            return
         meta = cut_pairs(
             args.interactions, args.out, start=args.start, end=args.end, window_months=args.window_months,
             min_events_user=args.min_events_user, chunksize=args.chunksize, scratch_dir=args.scratch_dir,

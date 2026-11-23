@@ -69,6 +69,24 @@ def write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def validate_pair_cache(path, source, *, start=None, end=None, window_months=None, min_events_user=0):
+    """Reuse only a complete, unchanged cache of exactly the requested extraction."""
+    path = Path(path)
+    meta = json.loads(Path(str(path) + ".meta.json").read_text(encoding="utf-8"))
+    if window_months is not None:
+        if start is not None or end is None:
+            raise ValueError("window_months requires an explicit end and no start")
+        start = window_start(end, window_months)
+    expected = {"source": str(source), "start_inclusive": start, "end_exclusive": end,
+                "window_months": window_months, "min_events_user": min_events_user,
+                "pair_universe": "raw_events", "timestamp_policy": "earliest_in_window"}
+    if any(meta.get(key) != value for key, value in expected.items()):
+        raise ValueError("Existing pair cache has other source/window rules; choose a new --out or rebuild explicitly")
+    if sha256_file(path) != meta["sha256"]:
+        raise ValueError("Existing pair cache hash does not match its manifest")
+    return meta
+
+
 def cut_pairs(
     source: str | Path,
     output: str | Path,

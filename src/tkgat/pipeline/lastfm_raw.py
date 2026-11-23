@@ -151,6 +151,9 @@ def build_raw_dataset(
     engine: str = "pandas",
     memory_limit: str = "1GB",
     scratch_dir: str | Path | None = None,
+    target_interactions: int | None = None,
+    user_seed: int = 2019,
+    compact_entities: bool = False,
 ) -> dict:
     output, export = Path(output), Path(export)
     if output.resolve() == export.resolve() or output.resolve() in export.resolve().parents:
@@ -173,21 +176,27 @@ def build_raw_dataset(
         from tkgat.kg.freebase_dump import validate_extract
 
         validate_extract(freebase)
-    kg_options = {"kg_mode": kg_mode, "kg_entity_min": kg_entity_min, "kg_relation_min": kg_relation_min}
+    if target_interactions is not None and (target_interactions < 1 or user_seed < 0):
+        raise ValueError("target_interactions must be positive and user_seed nonnegative")
+    kg_options = {"kg_mode": kg_mode, "kg_entity_min": kg_entity_min, "kg_relation_min": kg_relation_min,
+                  "compact_entities": compact_entities or target_interactions is not None}
     if engine == "auto":
         manifest = json.loads(Path(str(pairs) + ".meta.json").read_text(encoding="utf-8"))
-        engine = "duckdb" if manifest["pairs"] >= 2_000_000 else "pandas"
+        engine = "duckdb" if target_interactions is not None or manifest["pairs"] >= 2_000_000 else "pandas"
     config = SplitConfig(q_val=q_val, q_test=q_test, min_rating=1, kcore=kcore)
     if engine == "duckdb":
         from tkgat.data.lastfm_disk import disk_split
 
-        with disk_split(pairs, config, scratch_dir or output.parent, memory_limit) as disk:
+        with disk_split(pairs, config, scratch_dir or output.parent, memory_limit,
+                        target_interactions=target_interactions, user_seed=user_seed) as disk:
             return _finish_raw_dataset(
                 pairs, output, export, freebase, item_links, disk.split, disk.enc,
                 disk.cut_meta, disk.audit, None, disk=disk, **kg_options,
             )
     if engine != "pandas":
         raise ValueError(f"Unknown processing engine: {engine}")
+    if target_interactions is not None:
+        raise ValueError("Train-only size sampling requires --engine auto or duckdb")
     interactions, cut_meta = load_raw_pairs(pairs)
     split = temporal_split(interactions, config)
     problems = check_split(split)
@@ -202,7 +211,7 @@ def build_raw_dataset(
 
 def _finish_raw_dataset(pairs, output, export, freebase, item_links, split, enc,
                         cut_meta, audit, excluded_interactions, *, disk=None, kg_mode="one-hop",
-                        kg_entity_min=10, kg_relation_min=50):
+                        kg_entity_min=10, kg_relation_min=50, compact_entities=False):
     """Shared KG construction and provenance for both interaction-processing engines."""
     if disk is not None:
         disk.log("Reading Drive mapping/Freebase and building the temporal KG")
@@ -227,7 +236,8 @@ def _finish_raw_dataset(pairs, output, export, freebase, item_links, split, enc,
         if seed_hash != extraction["seed_mids_sha256"]:
             raise ValueError("Mapping MID set differs from the 01c extraction; rerun 01c with this mapping")
         bundle = build_twohop(items, graph, evidence, {"t1": split.t1, "t2": split.t2},
-                              entity_min=kg_entity_min, relation_min=kg_relation_min)
+                              entity_min=kg_entity_min, relation_min=kg_relation_min,
+                              compact_entities=compact_entities)
         facts, kept, dropped = bundle.facts, bundle.kept, bundle.dropped
         entities, relations, triples, dates = bundle.entities, bundle.relations, bundle.triples, bundle.dates
         relation_names = list(PAPER_RELATIONS)
@@ -265,6 +275,8 @@ def _finish_raw_dataset(pairs, output, export, freebase, item_links, split, enc,
         "support_zip_sha256": SUPPORT_ZIP_SHA256
         if support_archive_used else None,
     }
+    if disk is not None and disk.sampling is not None:
+        source_info["user_sampling"] = disk.sampling
     cfg = {"name": "lastfm", "processed_dir": str(output), "csv_lineterminator": "\n"}
     if disk is None:
         save_split(split, cfg, {"raw_lfm1b": source_info})
@@ -292,7 +304,7 @@ def _finish_raw_dataset(pairs, output, export, freebase, item_links, split, enc,
     def covered_items(frame):
         if bundle is None:
             return int(frame.h.nunique())
-        endpoints = np.union1d(frame.h.to_numpy(), frame.t.to_numpy())
+        endpoints = np.union1d(frame.h.dropna().to_numpy(dtype="int64"), frame.t.dropna().to_numpy(dtype="int64"))
         return int((endpoints < enc.n_items).sum())
 
     coverage = {

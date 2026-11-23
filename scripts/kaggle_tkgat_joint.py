@@ -20,7 +20,6 @@ from zipfile import ZIP_DEFLATED, ZipFile
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = Path("configs/model/tkgat_joint.yaml")
 NOTEBOOK = Path("notebooks/10_kaggle_tkgat_joint.ipynb")
-RUN_NAME = "lastfm-raw-joint"
 GIB = 2**30
 
 
@@ -152,7 +151,7 @@ def main(argv: list[str] | None = None) -> None:
     missing = [name for name in ("meta.json", "kg/default/kg_meta.json") if not (processed / name).is_file()]
     if missing:
         parser.error(
-            f"--processed must point to the extracted lastfm-raw folder; missing: {', '.join(missing)}. "
+            f"--processed must point to the extracted processed folder; missing: {', '.join(missing)}. "
             "On Kaggle, the processed CSVs and metadata must be visible under /kaggle/input."
         )
     output.mkdir(parents=True, exist_ok=True)
@@ -164,10 +163,11 @@ def main(argv: list[str] | None = None) -> None:
         return
     if report["blockers"]:
         raise SystemExit("Training was not started:\n- " + "\n- ".join(report["blockers"]))
+    run_name = f"{processed.name}-joint"
     identity = {
         "source_sha256": source_identity(ROOT),
         "model": MODEL.as_posix(),
-        "run_name": RUN_NAME,
+        "run_name": run_name,
         "split_meta_sha256": sha(processed / "meta.json"),
         "kg_meta_sha256": sha(processed / "kg/default/kg_meta.json"),
     }
@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> None:
     identity_path.write_text(json.dumps(identity, indent=2), encoding="utf-8")
     data_path = output / "data-config.yaml"
     data_path.write_text(
-        yaml.safe_dump({"name": "lastfm", "run_name": RUN_NAME, "processed_dir": str(processed)}), encoding="utf-8"
+        yaml.safe_dump({"name": "lastfm", "run_name": run_name, "processed_dir": str(processed)}), encoding="utf-8"
     )
     command = [
         sys.executable,

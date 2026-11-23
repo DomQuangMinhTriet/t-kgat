@@ -46,7 +46,7 @@ class TwoHopKG:
     report: dict
 
 
-def build_twohop(items, graph, evidence, cutoffs, *, entity_min=10, relation_min=50):
+def build_twohop(items, graph, evidence, cutoffs, *, entity_min=10, relation_min=50, compact_entities=False):
     """Use the fixed nine-relation schema and documented KGAT-inspired 10/50 filtering.
 
     Eligibility is learned once from t1 only. Both endpoint dates matter because an
@@ -105,7 +105,8 @@ def build_twohop(items, graph, evidence, cutoffs, *, entity_min=10, relation_min
         if mid:
             used.add(mid)
             by_mid.setdefault(mid, []).append(int(row.h))
-    nodes = sorted((set(base["head"]) | set(base["tail"])) - set(by_mid))
+    namespace = base[base.source_index.isin(selected["t2"])] if compact_entities else base
+    nodes = sorted((set(namespace["head"]) | set(namespace["tail"])) - set(by_mid))
     n_items = len(items)
     node_ids = {node: [n_items + i] for i, node in enumerate(nodes)}
     node_ids.update(by_mid)
@@ -121,7 +122,8 @@ def build_twohop(items, graph, evidence, cutoffs, *, entity_min=10, relation_min
     relations = pd.DataFrame({"relation": np.arange(len(PAPER_RELATIONS)), "name": PAPER_RELATIONS})
     relation_ids = relations.set_index("name").relation.to_dict()
     facts = base.assign(h=base["head"].map(node_ids), t=base["tail"].map(node_ids)).explode("h").explode("t")
-    facts["h"], facts["t"] = facts.h.astype("int64"), facts.t.astype("int64")
+    id_dtype = "Int64" if compact_entities else "int64"
+    facts["h"], facts["t"] = facts.h.astype(id_dtype), facts.t.astype(id_dtype)
     facts["r"] = facts.relation.map(relation_ids).astype("int64")
     facts["ts"] = [int(dt.datetime.combine(day, dt.time(), tzinfo=dt.timezone.utc).timestamp())
                    if pd.notna(day) else None for day in facts.edge_date]
@@ -131,6 +133,7 @@ def build_twohop(items, graph, evidence, cutoffs, *, entity_min=10, relation_min
     for cut in ("t1", "t2"):
         reason = facts.source_index.map(reasons[cut])
         kept[cut] = facts[reason.eq("")].copy().reset_index(drop=True)
+        kept[cut][["h", "t"]] = kept[cut][["h", "t"]].astype("int64")
         dropped[cut] = facts[reason.ne("")].assign(reason=reason[reason.ne("")]).reset_index(drop=True)
         triples[cut] = kept[cut][["h", "r", "t"]].copy()
         dated[cut] = kept[cut][["h", "r", "t", "ts"]].copy()
@@ -157,4 +160,10 @@ def build_twohop(items, graph, evidence, cutoffs, *, entity_min=10, relation_min
         "source_edge_exclusions": {cut: reasons[cut][reasons[cut].ne("")].value_counts().to_dict() for cut in reasons},
         "date_semantics": "later available endpoint-existence proxy; undated stays null",
     }
+    if compact_entities:
+        report["entity_namespace"] = {
+            "method": "all train items plus endpoints used by the retained t1/t2 KG",
+            "removed_unused_entities": len((set(base["head"]) | set(base["tail"])) - set(by_mid)) - len(nodes),
+            "dropped_fact_ids": "blank for excluded endpoints; original head/tail MIDs remain auditable",
+        }
     return TwoHopKG(facts, kept, dropped, entities, relations, triples, dated, original, report)

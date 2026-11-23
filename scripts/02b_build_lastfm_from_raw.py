@@ -25,7 +25,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--q-val", type=float, default=0.8)
     parser.add_argument("--q-test", type=float, default=0.9)
-    parser.add_argument("--kcore", type=int, default=5)
+    parser.add_argument("--kcore", type=int, default=10)
+    parser.add_argument("--target-interactions", type=int, default=3_034_796,
+                        help="approximate total via train-only seeded user selection; 0 keeps all users")
+    parser.add_argument("--user-seed", type=int, default=2019)
+    parser.add_argument("--compact-entities", action="store_true", help="omit unused IDs; automatic with sampling")
     parser.add_argument("--engine", choices=["auto", "pandas", "duckdb"], default="auto",
                         help="auto uses disk-backed processing for at least 2 million pairs")
     parser.add_argument("--memory-limit", default="1GB", help="DuckDB buffer budget; Python/KG use additional RAM")
@@ -34,6 +38,8 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     if args.kcore < 1:
         parser.error("--kcore must be at least 1")
+    if args.target_interactions < 0 or args.user_seed < 0:
+        parser.error("--target-interactions and --user-seed must be nonnegative")
     source = args.freebase or (DEFAULT_EXTRACT if args.kg_mode == "two-hop" else FREEBASE_DRIVE)
     if args.kg_mode == "two-hop":
         try:
@@ -45,6 +51,8 @@ def main(argv: list[str] | None = None) -> None:
         item_links=args.item_links, q_val=args.q_val,
         q_test=args.q_test, kcore=args.kcore, overwrite=args.overwrite,
         engine=args.engine, memory_limit=args.memory_limit, scratch_dir=args.scratch_dir,
+        target_interactions=args.target_interactions or None, user_seed=args.user_seed,
+        compact_entities=args.compact_entities,
     )
     print(json.dumps({k: meta[k] for k in ("n_users", "n_items", "interactions", "coverage")}, indent=2))
     print(f"Processed: {args.out}\nKGAT export: {args.export_dir}")

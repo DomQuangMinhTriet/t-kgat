@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 import tempfile
@@ -25,8 +26,9 @@ def literal(value) -> str:
 
 
 class DiskSplit:
-    def __init__(self, db, pairs, config):
+    def __init__(self, db, pairs, config, *, target_interactions=None, user_seed=2019):
         self.db, self.config = db, config
+        self.sampling = None
         self.cut_meta = json.loads(Path(str(pairs) + ".meta.json").read_text(encoding="utf-8"))
         meta = self.cut_meta
         if meta.get("pair_universe") != "raw_events" or meta.get("timestamp_policy") != "earliest_in_window":
@@ -46,27 +48,14 @@ class DiskSplit:
             raise ValueError("degenerate temporal cutoffs")
         self.log(f"Cutoffs: t1={self.t1}, t2={self.t2}; computing train-only {config.kcore}-core")
         db.execute(f"CREATE TABLE train AS SELECT * FROM raw WHERE ts < {self.t1}")
-        before = self.count("train")
-        trace = []
-        if config.kcore > 1:
-            while True:
-                # Each removed vertex has degree < k in this train iteration.
-                db.execute(f"CREATE OR REPLACE TABLE good_users AS SELECT u FROM train "
-                           f"GROUP BY u HAVING count(*) >= {config.kcore}")
-                db.execute(f"CREATE OR REPLACE TABLE good_items AS SELECT i FROM train "
-                           f"GROUP BY i HAVING count(*) >= {config.kcore}")
-                db.execute("CREATE TABLE next_train AS SELECT * FROM train "
-                           "SEMI JOIN good_users USING(u) SEMI JOIN good_items USING(i)")
-                after = self.count("next_train")
-                trace.append({"before": before, "after": after})
-                self.log(f"Core iteration {len(trace)}: {before:,} -> {after:,} pairs")
-                db.execute("DROP TABLE train")
-                db.execute("ALTER TABLE next_train RENAME TO train")
-                if after == before:
-                    break
-                before = after
+        trace = self._prune_core()
         if not self.count("train"):
             raise ValueError("empty training set after train-only k-core")
+        if target_interactions is not None:
+            trace = self._sample_train(target_interactions, user_seed)
+        db.execute("CREATE VIEW selected_source AS SELECT r.* FROM raw r" + (
+            " SEMI JOIN sampled_users USING(u)" if self.sampling is not None else ""
+        ))
         db.execute("CREATE TABLE users AS SELECT u, row_number() OVER (ORDER BY u)-1 AS uid "
                    "FROM (SELECT DISTINCT u FROM train)")
         db.execute("CREATE TABLE items AS SELECT i, row_number() OVER (ORDER BY i)-1 AS iid "
@@ -76,7 +65,7 @@ class DiskSplit:
             db.execute(f"CREATE TABLE {name} AS SELECT r.* FROM raw r "
                        f"SEMI JOIN users USING(u) SEMI JOIN items USING(i) WHERE {condition}")
         for name, cutoff in (("seen_before_val", self.t1), ("seen_before_test", self.t2)):
-            db.execute(f"CREATE VIEW {name} AS SELECT * FROM raw WHERE ts < {cutoff}")
+            db.execute(f"CREATE VIEW {name} AS SELECT * FROM selected_source WHERE ts < {cutoff}")
         self.log("Auditing complete core, split boundaries, masks and pair accounting")
         self._audit(n, trace)
         self.enc = SimpleNamespace(
@@ -85,6 +74,96 @@ class DiskSplit:
             item_ids=db.execute("SELECT i FROM items ORDER BY iid").fetchnumpy()["i"],
         )
         self.split = SimpleNamespace(t1=self.t1, t2=self.t2)
+
+    def _prune_core(self, table="train"):
+        """Iterative core on a training-only table; identifiers are internal constants."""
+        assert table in {"train", "audit_train"}
+        trace, before = [], self.count(table)
+        if self.config.kcore > 1:
+            while True:
+                for key, good in (("u", "good_users"), ("i", "good_items")):
+                    self.db.execute(f"CREATE OR REPLACE TABLE {good} AS SELECT {key} FROM {table} "
+                                    f"GROUP BY {key} HAVING count(*) >= {self.config.kcore}")
+                self.db.execute(f"CREATE TABLE next_train AS SELECT * FROM {table} "
+                                "SEMI JOIN good_users USING(u) SEMI JOIN good_items USING(i)")
+                after = self.count("next_train")
+                trace.append({"before": before, "after": after})
+                self.log(f"{table} core iteration {len(trace)}: {before:,} -> {after:,}")
+                self.db.execute(f"DROP TABLE {table}")
+                self.db.execute(f"ALTER TABLE next_train RENAME TO {table}")
+                if after == before:
+                    break
+                before = after
+        return trace
+
+    def _sample_train(self, target, seed):
+        """Closest nonempty core of a seeded user prefix, without reading val/test counts."""
+        if target < 1 or seed < 0:
+            raise ValueError("target_interactions must be positive and user_seed nonnegative")
+        db = self.db
+        target_train = max(1, int(target * self.config.q_val))
+        users = [int(row[0]) for row in db.execute("SELECT DISTINCT u FROM train").fetchall()]
+        users.sort(key=lambda user: (hashlib.sha256(f"{seed}:{user}".encode("ascii")).digest(), user))
+        ranked = pd.DataFrame({"u": users, "user_rank": np.arange(1, len(users) + 1, dtype="int64")})
+        db.register("ranked_input", ranked)
+        db.execute("CREATE TABLE ranked_users AS SELECT * FROM ranked_input")
+        db.unregister("ranked_input")
+        full_count = self.count("train")
+        db.execute("ALTER TABLE train RENAME TO full_train")
+        probes = []
+
+        def probe(prefix):
+            db.execute("DROP TABLE IF EXISTS train")
+            db.execute(f"CREATE TABLE train AS SELECT f.* FROM full_train f SEMI JOIN "
+                       f"(SELECT u FROM ranked_users WHERE user_rank <= {prefix}) s USING(u)")
+            trace = self._prune_core()
+            count = self.count("train")
+            probes.append({"prefix_users": prefix, "train_pairs": count})
+            self.log(f"User sampling: prefix={prefix:,}, {self.config.kcore}-core={count:,}; target={target_train:,}")
+            return count, trace
+
+        if target_train >= full_count:
+            chosen = len(users)
+        else:
+            lo, lo_count = 0, 0
+            hi = min(len(users), max(1, math.ceil(len(users) * target_train / full_count)))
+            hi_count, _ = probe(hi)
+            while hi_count < target_train and hi < len(users):
+                lo, lo_count = hi, hi_count
+                hi = min(len(users), hi * 2)
+                hi_count, _ = probe(hi)
+            while hi - lo > 1:
+                mid = (hi + lo) // 2
+                count, _ = probe(mid)
+                if count <= target_train:
+                    lo, lo_count = mid, count
+                else:
+                    hi, hi_count = mid, count
+            candidates = [(hi, hi_count)] + ([(lo, lo_count)] if lo_count > 0 else [])
+            chosen = min(candidates, key=lambda pair: (abs(pair[1] - target_train), pair[0]))[0]
+        final_count, _ = probe(chosen)
+        if not final_count:
+            raise ValueError("No nonempty sampled training core")
+        db.execute(f"CREATE TABLE sampled_users AS SELECT u,user_rank FROM ranked_users WHERE user_rank <= {chosen}")
+        # Recompute from the original sampled histories, independently of the full core used for probes.
+        db.execute(f"CREATE TABLE audit_train AS SELECT r.* FROM raw r SEMI JOIN sampled_users USING(u) "
+                   f"WHERE ts < {self.t1}")
+        source_trace = self._prune_core("audit_train")
+        if self.one("SELECT 1 FROM ((SELECT * FROM audit_train EXCEPT SELECT * FROM train) "
+                    "UNION ALL (SELECT * FROM train EXCEPT SELECT * FROM audit_train)) LIMIT 1"):
+            raise ValueError("Sampled train differs from the complete core of the selected histories")
+        db.execute("DROP TABLE audit_train")
+        self.sampling = {
+            "method": "sha256(seed:user) prefix, closest nonempty train-only core",
+            "seed": seed, "target_total_interactions": target, "target_train_pairs": target_train,
+            "actual_train_pairs": final_count, "eligible_users": len(users), "sampled_users": chosen,
+            "selection_reference": "full-source t1 training core only; no val/test counts or scores",
+            "cutoff_reference": "global quantiles of the full original pair file, frozen before sampling",
+            "probes": probes, "full_core_train_pairs": full_count,
+            "note": "Approximate total; whole selected user histories retained, not a paper reconstruction.",
+        }
+        db.execute("DROP TABLE full_train")
+        return source_trace
 
     @staticmethod
     def log(message):
@@ -120,7 +199,7 @@ class DiskSplit:
             offset += len(batch)
             if offset % 4_000_000 == 0:
                 self.log(f"Imported {offset:,} pairs")
-        self.log(f"Imported {offset:,} pairs; no sampling")
+        self.log(f"Imported {offset:,} source pairs")
 
     def quantile(self, n, q):
         # Match NumPy's default linear interpolation and integer truncation exactly.
@@ -140,13 +219,18 @@ class DiskSplit:
         induced = f"SELECT r.* FROM raw r SEMI JOIN users USING(u) SEMI JOIN items USING(i) WHERE ts < {self.t1}"
         if self.one(f"SELECT 1 FROM (({induced}) EXCEPT SELECT * FROM train) LIMIT 1"):
             raise ValueError("Incomplete train core")
+        sampling_join = " LEFT JOIN sampled_users s USING(u)" if self.sampling is not None else ""
+        sampling_reason = "WHEN s.user_rank IS NULL THEN 'outside_user_sample' " if self.sampling is not None else ""
         db.execute(f"CREATE VIEW classified AS SELECT r.*, "
                    f"CASE WHEN ts < {self.t1} THEN 'train' WHEN ts < {self.t2} THEN 'val' ELSE 'test' END AS split, "
-                   f"CASE WHEN ts < {self.t1} AND (uid IS NULL OR iid IS NULL) THEN 'train_kcore' "
+                   f"CASE {sampling_reason}WHEN ts < {self.t1} AND (uid IS NULL OR iid IS NULL) THEN 'train_kcore' "
                    "WHEN uid IS NULL THEN 'cold_user' WHEN iid IS NULL THEN 'cold_item' ELSE '' END AS reason "
-                   "FROM raw r LEFT JOIN users USING(u) LEFT JOIN items USING(i)")
+                   "FROM raw r LEFT JOIN users USING(u) LEFT JOIN items USING(i)" + sampling_join)
         kept = {name: self.count(name) for name in ("train", "val", "test")}
         reasons = {name: dict.fromkeys(("train_kcore", "cold_user", "cold_item"), 0) for name in kept}
+        if self.sampling is not None:
+            for values in reasons.values():
+                values["outside_user_sample"] = 0
         for name, reason, total in db.execute(
             "SELECT split,reason,count(*) FROM classified WHERE reason <> '' GROUP BY split,reason"
         ).fetchall():
@@ -170,6 +254,10 @@ class DiskSplit:
                                      "no_unexplained_interaction_loss"), True),
             "core_iterations": trace,
         }
+        if self.sampling is not None:
+            self.sampling["actual_interactions"] = kept
+            self.sampling["actual_total_interactions"] = sum(kept.values())
+            self.audit["user_sampling"] = self.sampling
         self.stats = {
             "n_raw": n, "n_duplicate_pairs_removed": 0,
             "period_sizes": {name: self.one(f"SELECT count(*) FROM classified WHERE split='{name}'") for name in kept},
@@ -182,7 +270,8 @@ class DiskSplit:
                 f"{name}_pos_before_filter": self.stats["period_sizes"][name],
                 f"{name}_dropped_cold_user_interactions": reasons[name]["cold_user"],
                 f"{name}_dropped_cold_item_interactions": reasons[name]["cold_item"],
-                f"{name}_cold_items": self.one(f"SELECT count(*) FROM (SELECT i FROM raw ANTI JOIN items USING(i) "
+                f"{name}_cold_items": self.one("SELECT count(*) FROM (SELECT i FROM selected_source "
+                                              "ANTI JOIN items USING(i) "
                                               f"WHERE ts >= {self.t1 if name == 'val' else self.t2} "
                                               + (f"AND ts < {self.t2} " if name == "val" else "")
                                               + "GROUP BY i)"),
@@ -198,7 +287,16 @@ class DiskSplit:
             rating = "1 AS rating," if part in ("train", "val", "test") else ""
             self.copy(f'SELECT u AS "user",i AS item,{rating}ts FROM {part} ORDER BY ts,u,i', output / f"{part}.csv")
         self.copy('SELECT u AS "user",i AS item,1 AS rating,ts,split,reason FROM classified '
-                  "WHERE reason <> '' ORDER BY ts,u,i", output / "dropped_interactions.csv")
+                  "WHERE reason <> '' AND reason <> 'outside_user_sample' ORDER BY ts,u,i",
+                  output / "dropped_interactions.csv")
+        if self.sampling is not None:
+            self.copy('SELECT u AS "user",user_rank FROM sampled_users ORDER BY user_rank',
+                      output / "sampled_users.tsv", "\t")
+            write_json(output / "sampling_report.json", {
+                **self.sampling, "source_pairs_sha256": self.cut_meta["sha256"],
+                "sampled_users_sha256": sha256_file(output / "sampled_users.tsv"),
+                "excluded_user_rows": "counted by split in validation_report.json; reconstruct from sampled_users.tsv",
+            })
         write_json(output / "meta.json", {
             "dataset": "lastfm", "config": asdict(self.config), "t1": self.t1, "t2": self.t2,
             **self.stats, "clean": {"raw_lfm1b": source_info},
@@ -273,7 +371,7 @@ class DiskSplit:
 
 
 @contextmanager
-def disk_split(pairs, config, scratch_dir, memory_limit):
+def disk_split(pairs, config, scratch_dir, memory_limit, *, target_interactions=None, user_seed=2019):
     try:
         import duckdb
     except ImportError as exc:
@@ -285,4 +383,4 @@ def disk_split(pairs, config, scratch_dir, memory_limit):
             "memory_limit": memory_limit, "threads": 2,
             "temp_directory": str(Path(temporary) / "spill"), "preserve_insertion_order": True,
         }) as db:
-            yield DiskSplit(db, pairs, config)
+            yield DiskSplit(db, pairs, config, target_interactions=target_interactions, user_seed=user_seed)
