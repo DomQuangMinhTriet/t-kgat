@@ -23,6 +23,7 @@ from tkgat.data.encode import EncodedSplit
 from tkgat.device import describe, resolve_device, seed_all
 from tkgat.eval.metrics import evaluate
 from tkgat.models.baselines import BPRMF
+from tkgat.train.schedule import check_schedule, lr_at, set_lr
 
 METRICS = ("recall@10", "recall@20", "ndcg@10", "ndcg@20")
 
@@ -38,6 +39,8 @@ class BPRConfig:
     patience: int = 5  # in evaluations
     select_metric: str = "recall@20"
     device: str = "auto"
+    lr_schedule: str = "none"  # "none" (constant, decision 0013) or "cosine" (decision 0016 item 5)
+    lr_final_ratio: float = 0.01  # cosine: the rate at ``max_epochs`` is ``lr * lr_final_ratio``
 
 
 @dataclass
@@ -77,7 +80,17 @@ class NegativeSampler:
         return neg
 
 
-def fit_bpr(data: EncodedSplit, cfg: BPRConfig, seed: int) -> FitResult:
+def fit_bpr(data: EncodedSplit, cfg: BPRConfig, seed: int, fixed_epochs: int | None = None) -> FitResult:
+    """Train BPR-MF and keep the best epoch by validation ``select_metric``.
+
+    With ``fixed_epochs`` (the refit of decision 0016 item 4) it trains exactly that many epochs, never evaluates and
+    never stops early: the result is the model of the last epoch, ``best_epoch == fixed_epochs`` and ``best_val`` is
+    empty. The schedule horizon stays ``cfg.max_epochs``. ``data.val`` is not read in that mode.
+    """
+    check_schedule(cfg.lr_schedule, cfg.lr_final_ratio)
+    if fixed_epochs is not None and not 1 <= fixed_epochs <= cfg.max_epochs:
+        raise ValueError(f"fixed_epochs must be in [1, max_epochs={cfg.max_epochs}], got {fixed_epochs}")
+    n_epochs = cfg.max_epochs if fixed_epochs is None else fixed_epochs
     device = resolve_device(cfg.device)
     seed_all(seed)
     gen = torch.Generator(device=device).manual_seed(seed)
@@ -89,7 +102,9 @@ def fit_bpr(data: EncodedSplit, cfg: BPRConfig, seed: int) -> FitResult:
     best, best_state, best_epoch, best_val, bad = -1.0, None, 0, {}, 0
     history = []
     t0 = time.time()
-    for epoch in range(1, cfg.max_epochs + 1):
+    for epoch in range(1, n_epochs + 1):
+        lr = lr_at(epoch, cfg.lr, cfg.lr_schedule, cfg.max_epochs, cfg.lr_final_ratio)
+        set_lr([opt], lr)
         model.train()
         perm = torch.randperm(len(train), device=device, generator=gen)
         total = torch.zeros((), device=device)
@@ -103,8 +118,8 @@ def fit_bpr(data: EncodedSplit, cfg: BPRConfig, seed: int) -> FitResult:
             loss.backward()
             opt.step()
             total += loss.detach() * len(batch)
-        row = {"epoch": epoch, "loss": float(total) / len(perm)}
-        if epoch % cfg.eval_every == 0:
+        row = {"epoch": epoch, "loss": float(total) / len(perm), "lr": lr}
+        if fixed_epochs is None and epoch % cfg.eval_every == 0:
             model.eval()
             res = evaluate(model.score, data.val, data.mask_val)
             row.update({k: res[k] for k in METRICS})
@@ -117,6 +132,9 @@ def fit_bpr(data: EncodedSplit, cfg: BPRConfig, seed: int) -> FitResult:
         history.append(row)
         if bad >= cfg.patience:
             break
+    if fixed_epochs is not None:
+        model.eval()
+        return FitResult(model, fixed_epochs, {}, history, time.time() - t0, describe(device))
     if best_state is None:
         raise ValueError("no validation evaluation happened; max_epochs must be >= eval_every")
     model.load_state_dict(best_state)

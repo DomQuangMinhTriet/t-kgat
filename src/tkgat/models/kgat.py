@@ -28,6 +28,16 @@ interactions (Stage 1) rather than adding the two. ``edge_ts`` of a KG edge is t
 an undated fact (NaN) gets ``Delta-t = 0``, and ``dt_norm`` is capped at 1 because fact dates often lie decades before
 ``t_ref``, on another time scale than the interactions (item 10).
 
+T-KGAT combined (decision 0016, item 7; ``time_on = "both"``): the two terms at once,
+``pi_time = pi - gamma_ui * delta_ui * dt_ui / tau_ui - gamma_kg * delta_kg * dt_kg / tau_kg``. ``dt`` is
+``max(0, t_ref - ts)`` in seconds and each edge kind has its own absolute time constant (``tau_ui_days``,
+``tau_kg_years``): no division by the training window and no cap, so a decades-old fact is penalised by its age, not
+clipped to the window. ``delta_ui`` is 1 on Interact and its inverse; ``delta_kg`` is 1 on the KG relations of
+``kg_timed_relations`` (None = all) and their inverses. An undated fact (NaN) has ``dt = 0``. ``gamma`` is tied between
+the two terms; ``gamma_ui`` / ``gamma_kg`` override it for the ablations (``gamma_kg = 0`` keeps the user-item term
+only, and the reverse). With both gammas 0 the term is skipped: plain KGAT. ``time_on = "interact"`` and ``"kg"`` are
+untouched.
+
 Graph tensors, ``A`` and ``edge_ts`` are non-persistent buffers: ``state_dict`` holds the parameters only, so one set
 of weights can be loaded and then scored on the graph of another cut-off (``set_graph``, which recomputes ``A``).
 """
@@ -43,10 +53,12 @@ import torch.nn.functional as F
 from torch import nn
 
 from tkgat.device import resolve_device
-from tkgat.kg.ckg import CKG, INTERACT, inverse_relation_id
+from tkgat.kg.ckg import CKG, INTERACT, inverse_relation_id, relation_id
 
 LEAKY_SLOPE = 0.2  # tf.nn.leaky_relu default; torch's default is 0.01
-TIME_ON = ("interact", "kg")
+TIME_ON = ("interact", "kg", "both")
+SECONDS_PER_DAY = 86400.0
+SECONDS_PER_YEAR = 365.25 * SECONDS_PER_DAY
 
 
 @dataclass(frozen=True)
@@ -58,7 +70,13 @@ class KGATConfig:
     l2: float = 1e-5  # regulariser of the CF loss
     l2_kg: float = 1e-5  # regulariser of the KG loss
     gamma: float = 0.0  # time decay of the attention, >= 0; 0 = plain KGAT
-    time_on: str = "interact"  # edges that carry Delta-t: "interact" (Stage 1) or "kg" (Stage 2, fact dates)
+    time_on: str = "interact"  # edges that carry Delta-t: "interact" (Stage 1), "kg" (Stage 2, fact dates) or "both"
+    # only for time_on = "both" (decision 0016, item 7)
+    tau_ui_days: float = 90.0  # time constant of the user-item term, days
+    tau_kg_years: float = 5.0  # time constant of the KG term, years
+    gamma_ui: float | None = None  # None: tied to gamma; 0 switches the user-item term off (ablation)
+    gamma_kg: float | None = None  # None: tied to gamma; 0 switches the KG term off (ablation)
+    kg_timed_relations: Sequence[int] | None = None  # KG relation indices with delta_kg = 1; None: all of them
     attention_chunk: int = 65536  # edges per block when the attention scores are computed
 
     def __post_init__(self) -> None:
@@ -67,6 +85,34 @@ class KGATConfig:
             raise ValueError(f"gamma must be >= 0 (older edges are never favoured), got {self.gamma}")
         if self.time_on not in TIME_ON:
             raise ValueError(f"time_on must be one of {TIME_ON}, got {self.time_on!r}")
+        if self.kg_timed_relations is not None:
+            object.__setattr__(self, "kg_timed_relations", tuple(sorted({int(r) for r in self.kg_timed_relations})))
+        if self.time_on != "both":
+            both_only = (self.gamma_ui, self.gamma_kg, self.kg_timed_relations)
+            if any(v is not None for v in both_only):
+                raise ValueError("gamma_ui, gamma_kg and kg_timed_relations belong to time_on = 'both'")
+        else:
+            for name in ("gamma_ui", "gamma_kg"):
+                value = getattr(self, name)
+                if value is not None and not value >= 0.0:
+                    raise ValueError(f"{name} must be >= 0, got {value}")
+            if not (self.tau_ui_days > 0.0 and self.tau_kg_years > 0.0):
+                raise ValueError("tau_ui_days and tau_kg_years must be > 0")
+
+    @property
+    def gamma_ui_eff(self) -> float:
+        return self.gamma if self.gamma_ui is None else self.gamma_ui
+
+    @property
+    def gamma_kg_eff(self) -> float:
+        return self.gamma if self.gamma_kg is None else self.gamma_kg
+
+    @property
+    def time_active(self) -> bool:
+        """Whether any time term is subtracted from ``pi`` (otherwise the model is plain KGAT)."""
+        if self.time_on == "both":
+            return self.gamma_ui_eff > 0.0 or self.gamma_kg_eff > 0.0
+        return self.gamma > 0.0
 
 
 class BiInteraction(nn.Module):
@@ -115,10 +161,24 @@ class KGAT(nn.Module):
         if cfg.time_on == "interact":  # Stage 1: Interact and its inverse carry Delta-t (decision 0009, item 1)
             delta_r[INTERACT] = 1.0
             delta_r[inverse_relation_id(INTERACT, self.n_relations)] = 1.0
-        else:  # Stage 2: every KG relation and its inverse (item 8), Interact not
+        elif cfg.time_on == "kg":  # Stage 2: every KG relation and its inverse (item 8), Interact not
             delta_r.fill_(1.0)
             delta_r[INTERACT] = 0.0
             delta_r[inverse_relation_id(INTERACT, self.n_relations)] = 0.0
+        else:  # both: delta_ui on Interact, delta_kg on the chosen KG relations; delta_r is their union
+            delta_ui = torch.zeros_like(delta_r)
+            delta_ui[INTERACT] = 1.0
+            delta_ui[inverse_relation_id(INTERACT, self.n_relations)] = 1.0
+            chosen = range(self.n_relations) if cfg.kg_timed_relations is None else cfg.kg_timed_relations
+            delta_kg = torch.zeros_like(delta_r)
+            for r in chosen:
+                if not 0 <= r < self.n_relations:
+                    raise ValueError(f"kg_timed_relations: {r} is not a KG relation index (0..{self.n_relations - 1})")
+                delta_kg[relation_id(r)] = 1.0
+                delta_kg[inverse_relation_id(relation_id(r), self.n_relations)] = 1.0
+            self.register_buffer("delta_ui", delta_ui, persistent=False)
+            self.register_buffer("delta_kg", delta_kg, persistent=False)
+            delta_r = torch.maximum(delta_ui, delta_kg)
         self.register_buffer("delta_r", delta_r, persistent=False)
         self.set_graph(ckg)
 
@@ -149,7 +209,7 @@ class KGAT(nn.Module):
         self._buffer("tail", torch.tensor(ckg.tail, device=dev))
         self._buffer("edge_ts", torch.tensor(ckg.edge_ts, device=dev))  # float64: a float32 rounds to ~1 minute
         self._t_ref, self._dt_den = ckg.t_ref, ckg.dt_den
-        if self.cfg.gamma > 0.0:
+        if self.cfg.time_active:
             self._check_time_inputs()
         _, counts = torch.unique_consecutive(head, return_counts=True)
         self._buffer("_segments", counts)  # edges per non-empty head; the edges of a head are contiguous
@@ -187,6 +247,11 @@ class KGAT(nn.Module):
             raise ValueError("gamma > 0 needs t_ref and dt_den in the graph (build it with tkgat.kg.ckg.build_ckg)")
         if self.cfg.time_on == "kg":  # NaN on a KG edge is an undated fact: Delta-t = 0 (item 8), not an error
             return
+        if self.cfg.time_on == "both":  # only the user-item edges must be dated; a NaN fact date is Delta-t = 0
+            ui = self.delta_ui[self.relation] > 0
+            if self.cfg.gamma_ui_eff > 0.0 and bool(torch.isnan(self.edge_ts[ui]).any()):
+                raise ValueError("an Interact edge has no timestamp (NaN edge_ts)")
+            return
         timed = self.delta_r[self.relation] > 0
         if bool(torch.isnan(self.edge_ts[timed]).any()):
             raise ValueError("an edge with delta_r > 0 has no timestamp (NaN edge_ts)")
@@ -195,6 +260,8 @@ class KGAT(nn.Module):
         """``gamma * delta_r[relation] * dt_norm`` per edge: 0 on KG edges, whose NaN ``edge_ts`` is masked out."""
         if self.edge_ts.dtype != torch.float64:
             raise TypeError("edge_ts must stay float64 (do not cast the model with .float() when gamma > 0)")
+        if self.cfg.time_on == "both":
+            return self._both_penalty(dtype)
         weight = self.delta_r[self.relation].to(torch.float64)
         dt = (self._t_ref - self.edge_ts).clamp_min(0.0)  # dt = max(0, t_ref - ts); NaN on KG edges
         dt_norm = dt / self._dt_den if self._dt_den > 0 else torch.zeros_like(dt)
@@ -204,6 +271,19 @@ class KGAT(nn.Module):
             use = use & ~torch.isnan(self.edge_ts)  # undated fact: Delta-t = 0 (item 8)
         timed = torch.where(use, dt_norm, torch.zeros_like(dt_norm))  # NaN only in the unselected branch
         return (self.cfg.gamma * weight * timed).to(dtype)
+
+    def _both_penalty(self, dtype: torch.dtype) -> torch.Tensor:
+        """``gamma_ui * delta_ui * dt / tau_ui + gamma_kg * delta_kg * dt / tau_kg`` (decision 0016, item 7).
+
+        Absolute time constants, no cap; a NaN date (an undated fact) is masked, never multiplied, so it adds 0.
+        """
+        cfg = self.cfg
+        dt = (self._t_ref - self.edge_ts).clamp_min(0.0)  # seconds; NaN on undated facts
+        zero = torch.zeros_like(dt)
+        ui = torch.where(self.delta_ui[self.relation] > 0, dt, zero) / (cfg.tau_ui_days * SECONDS_PER_DAY)
+        kg = torch.where((self.delta_kg[self.relation] > 0) & ~torch.isnan(dt), dt, zero)
+        kg = kg / (cfg.tau_kg_years * SECONDS_PER_YEAR)
+        return (cfg.gamma_ui_eff * ui + cfg.gamma_kg_eff * kg).to(dtype)
 
     def _raw_scores(self) -> torch.Tensor:
         """``pi(h, r, t)`` of every edge, relation by relation and in chunks (never one ``W_r`` per edge)."""
@@ -221,7 +301,7 @@ class KGAT(nn.Module):
     def _edge_scores(self) -> torch.Tensor:
         """``pi_time = pi - gamma * delta_r * dt_norm``, the softmax logits (``pi`` itself at gamma = 0)."""
         pi = self._raw_scores()
-        if self.cfg.gamma == 0.0:
+        if not self.cfg.time_active:
             return pi  # plain KGAT: the very same tensor, nothing is subtracted
         return pi - self._time_penalty(pi.dtype)
 
