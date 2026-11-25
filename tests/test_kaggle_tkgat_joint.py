@@ -1,7 +1,11 @@
 """Standalone T-KGAT: no baseline, bounded resume, and fail-fast full-data memory checks."""
 
+import hashlib
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 from zipfile import ZipFile
 
 import pytest
@@ -133,7 +137,10 @@ def test_restore_rejects_another_source_or_dataset(tmp_path):
     assert not (output / "registry.csv").exists()
 
 
-@pytest.mark.parametrize("extra, refit", [([], True), (["--no-refit"], False), (["--val-only"], False)])
+@pytest.mark.parametrize(
+    "extra, refit",
+    [([], True), (["--no-refit"], False), (["--val-only"], False), (["--benchmark-batches", "2"], False)],
+)
 def test_kaggle_wrapper_enables_refit_except_for_validation_only(tmp_path, monkeypatch, extra, refit):
     wrapper = load_wrapper()
     processed = tmp_path / "lastfm-3m-k10"
@@ -162,10 +169,29 @@ def test_kaggle_wrapper_enables_refit_except_for_validation_only(tmp_path, monke
     monkeypatch.setattr(wrapper.subprocess, "Popen", launch)
     wrapper.main(["--processed", str(processed), "--out", str(tmp_path / "output"), *extra])
     assert len(commands) == 1 and ("--refit" in commands[0]) == refit
-    assert ("--val-only" in commands[0]) == ("--val-only" in extra)
+    assert ("--val-only" in commands[0]) == ("--val-only" in extra or "--benchmark-batches" in extra)
+    assert "--epochs-per-fit" in commands[0]
+    assert commands[0][commands[0].index("--max-new-runs") + 1] == "2"
+    assert commands[0][commands[0].index("--epochs-per-fit") + 1] == "150"
     assert str(ROOT / "configs/model/tkgat_joint.yaml") in commands[0]
     identity = json.loads((tmp_path / "output/run-identity.json").read_text())
     assert identity["run_name"] == "lastfm-3m-k10-joint"
+
+
+def test_restore_merges_saved_epoch_into_benchmark_only_output_but_never_overwrites_progress(tmp_path):
+    source, output = tmp_path / "previous", tmp_path / "output"
+    (source / "runs/states").mkdir(parents=True)
+    (output / "runs").mkdir(parents=True)
+    identity = {"source": "same", "split": "same"}
+    (source / "run-identity.json").write_text(json.dumps(identity))
+    (source / "runs/states/partial.epoch.pt").write_bytes(b"saved weights and optimizer")
+    (output / "runs/benchmark.json").write_text("{}")
+    wrapper = load_wrapper()
+    wrapper.restore_results(source, output, identity)
+    assert (output / "runs/states/partial.epoch.pt").read_bytes() == b"saved weights and optimizer"
+    assert (output / "runs/benchmark.json").exists()
+    with pytest.raises(ValueError, match="already has progress"):
+        wrapper.restore_results(source, output, identity)
 
 
 def test_shipped_notebook_has_valid_python_and_only_uses_the_joint_runner():
@@ -177,9 +203,113 @@ def test_shipped_notebook_has_valid_python_and_only_uses_the_joint_runner():
             compile(code, "kaggle_tkgat_joint", "exec")
             source += code
     assert "kaggle_tkgat_joint.py" in source and "RUN_TRAINING = False" in source
+    assert "MAX_NEW_RUNS = 2" in source and "EPOCHS_PER_FIT = None" in source
     assert "kaggle_lastfm.py" not in source
     cfg = yaml.safe_load((ROOT / "configs/model/tkgat_joint.yaml").read_text())
     assert cfg["standalone"] and cfg["time_on"] == "both"
     assert cfg["seeds"] == [2019, 2020, 2021, 2022, 2023]
     assert [p["gamma"] for p in cfg["grid"]] == [1, 3, 10]
     assert not any(key in cfg for key in ("from_kgat", "from_tkgat", "control"))
+
+
+@pytest.mark.parametrize("conflict", [False, True])
+def test_notebook_can_mount_previous_output_with_the_same_extracted_code(tmp_path, conflict):
+    notebook = json.loads((ROOT / "notebooks/10_kaggle_tkgat_joint.ipynb").read_text(encoding="utf-8"))
+    setup = "".join(next(c for c in notebook["cells"] if c["id"] == "joint-1")["source"])
+    inputs, code, output = tmp_path / "input", tmp_path / "code", tmp_path / "output"
+    for index, root in enumerate((inputs / "source-dataset", inputs / "previous-output/tkgat-joint-code")):
+        root.mkdir(parents=True)
+        contents = b"x = 2\n" if conflict and index else b"x = 1\n"
+        (root / "example.py").write_bytes(contents)
+        (root / "SOURCE_SHA256.json").write_text(json.dumps({"example.py": hashlib.sha256(contents).hexdigest()}))
+    processed = inputs / "processed-dataset/lastfm-3m-k10"
+    (processed / "kg/default").mkdir(parents=True)
+    for name in ("meta.json", "train.csv", "kg/default/kg_meta.json"):
+        (processed / name).write_text("{}")
+    setup = setup.replace('Path("/kaggle/input")', f"Path({str(inputs)!r})")
+    setup = setup.replace('Path("/kaggle/working/tkgat-joint-code")', f"Path({str(code)!r})")
+    setup = setup.replace('Path("/kaggle/working/tkgat-joint")', f"Path({str(output)!r})")
+    scope = {}
+    if conflict:
+        with pytest.raises(RuntimeError, match="different code versions"):
+            exec(compile(setup, "notebook-setup", "exec"), scope)
+    else:
+        exec(compile(setup, "notebook-setup", "exec"), scope)
+        assert scope["PROCESSED"] == processed
+        assert (code / "example.py").read_bytes() == b"x = 1\n"
+
+
+@pytest.fixture
+def notebook_runner(tmp_path, monkeypatch):
+    notebook = json.loads((ROOT / "notebooks/10_kaggle_tkgat_joint.ipynb").read_text(encoding="utf-8"))
+    setup = "".join(next(c for c in notebook["cells"] if c["id"] == "joint-2")["source"])
+    setup = setup.split('run_tkgat("--check-only")')[0]
+    scope = {
+        "CODE": ROOT,
+        "PROCESSED": tmp_path,
+        "OUTPUT": tmp_path / "output",
+        "os": os,
+        "sys": sys,
+        "subprocess": subprocess,
+        "json": json,
+    }
+    exec(compile(setup, "notebook-runner", "exec"), scope)
+
+    def run(lines, returncode=0, *extra):
+        class FakeProcess:
+            stdout = lines
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def wait(self):
+                return returncode
+
+        monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: FakeProcess())
+        scope["run_tkgat"](*extra)
+
+    return run
+
+
+def test_notebook_shows_completed_and_next_fit_without_batch_losses_or_metadata(notebook_runner, capsys):
+    notebook_runner(
+        [
+            '{"train_pairs": 2428891}\n',
+            "[train:select seed=2019 gamma=1] Initializing model and samplers on cuda\n",
+            "[train:select seed=2019 gamma=1] epoch 1 CF 25/2372 loss=0.69 elapsed=6.4s\n",
+            "[train:select seed=2019 gamma=1] Saved epoch 1: checkpoint.pt\n",
+            "[val] grid={'gamma': 1} seed=2019 recall@20=0.5\n",
+            "[train:select seed=2020 gamma=1] Initializing model and samplers on cuda\n",
+            "[val] grid={'gamma': 1} seed=2020 recall@20=0.6\n",
+            "Partial grid saved. Re-run with --resume; selection/test wait until the grid is complete.\n",
+        ]
+    )
+    output = capsys.readouterr().out
+    assert "Running run 1/20" in output and "Result ready: run 2/20" in output
+    assert "Next: run 3/20" in output
+    assert all(hidden not in output for hidden in ("train_pairs", "CF 25", "loss=", "recall@20", "Saved epoch"))
+
+
+def test_notebook_reports_refit_continuation_and_result_by_its_global_run_number(notebook_runner, capsys):
+    notebook_runner(
+        [
+            "selected grid point {'gamma': 3} (mean val recall@20 = 0.5)\n",
+            "[train:refit seed=2019 gamma=3] Initializing model and samplers on cuda\n",
+            "[train:refit seed=2019 gamma=3] Resumed after epoch 20; next epoch 21\n",
+            "[train:refit seed=2019 gamma=3] epoch 21 KG 25/2725 loss=0.02\n",
+            "[test] seed=2019 recall@20=0.7\n",
+        ]
+    )
+    output = capsys.readouterr().out
+    assert "Continuing run 16/20 (refit, gamma=3, seed=2019)" in output
+    assert "next epoch 21" in output and "Result ready: run 16/20" in output
+    assert "KG 25" not in output and "recall@20" not in output
+
+
+def test_notebook_preserves_error_details_even_in_quiet_preflight(notebook_runner, capsys):
+    with pytest.raises(subprocess.CalledProcessError):
+        notebook_runner(["Traceback: checkpoint failed\n", "RuntimeError: sample failure\n"], 1, "--check-only")
+    assert "RuntimeError: sample failure" in capsys.readouterr().out

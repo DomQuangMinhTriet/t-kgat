@@ -132,6 +132,16 @@ Chỉ mở rộng cách tính độ cũ; giữ nguyên điểm KGAT, một γ ch
   không tính lại min/max khi chỉ đổi graph để đánh giá. Với **refit**, khởi tạo model
   mới trên train+val/KG t2 và tính lại hai cửa sổ từ chính phần refit đó; không dùng
   interaction test. Các rule cutoff của dữ liệu vẫn áp dụng.
+- **Báo cáo cửa sổ:** `tkgat_joint_refit_summary.json` → `tkgat.time_windows`
+  ghi `selection` và `refit`, mỗi phần có `interaction`/`fact` với `min_ts`, `max_ts`,
+  `width_seconds`, `width_days`. `refit_vs_selection` ghi dịch min/max, chênh độ rộng,
+  tỷ số độ rộng và phần trăm thay đổi; không tính tỷ số khi độ rộng cũ bằng 0.
+  File riêng `tkgat_joint_window_summary.json` có cửa sổ selection ngay đầu lượt chạy,
+  bổ sung so sánh refit sau khi chọn gamma, **trước khi train refit/chấm test**, kể cả
+  khi tạm dừng theo ngân sách. `--val-only` chỉ ghi selection, không đọc KG t2/test.
+  Chưa khóa cửa sổ: cùng γ có thể phạt khác khi min/max đổi. Ví dụ `[100,500]` thành
+  `[100,1000]`, cạnh `ts=300` đổi tuổi chuẩn hóa từ `0,5` thành khoảng `0,778`.
+  Cần xem số đo trước khi quyết định thay đổi chính sách; không chọn dựa vào điểm test.
 - `γ=0` khớp KGAT. Chỉ đổi công thức không cần generate lại dữ liệu;
   riêng thay đổi quy mô/10-core thì chạy lại 02b. Không đổi loss, sampler,
   vòng tối ưu CF/KG; việc chọn γ trên validation giữ nguyên.
@@ -149,10 +159,19 @@ Kết quả/checkpoint mới có `time_on: both`, không resume checkpoint hai s
    ZIP thư mục export có thể giữ làm bản lưu, không cần upload. Không cần raw/Freebase.
 3. Import `notebooks/10_kaggle_tkgat_joint.ipynb`, Add Input hai Dataset, chọn GPU.
    Đảm bảo các CSV trong Dataset processed đã được giải nén và nhìn thấy trong Input.
-4. Chạy ô chuẩn bị/kiểm tra bộ nhớ. Nếu đủ thì đặt `RUN_TRAINING=True`;
-   mỗi lần chạy ô train hoàn tất thêm một lượt gamma/seed, chạy lại để tiếp tục.
+4. Chạy kiểm tra bộ nhớ rồi ô `RUN_BENCHMARK=True`, giữ `RUN_TRAINING=False`.
+   Ô này đo 5 batch CF/KG, in ước lượng thời gian một epoch; chưa chọn model/chấm test.
+   Dựa vào số đo mới bật train. `MAX_NEW_RUNS=2`, `EPOCHS_PER_FIT=None` hoàn tất
+   tối đa 2 lượt gamma/seed hoặc refit/seed rồi dừng; vẫn lưu checkpoint mỗi epoch.
+   Muốn dừng sớm theo epoch thì đặt `EPOCHS_PER_FIT` là số nguyên dương.
 5. Lưu phiên bản **kèm output** `tkgat-joint/`. Phiên sau Add Input output cũ và
    đặt `RESTORE_FROM` tới thư mục đó; khôi phục cả registry/checkpoint/identity.
+   Phiên đầu chưa có result nên để `RESTORE_FROM=None`. Các phiên sau giữ nguyên
+   Input code/processed, chỉ thay result bằng output **mới nhất**; output này đã chứa
+   tiến độ tích lũy. Có thể Add Input trực tiếp output notebook trước, không cần tải về
+   rồi upload lại; nếu upload Dataset result riêng thì chỉ cần thư mục `tkgat-joint/`.
+   Notebook chỉ hiện lượt đang chạy/tiếp tục, lượt đã có result và lượt tiếp theo;
+   ẩn log batch/loss/metadata. Log chi tiết vẫn ở `tkgat-joint/training.log`, lỗi vẫn hiện.
 
 Cấu hình riêng `configs/model/tkgat_joint.yaml` không phụ thuộc baseline:
 `lr=0.001`, `l2=l2_kg=0.00001`, dropout `0.1` được cố định cho lần chạy này,
@@ -160,8 +179,26 @@ theo điểm Triết báo từ cổng tập nhỏ; chưa chọn lại bằng KGA
 chọn gamma `{1,3,10}` trên validation trung bình 5 seed. Không chạy KGAT/BPR/MostPop
 hay đối chứng trong notebook này. Sau đủ 15 lượt, chọn gamma rồi refit 5 seed trên
 train+val với số epoch là median best epoch validation, không early stopping, rồi
-chấm test bằng model refit. Mỗi lần chạy ô train thêm tối đa một lượt selection/refit;
-resume chỉ ở ranh giới lượt hoàn tất, chưa khôi phục giữa epoch.
+chấm test bằng model refit. Mỗi lần chạy ô train hoàn tất tối đa **2 lượt selection/refit**;
+selection và refit dùng chung bộ đếm 2 lượt. Lưu toàn bộ output, phiên sau Add Input
+output đó và đặt `RESTORE_FROM` để tiếp tục các lượt còn lại.
+Nếu đặt thêm `EPOCHS_PER_FIT`, một lượt đang dở có thể dừng trước khi đủ 2 lượt.
+Checkpoint mỗi epoch lưu weights, cả hai Adam,
+best validation, bộ đếm early stopping và RNG; tiếp tục từ epoch đã lưu, không chạy lại
+cả lượt gamma/seed. Lượt đang dở chưa được đưa vào chọn gamma hay chấm test.
+
+**Sửa sau phiên timeout 24/11/2026:** log Kaggle báo hết thời gian sau `43213.3s`
+(khoảng 12 giờ), không đủ bằng chứng kết luận OOM từ mã 137. Trainer tính propagation
+toàn CKG ở mỗi batch CF nên kiểm tra vừa bộ nhớ không chứng minh train kịp thời gian.
+Code mới in tiến độ batch/epoch, lưu `*.epoch.pt` cùng history CSV sau mỗi epoch.
+Không thay công thức, batch size hay tham số thí nghiệm; đây chưa phải tối ưu tốc độ.
+Benchmark là ước lượng từ các batch đầu, chưa gồm validation/lưu checkpoint, không
+cam kết cả lượt vừa một phiên Kaggle. Không tiếp tục được trọng số phiên cũ nếu chưa
+có checkpoint `.pt`. Khi ngắt giữa epoch chỉ mất phần epoch chưa lưu; cần lưu output
+và khôi phục `RESTORE_FROM` để tiếp tục ở phiên khác, cùng code/config và loại thiết bị.
+Giới hạn 2 lượt không phải giới hạn thời gian: chưa bảo đảm 2 lượt vừa 12 giờ.
+Nếu một epoch tự nó vượt 12 giờ thì cần tối ưu trainer. Tổng 20 lượt có thể chia thành
+10 phiên nếu mỗi phiên hoàn tất đủ 2 lượt; timeout hoặc giới hạn epoch có thể làm tăng số phiên.
 
 ### Tham số Kaggle đã chuẩn bị theo tin Triết (23/11/2026)
 

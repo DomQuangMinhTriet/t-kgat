@@ -62,8 +62,10 @@ from tkgat import registry
 from tkgat.data.encode import encode, encode_trainval
 from tkgat.eval.metrics import evaluate
 from tkgat.kg.ckg import (
+    INTERACT,
     build_ckg,
     carry_kg_ts,
+    inverse_relation_id,
     load_kg,
     load_kg_dates,
     no_kg,
@@ -246,6 +248,46 @@ def registry_config(point: dict, ckg, seed: int, perm: bool) -> dict:
     return cfg
 
 
+def joint_time_windows(ckg) -> dict:
+    """Report the bounds used by joint attention on its initial selection or refit graph."""
+
+    def window(maximum, width):
+        return {
+            "min_ts": maximum - width if maximum is not None else None,
+            "max_ts": maximum,
+            "width_seconds": width,
+            "width_days": width / 86400.0,
+        }
+
+    fact = (ckg.relation != INTERACT) & (ckg.relation != inverse_relation_id(INTERACT, ckg.n_relations))
+    dates = ckg.edge_ts[fact & np.isfinite(ckg.edge_ts)]
+    return {
+        "interaction": window(ckg.t_ref, ckg.dt_den or 0.0),
+        # An empty fact window has zero penalty; null bounds distinguish it from Unix epoch zero.
+        "fact": window(float(dates.max()), float(np.ptp(dates))) if len(dates) else window(None, 0.0),
+    }
+
+
+def compare_time_windows(selection: dict, refit: dict) -> dict:
+    """Report scale/anchor drift without imposing a new refit or model-selection policy."""
+    drift = {}
+    for kind, before in selection.items():
+        after = refit[kind]
+        drift[kind] = {
+            f"{bound}_shift_seconds": after[f"{bound}_ts"] - before[f"{bound}_ts"]
+            if after[f"{bound}_ts"] is not None and before[f"{bound}_ts"] is not None
+            else None
+            for bound in ("min", "max")
+        }
+        old, new = before["width_seconds"], after["width_seconds"]
+        drift[kind].update(
+            width_change_seconds=new - old,
+            width_ratio=new / old if old else None,
+            width_change_pct=100.0 * (new - old) / old if old else None,
+        )
+    return drift
+
+
 def kgat_checkpoint_path(out_dir: Path, tag: str, g: int, seed: int) -> Path:
     return out_dir / "states" / f"{tag}_{g}_seed{seed}.pt"
 
@@ -311,6 +353,13 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--registry", default="results/registry.csv")
     ap.add_argument("--runs-dir", default="results/runs")
     ap.add_argument("--device", default="auto", help='"auto" (CUDA if available), "cuda", "cuda:1" or "cpu"')
+    ap.add_argument("--epochs-per-fit", type=int, help="with --resume: pause each fit after this many new epochs")
+    ap.add_argument(
+        "--benchmark-batches",
+        type=int,
+        default=0,
+        help="with --val-only: time this many CF/KG batches; never select or score a model",
+    )
     ap.add_argument(
         "--val-only",
         action="store_true",
@@ -337,6 +386,10 @@ def main(argv: list[str] | None = None) -> None:
         "<tag>_refit_seed<seed>.npz",
     )
     args = ap.parse_args(argv)
+    if args.epochs_per_fit is not None and (args.epochs_per_fit < 1 or not args.resume):
+        ap.error("--epochs-per-fit requires --resume and a positive number")
+    if args.benchmark_batches < 0 or (args.benchmark_batches and not args.val_only):
+        ap.error("--benchmark-batches must be nonnegative and requires --val-only")
 
     dcfg = load_config(args.data)
     mcfg = yaml.safe_load(Path(args.model).read_text(encoding="utf-8"))
@@ -405,7 +458,7 @@ def main(argv: list[str] | None = None) -> None:
             test_graphs[key] = kgat_test_graph(dcfg, data_s, meta, kg_t1, ckg_s, ts_t1=ts_s if time_kg else None)
         return test_graphs[key]
 
-    def tkgat_info() -> dict:
+    def tkgat_info(*, include_refit=False) -> dict:
         ckg = graph_for(seeds[0])[1]
         return {
             "tkgat": {
@@ -415,6 +468,7 @@ def main(argv: list[str] | None = None) -> None:
                 "dt_den": round(ckg.dt_den),
                 "control": control,
                 "time_on": time_on,
+                **({"time_windows": time_window_info(include_refit)} if time_on == "both" else {}),
             }
         }
 
@@ -427,7 +481,52 @@ def main(argv: list[str] | None = None) -> None:
             refit_graphs[key] = refit_graph(dcfg, data_rf, meta, kg_t1, control=control, seed=seed, time_kg=time_kg)
         return refit_graphs[key]
 
+    def time_window_info(include_refit=False):
+        selection = joint_time_windows(graph_for(seeds[0])[1])
+        info = {"policy": "fit_each_training_phase", "timestamp_unit": "Unix seconds", "selection": selection}
+        if include_refit:
+            refit = joint_time_windows(refit_graph_for(seeds[0])[1])
+            info.update(refit=refit, refit_vs_selection=compare_time_windows(selection, refit))
+        return info
+
+    window_path = out_dir / f"{tag}_window_summary.json"
+    if tkgat and time_on == "both" and not window_path.exists():
+        # Available even when a session pauses before finishing its first selection fit. No t2/test access.
+        window_path.write_text(json.dumps({"time_windows": time_window_info()}, indent=2))
+
     fitted: dict[int, dict[int, object]] = {}  # kgat: the best state_dict (CPU tensors), not the model
+    if args.benchmark_batches:
+        if not kgat:
+            ap.error("--benchmark-batches is implemented for KGAT/T-KGAT only")
+        point, seed = mcfg["grid"][0], seeds[0]
+        model_cfg, fit_cfg = kgat_params(point, mcfg, kg_t1, args.device)
+        data_s, ckg_s = graph_for(seed)
+        measured = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed, benchmark_batches=args.benchmark_batches)
+        row = measured.history[-1]
+        cf_total = int(np.ceil(len(data_s.train) / fit_cfg.batch_size))
+        kg_total = int(np.ceil(ckg_s.n_edges / fit_cfg.batch_size_kg))
+        estimate = (
+            row["sec_cf"] / row["cf_batches"] * cf_total
+            + row["sec_kg"] / row["kg_batches"] * kg_total
+            + row["sec_attention"]
+        )
+        report = {
+            "benchmark_only": True,
+            "test_read": False,
+            "validation_scored": False,
+            "point": point,
+            "seed": seed,
+            "device": measured.device,
+            "peak_memory_allocated_GiB": measured.peak_memory / 2**30,
+            "cf_batches_total": cf_total,
+            "kg_batches_total": kg_total,
+            "measured": row,
+            "estimated_epoch_seconds_excluding_validation": estimate,
+            "note": "Initial-batch estimate, excluding validation; no accuracy scores or official checkpoints.",
+        }
+        (out_dir / f"{tag}_benchmark.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(json.dumps(report, indent=2), flush=True)
+        return
     best_epochs: dict[int, list[int]] = {}  # the validation best epoch of every seed, per grid point (refit epochs)
     devices: dict[int, dict[int, str]] = {}
     val_means, val_stds = [], []
@@ -482,9 +581,24 @@ def main(argv: list[str] | None = None) -> None:
                             "Partial grid saved. Re-run with --resume; selection/test wait until the grid is complete."
                         )
                         return
-                    fit = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed)
+                    progress_path = ck_path.with_suffix(".epoch.pt")
+                    epoch_args = (
+                        {
+                            "checkpoint_path": progress_path,
+                            "checkpoint_key": fingerprint,
+                            "max_new_epochs": args.epochs_per_fit,
+                        }
+                        if args.epochs_per_fit is not None
+                        else {}
+                    )
+                    fit = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed, **epoch_args)
+                    if not fit.complete:
+                        print(f"[pause] grid={g} seed={seed} saved epoch {fit.history[-1]['epoch']}; rerun --resume.")
+                        return
                     new_runs += 1
                     save_checkpoint(ck_path, fingerprint, fit)
+                    if epoch_args:
+                        progress_path.unlink(missing_ok=True)
                     registry.save_history(
                         out_dir / f"{tag}_{g}_seed{seed}_history.csv",
                         fit.history,
@@ -571,6 +685,12 @@ def main(argv: list[str] | None = None) -> None:
         print(f"[refit] {refit_e} epochs = median best epoch of seeds {best_epochs[best]}")
     refit_tag = {"refit": True, **({"epochs": refit_e} if refit_e else {})}
     best_model_cfg = kgat_params(mcfg["grid"][best], mcfg, kg_t1, args.device)[0] if kgat else None
+    if tkgat and time_on == "both" and args.refit:
+        # Persist the comparison before any refit/test; the fit budget can stop this call at this boundary.
+        window_path.write_text(
+            json.dumps({"selected": mcfg["grid"][best], "time_windows": time_window_info(True)}, indent=2)
+        )
+        print(f"[time windows] Selection/refit bounds and drift saved to {window_path}", flush=True)
     summary = []
     for seed, model in fitted[best].items():
         dev = devices[best][seed]
@@ -614,9 +734,24 @@ def main(argv: list[str] | None = None) -> None:
                     if args.max_new_runs is not None and new_runs >= args.max_new_runs:
                         print("[resume] Fit budget reached; rerun to continue refit. Completed test rows are kept.")
                         return
-                    fit_rf = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed, fixed_epochs=refit_e)
+                    progress_path = rf_path.with_suffix(".epoch.pt")
+                    epoch_args = (
+                        {
+                            "checkpoint_path": progress_path,
+                            "checkpoint_key": rf_fingerprint,
+                            "max_new_epochs": args.epochs_per_fit,
+                        }
+                        if args.epochs_per_fit is not None
+                        else {}
+                    )
+                    fit_rf = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed, fixed_epochs=refit_e, **epoch_args)
+                    if not fit_rf.complete:
+                        print(f"[pause:refit] seed={seed} saved epoch {fit_rf.history[-1]['epoch']}; rerun --resume.")
+                        return
                     new_runs += 1
                     save_checkpoint(rf_path, rf_fingerprint, fit_rf)
+                    if epoch_args:
+                        progress_path.unlink(missing_ok=True)
                     registry.save_history(
                         out_dir / f"{tag}_refit_seed{seed}_history.csv",
                         fit_rf.history,
@@ -678,7 +813,7 @@ def main(argv: list[str] | None = None) -> None:
                 "test_mean_std": agg,
                 **({"refit": {"epochs": refit_e, "best_epochs": best_epochs[best]}} if args.refit else {}),
                 **({"kg": kg_summary} if kgat else {}),
-                **(tkgat_info() if tkgat else {}),
+                **(tkgat_info(include_refit=args.refit) if tkgat else {}),
             },
             indent=2,
         )

@@ -120,12 +120,12 @@ def restore_results(source: Path, output: Path, identity: dict) -> None:
     previous = json.loads((source / "run-identity.json").read_text(encoding="utf-8"))
     if previous != identity:
         raise ValueError("Saved results belong to another source/configuration or processed split")
-    if (output / "registry.csv").exists() or (output / "runs").exists():
+    if (output / "registry.csv").exists() or any((output / "runs").rglob("*.pt")):
         raise ValueError("Current output already has progress; do not overwrite it with a saved session")
     for name in ("registry.csv", "runs"):
         path = source / name
         if path.is_dir():
-            shutil.copytree(path, output / name)
+            shutil.copytree(path, output / name, dirs_exist_ok=True)
         elif path.is_file():
             shutil.copy2(path, output / name)
 
@@ -137,7 +137,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--processed", type=Path, help="directory containing meta.json, train.csv and kg/default/")
     parser.add_argument("--out", type=Path, default=Path("/kaggle/working/tkgat-joint"))
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--max-new-runs", type=int, default=1, help="new selection/refit fits per call")
+    parser.add_argument("--max-new-runs", type=int, default=2, help="new selection/refit fits per call (default 2)")
+    parser.add_argument(
+        "--epochs-per-fit",
+        type=int,
+        help="optional new-epoch limit per fit; default completes each fit, with checkpoints every epoch",
+    )
+    parser.add_argument(
+        "--benchmark-batches", type=int, default=0, help="time CF/KG batches without validation/test scoring"
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--refit", dest="refit", action="store_true", default=True, help="refit on train+val before test (default)"
@@ -154,6 +162,8 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("--processed is required unless --package-code is used")
     if args.max_new_runs < 1:
         parser.error("--max-new-runs must be positive")
+    if (args.epochs_per_fit is not None and args.epochs_per_fit < 1) or args.benchmark_batches < 0:
+        parser.error("--epochs-per-fit must be positive; --benchmark-batches must be nonnegative")
     import yaml
 
     processed, output = args.processed.resolve(), args.out.resolve()
@@ -165,7 +175,11 @@ def main(argv: list[str] | None = None) -> None:
         )
     output.mkdir(parents=True, exist_ok=True)
     model_cfg = yaml.safe_load((ROOT / MODEL).read_text(encoding="utf-8"))
-    report = memory_report(processed, model_cfg, args.device, refit=args.refit and not args.val_only)
+    # The full horizon allows each fit to finish while keeping the trainer's per-epoch resume enabled.
+    epochs_per_fit = args.epochs_per_fit if args.epochs_per_fit is not None else model_cfg["fixed"]["max_epochs"]
+    report = memory_report(
+        processed, model_cfg, args.device, refit=args.refit and not (args.val_only or args.benchmark_batches)
+    )
     (output / "memory-report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2), flush=True)
     if args.check_only:
@@ -204,12 +218,16 @@ def main(argv: list[str] | None = None) -> None:
         "--resume",
         "--max-new-runs",
         str(args.max_new_runs),
+        "--epochs-per-fit",
+        str(epochs_per_fit),
         "--registry",
         str(output / "registry.csv"),
         "--runs-dir",
         str(output / "runs"),
     ]
-    if args.val_only:
+    if args.benchmark_batches:
+        command.extend(["--val-only", "--benchmark-batches", str(args.benchmark_batches)])
+    elif args.val_only:
         command.append("--val-only")
     elif args.refit:
         command.append("--refit")
@@ -233,7 +251,7 @@ def main(argv: list[str] | None = None) -> None:
             code = proc.wait()
     if code:
         raise SystemExit(code)
-    print(f"Progress saved to {output}. Rerun to continue; resume is at completed fit boundaries, not mid-epoch.")
+    print(f"Progress saved to {output}. Rerun to continue from the last saved epoch; no mid-epoch resume.")
 
 
 if __name__ == "__main__":
