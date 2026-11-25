@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-drive = ["gdown>=5.2,<6", "stream-unzip>=0.0.99,<0.1", "requests>=2.31,<3"]
+drive = ["gdown>=5.2,<6", "stream-unzip>=0.0.99,<0.1", "requests>=2.31,<3", "duckdb>=1.4,<2"]
 dev = ["pytest>=8", "ruff==0.6.9", "jupyter", "nbconvert", "nbstripout", "pre-commit"]
 
 [tool.setuptools.packages.find]

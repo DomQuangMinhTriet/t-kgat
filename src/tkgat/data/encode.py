@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -64,3 +64,22 @@ def encode(s: TemporalSplit) -> EncodedSplit:
         mask_val=mask(s.seen_before_val),
         mask_test=mask(s.seen_before_test),
     )
+
+
+def encode_trainval(s: TemporalSplit) -> EncodedSplit:
+    """The split for the refit (decision 0016 item 4): train and validation interactions together as the train part.
+
+    The vocabulary is the train vocabulary of ``encode(s)`` (users, items and their order): validation keeps only users
+    and items that survive in train, so adding it changes no id, and the KG entity ids stay valid. ``val`` is empty and
+    ``mask_val`` is not used by a refit. ``test`` and ``mask_test`` are exactly those of ``encode(s)``: the mask is
+    every interaction before t2, which is train, validation and the pairs the 5-core or the cold filters dropped.
+    ``train_ts`` holds the timestamps of the merged part, so the Delta-t anchor ``t_ref`` is recomputed on it.
+    """
+    merged = pd.concat([s.train, s.val], ignore_index=True)
+    if merged.duplicated(["user", "item"]).any():
+        raise ValueError("a (user, item) pair is in both train and val")
+    out = encode(replace(s, train=merged, val=s.val.iloc[0:0]))
+    base = encode(s)
+    if not (np.array_equal(out.user_ids, base.user_ids) and np.array_equal(out.item_ids, base.item_ids)):
+        raise ValueError("validation holds a user or item that is not in train: the vocabulary would change")
+    return out

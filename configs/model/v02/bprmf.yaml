@@ -1,0 +1,13 @@
+# Official configuration of decision 0016 (protocol after 2026-11-15). Copied from configs/model/bprmf.yaml with the values
+# fixed by the small-set gate (docs/lr-schedule.md, docs/small-set-gate.md): max_epochs 150, patience 10 evaluations,
+# eval_every 5, learning-rate schedule none, no lr 1e-4 grid points. The old files stay as they are (their registry rows
+# belong to the first protocol). `from_kgat` / `from_tkgat` resolve inside this directory.
+# BPR-MF. Every grid point is trained with every seed; the point with the best
+# mean validation Recall@20 is selected, and only that point is scored on test.
+name: bprmf
+seeds: [2019, 2020, 2021, 2022, 2023]
+grid:
+  - {dim: 64, lr: 0.001, l2: 0.0001}
+  - {dim: 64, lr: 0.001, l2: 0.001}
+  - {dim: 32, lr: 0.001, l2: 0.0001}
+fixed: {batch_size: 2048, max_epochs: 150, eval_every: 5, patience: 10, select_metric: recall@20}

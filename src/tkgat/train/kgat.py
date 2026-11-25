@@ -20,8 +20,11 @@ Everything runs on ``device``: batches, negatives and rejection tests are tensor
 from __future__ import annotations
 
 import dataclasses
+import json
+import math
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -32,6 +35,8 @@ from tkgat.eval.metrics import evaluate
 from tkgat.kg.ckg import CKG
 from tkgat.models.kgat import KGAT, KGATConfig
 from tkgat.train.bpr import METRICS, NegativeSampler
+from tkgat.train.progress import cpu_state, load_epoch, save_epoch
+from tkgat.train.schedule import check_schedule, lr_at, set_lr
 
 MAX_REDRAWS = 100
 
@@ -48,6 +53,8 @@ class KGATFitConfig:
     patience: int = 10  # in evaluations: 10 x 5 epochs = the paper's 50 epochs
     select_metric: str = "recall@20"
     device: str = "auto"
+    lr_schedule: str = "none"  # "none" (constant, decision 0013) or "cosine" (decision 0016 item 5)
+    lr_final_ratio: float = 0.01  # cosine: the rate at ``max_epochs`` is ``lr * lr_final_ratio``
 
 
 def split_params(params: dict, device: str = "auto") -> tuple[KGATConfig, KGATFitConfig]:
@@ -73,6 +80,7 @@ class KGATFitResult:
     seconds: float = 0.0
     device: str = "cpu"
     peak_memory: int = 0  # torch.cuda.max_memory_allocated in bytes (0 on the CPU)
+    complete: bool = True  # False: an epoch budget paused this fit; no validation selection/test may use it yet
 
 
 class KGNegativeSampler:
@@ -114,14 +122,48 @@ def _sync(device: torch.device) -> float:
     return time.perf_counter()
 
 
-def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitConfig, seed: int) -> KGATFitResult:
-    """Train KGAT on ``ckg`` (train interactions + KG at t1) and keep the best epoch by validation ``select_metric``."""
+def fit_kgat(
+    data: EncodedSplit,
+    ckg: CKG,
+    model_cfg: KGATConfig,
+    cfg: KGATFitConfig,
+    seed: int,
+    fixed_epochs: int | None = None,
+    *,
+    checkpoint_path: str | Path | None = None,
+    checkpoint_key: str | None = None,
+    max_new_epochs: int | None = None,
+    benchmark_batches: int = 0,
+    log_every_batches: int = 25,
+) -> KGATFitResult:
+    """Train KGAT on ``ckg`` (train interactions + KG at t1) and keep the best epoch by validation ``select_metric``.
+
+    With ``fixed_epochs`` (the refit of decision 0016 item 4: ``ckg`` then holds train and validation interactions and
+    the KG at t2) it trains exactly that many epochs, never evaluates and never stops early: the result is the state
+    of the last epoch, ``best_epoch == fixed_epochs`` and ``best_val`` is empty. The schedule horizon stays
+    ``cfg.max_epochs``. ``data.val`` and ``data.mask_val`` are not read in that mode.
+    """
+    check_schedule(cfg.lr_schedule, cfg.lr_final_ratio)
+    if fixed_epochs is not None and not 1 <= fixed_epochs <= cfg.max_epochs:
+        raise ValueError(f"fixed_epochs must be in [1, max_epochs={cfg.max_epochs}], got {fixed_epochs}")
+    if benchmark_batches < 0 or log_every_batches < 1 or (max_new_epochs is not None and max_new_epochs < 1):
+        raise ValueError("benchmark_batches must be nonnegative; epoch/log budgets must be positive")
+    if checkpoint_path is not None and not checkpoint_key:
+        raise ValueError("checkpoint_key is required for safe epoch resume")
+    if max_new_epochs is not None and checkpoint_path is None:
+        raise ValueError("max_new_epochs requires a checkpoint_path so paused training can resume")
+    if benchmark_batches and (fixed_epochs is not None or checkpoint_path is not None):
+        raise ValueError("benchmark cannot refit or write official epoch checkpoints")
+    n_epochs = 1 if benchmark_batches else cfg.max_epochs if fixed_epochs is None else fixed_epochs
+    phase = "benchmark" if benchmark_batches else "refit" if fixed_epochs is not None else "select"
+    label = f"[train:{phase} seed={seed} gamma={model_cfg.gamma}]"
     device = resolve_device(cfg.device)
+    print(f"{label} Initializing model and samplers on {device}", flush=True)
     seed_all(seed)
     gen = torch.Generator(device=device).manual_seed(seed)
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
-    model = KGAT(ckg, model_cfg, device=device)
+    model = KGAT(ckg, model_cfg, device=device, **({"refit": True} if fixed_epochs is not None else {}))
     opt_cf = torch.optim.Adam(model.cf_parameters(), lr=cfg.lr)
     opt_kg = torch.optim.Adam(model.kg_parameters(), lr=cfg.lr)
 
@@ -132,13 +174,53 @@ def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitCo
 
     best, best_state, best_epoch, best_val, bad = -1.0, None, 0, {}, 0
     history = []
+    last_epoch, previous_seconds = 0, 0.0
+    signature = json.dumps(
+        {
+            "key": checkpoint_key,
+            "model": dataclasses.asdict(model_cfg),
+            "fit": dataclasses.asdict(cfg),
+            "seed": seed,
+            "fixed_epochs": fixed_epochs,
+            "n_train": len(train),
+            "n_nodes": ckg.n_nodes,
+            "n_edges": ckg.n_edges,
+        },
+        sort_keys=True,
+    )
+    checkpoint = Path(checkpoint_path) if checkpoint_path is not None else None
+    if checkpoint is not None and checkpoint.exists():
+        saved = load_epoch(checkpoint, signature, device)
+        model.load_state_dict(saved["state"])
+        opt_cf.load_state_dict(saved["opt_cf"])
+        opt_kg.load_state_dict(saved["opt_kg"])
+        model.update_attention()
+        best, best_state = saved["best"], saved["best_state"]
+        best_epoch, best_val, bad = saved["best_epoch"], saved["best_val"], saved["bad"]
+        history, last_epoch, previous_seconds = saved["history"], saved["epoch"], saved["seconds"]
+        gen.set_state(saved["sampler_rng"])
+        torch.set_rng_state(saved["torch_rng"])
+        if device.type == "cuda":
+            torch.cuda.set_rng_state(saved["cuda_rng"], device)
+        print(f"{label} Resumed after epoch {last_epoch}; next epoch {last_epoch + 1}", flush=True)
+    print(f"{label} Ready: {len(train):,} pairs / {len(edges):,} edges; budget {n_epochs} epochs", flush=True)
     t0 = time.perf_counter()
-    for epoch in range(1, cfg.max_epochs + 1):
+    epoch_range = range(last_epoch + 1, n_epochs + 1)
+    if fixed_epochs is None and bad >= cfg.patience:
+        epoch_range = range(0)
+    complete = True
+    for epoch in epoch_range:
+        lr = lr_at(epoch, cfg.lr, cfg.lr_schedule, cfg.max_epochs, cfg.lr_final_ratio)
+        set_lr([opt_cf, opt_kg], lr)  # both Adam optimisers follow the same schedule
         model.train()
         start = _sync(device)
 
         perm = torch.randperm(len(train), device=device, generator=gen)
         total_cf = torch.zeros((), device=device)
+        cf_examples, cf_batches = 0, 0
+        cf_total = math.ceil(len(train) / cfg.batch_size)
+        print(f"{label} epoch {epoch}/{n_epochs}: CF 0/{cf_total}", flush=True)
+        last_log = start
         for lo in range(0, len(perm), cfg.batch_size):
             batch = train[perm[lo : lo + cfg.batch_size]]
             users, pos = batch[:, 0], batch[:, 1]
@@ -147,10 +229,25 @@ def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitCo
             loss.backward()
             opt_cf.step()
             total_cf += loss.detach() * len(batch)
+            cf_examples += len(batch)
+            cf_batches += 1
+            if cf_batches == 1 or cf_batches % log_every_batches == 0 or time.perf_counter() - last_log >= 30:
+                print(
+                    f"{label} epoch {epoch} CF {cf_batches}/{cf_total} "
+                    f"loss={float(total_cf) / cf_examples:.5f} elapsed={time.perf_counter() - start:.1f}s",
+                    flush=True,
+                )
+                last_log = time.perf_counter()
+            if benchmark_batches and cf_batches >= benchmark_batches:
+                break
         t_cf = _sync(device)
 
         perm = torch.randperm(len(edges), device=device, generator=gen)
         total_kg = torch.zeros((), device=device)
+        kg_examples, kg_batches = 0, 0
+        kg_total = math.ceil(len(edges) / cfg.batch_size_kg)
+        print(f"{label} epoch {epoch}: KG 0/{kg_total}", flush=True)
+        last_log = t_cf
         for lo in range(0, len(perm), cfg.batch_size_kg):
             batch = edges[perm[lo : lo + cfg.batch_size_kg]]
             h, r, t = batch[:, 0], batch[:, 1], batch[:, 2]
@@ -159,18 +256,34 @@ def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitCo
             loss.backward()
             opt_kg.step()
             total_kg += loss.detach() * len(batch)
+            kg_examples += len(batch)
+            kg_batches += 1
+            if kg_batches == 1 or kg_batches % log_every_batches == 0 or time.perf_counter() - last_log >= 30:
+                print(
+                    f"{label} epoch {epoch} KG {kg_batches}/{kg_total} "
+                    f"loss={float(total_kg) / kg_examples:.5f} elapsed={time.perf_counter() - t_cf:.1f}s",
+                    flush=True,
+                )
+                last_log = time.perf_counter()
+            if benchmark_batches and kg_batches >= benchmark_batches:
+                break
         t_kg = _sync(device)
 
+        print(f"{label} epoch {epoch}: updating attention", flush=True)
         model.update_attention()
         t_att = _sync(device)
 
         row = {
             "epoch": epoch,
-            "loss_cf": float(total_cf) / len(train),
-            "loss_kg": float(total_kg) / len(edges),
+            "lr": lr,
+            "loss_cf": float(total_cf) / cf_examples,
+            "loss_kg": float(total_kg) / kg_examples,
+            "cf_batches": cf_batches,
+            "kg_batches": kg_batches,
         }
         t_eval = t_att
-        if epoch % cfg.eval_every == 0:
+        if fixed_epochs is None and not benchmark_batches and epoch % cfg.eval_every == 0:
+            print(f"{label} epoch {epoch}: validation", flush=True)
             res = evaluate(model.scorer(), data.val, data.mask_val)
             t_eval = _sync(device)
             row.update({k: res[k] for k in METRICS})
@@ -188,8 +301,58 @@ def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitCo
             sec_eval=t_eval - t_att,
         )
         history.append(row)
-        if bad >= cfg.patience:
+        done = epoch >= n_epochs or (fixed_epochs is None and not benchmark_batches and bad >= cfg.patience)
+        print(
+            f"{label} epoch {epoch} complete in {row['seconds']:.1f}s "
+            f"loss_cf={row['loss_cf']:.5f} loss_kg={row['loss_kg']:.5f} "
+            f"val={row.get('recall@20', 'not evaluated')}",
+            flush=True,
+        )
+        if checkpoint is not None:
+            save_epoch(
+                checkpoint,
+                {
+                    "signature": signature,
+                    "state": cpu_state(model.state_dict()),
+                    "opt_cf": cpu_state(opt_cf.state_dict()),
+                    "opt_kg": cpu_state(opt_kg.state_dict()),
+                    "epoch": epoch,
+                    "best": best,
+                    "best_state": best_state,
+                    "best_epoch": best_epoch,
+                    "best_val": best_val,
+                    "bad": bad,
+                    "history": history,
+                    "seconds": previous_seconds + time.perf_counter() - t0,
+                    "device_type": device.type,
+                    "sampler_rng": gen.get_state(),
+                    "torch_rng": torch.get_rng_state(),
+                    "cuda_rng": torch.cuda.get_rng_state(device) if device.type == "cuda" else None,
+                },
+            )
+            print(f"{label} Saved epoch {epoch}: {checkpoint}", flush=True)
+        if done:
             break
+        if max_new_epochs is not None and epoch - last_epoch >= max_new_epochs:
+            complete = False
+            break
+    if not complete:
+        model.eval()
+        peak = int(torch.cuda.max_memory_allocated(device)) if device.type == "cuda" else 0
+        return KGATFitResult(
+            model,
+            best_epoch,
+            best_val,
+            best_state or {},
+            history,
+            previous_seconds + time.perf_counter() - t0,
+            describe(device),
+            peak,
+            complete=False,
+        )
+    if fixed_epochs is not None or benchmark_batches:
+        best_epoch, best_val = n_epochs, {}
+        best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     if best_state is None:
         raise ValueError("no validation evaluation happened; max_epochs must be >= eval_every")
     model.load_state_dict(best_state)
@@ -197,5 +360,12 @@ def fit_kgat(data: EncodedSplit, ckg: CKG, model_cfg: KGATConfig, cfg: KGATFitCo
     model.eval()
     peak = int(torch.cuda.max_memory_allocated(device)) if device.type == "cuda" else 0
     return KGATFitResult(
-        model, best_epoch, best_val, best_state, history, time.perf_counter() - t0, describe(device), peak
+        model,
+        best_epoch,
+        best_val,
+        best_state,
+        history,
+        previous_seconds + time.perf_counter() - t0,
+        describe(device),
+        peak,
     )

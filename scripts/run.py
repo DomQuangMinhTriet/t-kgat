@@ -19,8 +19,9 @@ With ``--val-only`` only steps 1, 2 and 5 happen: the test files are not opened,
 per-user test file is saved; the selection goes to ``<tag>_val_summary.json``. Use it for sensitivity checks, where
 choosing a split by its test scores would be leakage.
 
-KGAT (``configs/model/kgat*.yaml``, ``name: kgat``, ``kg: {variant: default | drop_undated | static | none}``): train
-and validation use the CKG of the train interactions and the KG at t1. Each (grid point, seed) keeps only its best
+KGAT (``configs/model/kgat*.yaml``, ``name: kgat``,
+``kg: {variant: default | drop_undated | static | pruned | none}``): train and validation use the CKG of the train
+interactions and the KG at t1. Each (grid point, seed) keeps only its best
 ``state_dict`` (CPU tensors, also written to ``<runs-dir>/<run_name>/states/``, which git ignores). Test is scored once
 per seed of the selected point on a *new* graph, ``set_graph`` with the same train edges and the KG at t2 (triples
 whose tail is unseen at t1 dropped), attention recomputed from the frozen weights (design Q1, Q2). ``--resume`` reuses
@@ -58,11 +59,13 @@ import torch
 import yaml
 
 from tkgat import registry
-from tkgat.data.encode import encode
+from tkgat.data.encode import encode, encode_trainval
 from tkgat.eval.metrics import evaluate
 from tkgat.kg.ckg import (
+    INTERACT,
     build_ckg,
     carry_kg_ts,
+    inverse_relation_id,
     load_kg,
     load_kg_dates,
     no_kg,
@@ -73,11 +76,12 @@ from tkgat.kg.ckg import (
 from tkgat.models.baselines import MostPop
 from tkgat.models.kgat import KGAT, TIME_ON
 from tkgat.pipeline.build import load_config, load_saved
+from tkgat.pipeline.refit import refit_epochs, refit_graph
 from tkgat.train.bpr import BPRConfig, fit_bpr
 from tkgat.train.kgat import fit_kgat, split_params
 
 METRICS = ("recall@10", "recall@20", "ndcg@10", "ndcg@20")
-KG_VARIANTS = ("default", "drop_undated", "static", "none")
+KG_VARIANTS = ("default", "drop_undated", "static", "pruned", "none")
 
 
 def seed_std(values: list[float]) -> float | None:
@@ -112,8 +116,28 @@ def kgat_test_graph(dcfg: dict, data, meta: dict, kg_t1, ckg_t1, ts_t1=None):
     return build_ckg(data, kg_t2, known_tails=used_tails(kg_t1), kg_ts=kg_ts)
 
 
-TKGAT_CONTROLS = ("permute_train_ts", "permute_kg_ts")
-CONTROL_TIME_ON = {"permute_train_ts": "interact", "permute_kg_ts": "kg"}  # what each control shuffles
+TKGAT_CONTROLS = ("permute_train_ts", "permute_kg_ts", "permute_both_ts")
+CONTROL_TIME_ON = {"permute_train_ts": "interact", "permute_kg_ts": "kg", "permute_both_ts": "both"}  # what is shuffled
+ABLATIONS = {"kg": "gamma_kg", "ui": "gamma_ui"}  # ablate: kg = no KG term (gamma_kg = 0), ui = no user-item term
+BOTH_GRID_KEYS = {"gamma"}  # separate train windows replace the absolute tau grid (decision 0019)
+
+
+def resolve_kg_relations(names: list[str] | None, relations: tuple[str, ...]) -> tuple[int, ...] | None:
+    """KG relation indices of the names that carry delta_kg (``None`` = all relations); unknown names are an error."""
+    if names is None:
+        return None
+    unknown = sorted(set(names) - set(relations))
+    if unknown:
+        raise ValueError(f"delta_kg_relations: unknown relation(s) {unknown}; the KG has {list(relations)}")
+    return tuple(i for i, name in enumerate(relations) if name in set(names))
+
+
+def kgat_params(point: dict, mcfg: dict, kg, device: str):
+    """``split_params`` of a grid point plus ``fixed``; relation names of ``kg_timed_relations`` become indices."""
+    params = {**point, **mcfg.get("fixed", {})}
+    if "kg_timed_relations" in params:  # names in the registry, indices in the model
+        params["kg_timed_relations"] = resolve_kg_relations(params["kg_timed_relations"], kg.relations)
+    return split_params(params, device)
 
 
 def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = False) -> tuple[list[dict], dict]:
@@ -126,16 +150,36 @@ def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = F
     is copied by hand. An official run (not ``val_only``) needs ``<tag>_summary.json``, the run that was scored on
     test; ``<tag>_val_summary.json`` (a ``--val-only`` run) is only accepted by a ``--val-only`` run.
     """
-    control = mcfg.get("control")
+    if mcfg.get("standalone"):
+        # Explicit parameters, fixed before training: no baseline run or summary is consulted.
+        if any(mcfg.get(key) for key in ("control", "ablate", "from_kgat", "from_tkgat")):
+            raise ValueError("standalone T-KGAT cannot depend on a baseline or control")
+        if mcfg.get("time_on") != "both" or mcfg.get("kg", {}).get("variant") != "default":
+            raise ValueError("standalone T-KGAT requires time_on: both and kg.variant: default")
+        base = mcfg.get("base_point", {})
+        if set(base) != {"lr", "l2", "l2_kg", "mess_dropout"}:
+            raise ValueError("standalone base_point must specify lr, l2, l2_kg and mess_dropout")
+        if not mcfg.get("grid") or any(set(p) != {"gamma"} or not p["gamma"] > 0 for p in mcfg["grid"]):
+            raise ValueError("a standalone T-KGAT grid holds gamma > 0 only")
+        if set(mcfg.get("fixed", {})) & {*base, "gamma", "time_on"}:
+            raise ValueError("fixed must not override the standalone point or time_on")
+        return [{**base, **point, "time_on": "both"} for point in mcfg["grid"]], base
+    control, ablate = mcfg.get("control"), mcfg.get("ablate")
     if control not in (None, *TKGAT_CONTROLS):
         raise ValueError(f"control must be one of {TKGAT_CONTROLS}, got {control!r}")
-    source, expected = ("from_tkgat", "tkgat") if control else ("from_kgat", "kgat")
-    other = "from_kgat" if control else "from_tkgat"
+    if ablate not in (None, *ABLATIONS):
+        raise ValueError(f"ablate must be one of {tuple(ABLATIONS)}, got {ablate!r}")
+    if control and ablate:
+        raise ValueError("a run is a control or an ablation, not both")
+    derived = bool(control or ablate)  # runs that re-use the point T-KGAT selected
+    source, expected = ("from_tkgat", "tkgat") if derived else ("from_kgat", "kgat")
+    other = "from_kgat" if derived else "from_tkgat"
     if not mcfg.get(source) or mcfg.get(other):
-        raise ValueError(f"a {'control' if control else 'T-KGAT'} config needs {source} (and not {other})")
+        kind = "control" if control else "ablation" if ablate else "T-KGAT"
+        raise ValueError(f"a {kind} config needs {source} (and not {other})")
     tag = mcfg[source]
     ref = yaml.safe_load(Path(model_path).with_name(f"{tag}.yaml").read_text(encoding="utf-8"))
-    if ref["name"] != expected or (not control and ref.get("control")) or (control and not ref.get("from_kgat")):
+    if ref["name"] != expected or (not derived and ref.get("control")) or (derived and not ref.get("from_kgat")):
         raise ValueError(f"{source}: {tag}.yaml is not a {expected} config")
     for key in ("fixed", "kg", "seeds"):
         if mcfg.get(key) != ref.get(key):
@@ -143,13 +187,17 @@ def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = F
     time_on = mcfg.get("time_on", "interact")
     if time_on not in TIME_ON:
         raise ValueError(f"time_on must be one of {TIME_ON}, got {time_on!r}")
-    if control and ref.get("time_on", "interact") != time_on:
+    if derived and ref.get("time_on", "interact") != time_on:
         raise ValueError(f"time_on differs from {tag}.yaml")
-    if control and CONTROL_TIME_ON[control] != time_on:
+    if derived and mcfg.get("delta_kg_relations") != ref.get("delta_kg_relations"):
+        raise ValueError(f"delta_kg_relations differs from {tag}.yaml")
+    if ablate and time_on != "both":
+        raise ValueError(f"ablate {ablate} removes one term of the combined model: it needs time_on = both")
+    if control and time_on != "both" and CONTROL_TIME_ON[control] != time_on:
         raise ValueError(f"control {control} shuffles the dates of time_on = {CONTROL_TIME_ON[control]}, not {time_on}")
-    if time_on == "kg" and mcfg.get("kg", {}).get("variant", "default") == "none":
-        raise ValueError("time_on = kg needs a KG (kg.variant none has no triple to date)")
-    names = [f"{tag}_summary.json"] + ([f"{tag}_val_summary.json"] if val_only else [])
+    if time_on in ("kg", "both") and mcfg.get("kg", {}).get("variant", "default") == "none":
+        raise ValueError(f"time_on = {time_on} needs a KG (kg.variant none has no triple to date)")
+    names = [f"{tag}_refit_summary.json", f"{tag}_summary.json"] + ([f"{tag}_val_summary.json"] if val_only else [])
     for name in names:
         if (out_dir / name).exists():
             base = json.loads((out_dir / name).read_text(encoding="utf-8"))["selected"]
@@ -165,17 +213,31 @@ def tkgat_points(mcfg: dict, model_path: Path, out_dir: Path, val_only: bool = F
                 else ""
             )
         )
-    if control:
+    if derived:
         if mcfg.get("grid"):
-            raise ValueError("a control run takes its point from the T-KGAT run: remove grid")
-        return [base], base
+            raise ValueError("a control or ablation run takes its point from the T-KGAT run: remove grid")
+        if time_on == "both" and (base.get("time_on") != "both" or any(k.startswith("tau_") for k in base)):
+            raise ValueError(f"the selected point is from an older time mode: rerun {tag} with window-based both")
+        return [{**base, ABLATIONS[ablate]: 0.0} if ablate else base], base
     if "gamma" in base:
         raise ValueError(f"the point selected by {tag} already has a gamma: it is not a KGAT point")
+    keys = BOTH_GRID_KEYS if time_on == "both" else {"gamma"}
     for point in mcfg["grid"]:
-        if set(point) != {"gamma"} or not point["gamma"] > 0:
-            raise ValueError(f"a T-KGAT grid point holds gamma > 0 only, got {point}")
-    extra = {"time_on": "kg"} if time_on == "kg" else {}  # Stage 1 points stay exactly what they were
+        if set(point) != keys or not point["gamma"] > 0:
+            raise ValueError(f"a T-KGAT grid point holds {sorted(keys)} with gamma > 0 only, got {point}")
+    extra = {} if time_on == "interact" else {"time_on": time_on}  # Stage 1 points stay exactly what they were
+    if time_on == "both" and mcfg.get("delta_kg_relations") is not None:
+        extra["kg_timed_relations"] = list(mcfg["delta_kg_relations"])  # names; kgat_params turns them into indices
     return [{**base, **point, **extra} for point in mcfg["grid"]], base
+
+
+def with_schedule(config: dict, mcfg: dict) -> dict:
+    """``config`` of a registry row plus the learning-rate schedule (decision 0016 item 5), so that the schedule is part
+    of the run key. A constant rate adds nothing: every older row keeps its key."""
+    fixed = mcfg.get("fixed", {})
+    if fixed.get("lr_schedule", "none") == "none":
+        return config
+    return {**config, "lr_schedule": fixed["lr_schedule"], "lr_final_ratio": fixed.get("lr_final_ratio", 0.01)}
 
 
 def registry_config(point: dict, ckg, seed: int, perm: bool) -> dict:
@@ -184,6 +246,46 @@ def registry_config(point: dict, ckg, seed: int, perm: bool) -> dict:
     if perm:
         cfg["perm_seed"] = seed  # the permutation is drawn from numpy.random.default_rng(seed)
     return cfg
+
+
+def joint_time_windows(ckg) -> dict:
+    """Report the bounds used by joint attention on its initial selection or refit graph."""
+
+    def window(maximum, width):
+        return {
+            "min_ts": maximum - width if maximum is not None else None,
+            "max_ts": maximum,
+            "width_seconds": width,
+            "width_days": width / 86400.0,
+        }
+
+    fact = (ckg.relation != INTERACT) & (ckg.relation != inverse_relation_id(INTERACT, ckg.n_relations))
+    dates = ckg.edge_ts[fact & np.isfinite(ckg.edge_ts)]
+    return {
+        "interaction": window(ckg.t_ref, ckg.dt_den or 0.0),
+        # An empty fact window has zero penalty; null bounds distinguish it from Unix epoch zero.
+        "fact": window(float(dates.max()), float(np.ptp(dates))) if len(dates) else window(None, 0.0),
+    }
+
+
+def compare_time_windows(selection: dict, refit: dict) -> dict:
+    """Report scale/anchor drift without imposing a new refit or model-selection policy."""
+    drift = {}
+    for kind, before in selection.items():
+        after = refit[kind]
+        drift[kind] = {
+            f"{bound}_shift_seconds": after[f"{bound}_ts"] - before[f"{bound}_ts"]
+            if after[f"{bound}_ts"] is not None and before[f"{bound}_ts"] is not None
+            else None
+            for bound in ("min", "max")
+        }
+        old, new = before["width_seconds"], after["width_seconds"]
+        drift[kind].update(
+            width_change_seconds=new - old,
+            width_ratio=new / old if old else None,
+            width_change_pct=100.0 * (new - old) / old if old else None,
+        )
+    return drift
 
 
 def kgat_checkpoint_path(out_dir: Path, tag: str, g: int, seed: int) -> Path:
@@ -251,6 +353,13 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--registry", default="results/registry.csv")
     ap.add_argument("--runs-dir", default="results/runs")
     ap.add_argument("--device", default="auto", help='"auto" (CUDA if available), "cuda", "cuda:1" or "cpu"')
+    ap.add_argument("--epochs-per-fit", type=int, help="with --resume: pause each fit after this many new epochs")
+    ap.add_argument(
+        "--benchmark-batches",
+        type=int,
+        default=0,
+        help="with --val-only: time this many CF/KG batches; never select or score a model",
+    )
     ap.add_argument(
         "--val-only",
         action="store_true",
@@ -264,10 +373,23 @@ def main(argv: list[str] | None = None) -> None:
         "that already has its test row in the registry",
     )
     ap.add_argument(
-        "--max-new-runs", type=int,
+        "--max-new-runs",
+        type=int,
         help="with --resume, limit new KGAT/T-KGAT grid/seed fits; select and score only after the full grid",
     )
+    ap.add_argument(
+        "--refit",
+        action="store_true",
+        help="decision 0016 item 4: after the selection on validation, train the selected point again from scratch on "
+        "train + validation for the median best epoch of its seeds (no early stopping, KG at t2) and score that model "
+        "on test once; test rows get refit: true and epochs in config, per-user scores go to "
+        "<tag>_refit_seed<seed>.npz",
+    )
     args = ap.parse_args(argv)
+    if args.epochs_per_fit is not None and (args.epochs_per_fit < 1 or not args.resume):
+        ap.error("--epochs-per-fit requires --resume and a positive number")
+    if args.benchmark_batches < 0 or (args.benchmark_batches and not args.val_only):
+        ap.error("--benchmark-batches must be nonnegative and requires --val-only")
 
     dcfg = load_config(args.data)
     mcfg = yaml.safe_load(Path(args.model).read_text(encoding="utf-8"))
@@ -275,8 +397,11 @@ def main(argv: list[str] | None = None) -> None:
         ap.error("--resume is only implemented for kgat and tkgat")
     if args.max_new_runs is not None and (not args.resume or args.max_new_runs < 1):
         ap.error("--max-new-runs requires --resume and a positive number")
+    if args.refit and args.val_only:
+        ap.error("--refit scores on test; it cannot be combined with --val-only")
     split, meta = load_saved(dcfg, with_test=not args.val_only)
     data = encode(split)
+    data_rf = encode_trainval(split) if args.refit else None  # train + validation as the train part (item 4)
     split_sha = registry.sha256_file(Path(dcfg["processed_dir"]) / "meta.json")
     seeds = mcfg.get("seeds", [0])
     tag = Path(args.model).stem
@@ -293,7 +418,8 @@ def main(argv: list[str] | None = None) -> None:
         mcfg = {**mcfg, "grid": grid}
     control = mcfg.get("control") if tkgat else None
     perm = control is not None
-    time_kg = tkgat and mcfg.get("time_on", "interact") == "kg"  # Stage 2: fact dates on the KG edges
+    time_on = mcfg.get("time_on", "interact") if tkgat else "interact"
+    time_kg = time_on in ("kg", "both")  # Stage 2 and the combined model: fact dates on the KG edges
     kg_t1 = ckg_t1 = ts_t1 = None
     if kgat:
         kg_t1, ckg_t1 = kgat_train_graph(mcfg, dcfg, data, meta, args.val_only)
@@ -310,7 +436,11 @@ def main(argv: list[str] | None = None) -> None:
         ``train_ts`` (Stage 1) or the fact dates (Stage 2) with this seed."""
         key = seed if perm else None
         if key not in train_graphs:
-            if control == "permute_kg_ts":
+            if control == "permute_both_ts":  # both date sets shuffled, with the same seed
+                shuffled = permute_train_ts(data, seed)
+                shuffled_ts = permute_kg_ts(ts_t1, seed)
+                train_graphs[key] = (shuffled, build_ckg(shuffled, kg_t1, kg_ts=shuffled_ts), shuffled_ts)
+            elif control == "permute_kg_ts":
                 shuffled_ts = permute_kg_ts(ts_t1, seed)
                 train_graphs[key] = (data, build_ckg(data, kg_t1, kg_ts=shuffled_ts), shuffled_ts)
             else:
@@ -328,25 +458,81 @@ def main(argv: list[str] | None = None) -> None:
             test_graphs[key] = kgat_test_graph(dcfg, data_s, meta, kg_t1, ckg_s, ts_t1=ts_s if time_kg else None)
         return test_graphs[key]
 
-    def tkgat_info() -> dict:
+    def tkgat_info(*, include_refit=False) -> dict:
         ckg = graph_for(seeds[0])[1]
         return {
             "tkgat": {
-                "from": mcfg.get("from_tkgat") or mcfg.get("from_kgat"),
+                "from": "standalone" if mcfg.get("standalone") else mcfg.get("from_tkgat") or mcfg.get("from_kgat"),
                 "base_point": base_point,
                 "t_ref": round(ckg.t_ref),
                 "dt_den": round(ckg.dt_den),
                 "control": control,
-                "time_on": "kg" if time_kg else "interact",
+                "time_on": time_on,
+                **({"time_windows": time_window_info(include_refit)} if time_on == "both" else {}),
             }
         }
 
+    refit_graphs: dict = {}
+
+    def refit_graph_for(seed: int):
+        """(data, graph) of the refit of a seed; a control permutes per seed, so it is one graph per seed."""
+        key = seed if perm else None
+        if key not in refit_graphs:
+            refit_graphs[key] = refit_graph(dcfg, data_rf, meta, kg_t1, control=control, seed=seed, time_kg=time_kg)
+        return refit_graphs[key]
+
+    def time_window_info(include_refit=False):
+        selection = joint_time_windows(graph_for(seeds[0])[1])
+        info = {"policy": "fit_each_training_phase", "timestamp_unit": "Unix seconds", "selection": selection}
+        if include_refit:
+            refit = joint_time_windows(refit_graph_for(seeds[0])[1])
+            info.update(refit=refit, refit_vs_selection=compare_time_windows(selection, refit))
+        return info
+
+    window_path = out_dir / f"{tag}_window_summary.json"
+    if tkgat and time_on == "both" and not window_path.exists():
+        # Available even when a session pauses before finishing its first selection fit. No t2/test access.
+        window_path.write_text(json.dumps({"time_windows": time_window_info()}, indent=2))
+
     fitted: dict[int, dict[int, object]] = {}  # kgat: the best state_dict (CPU tensors), not the model
+    if args.benchmark_batches:
+        if not kgat:
+            ap.error("--benchmark-batches is implemented for KGAT/T-KGAT only")
+        point, seed = mcfg["grid"][0], seeds[0]
+        model_cfg, fit_cfg = kgat_params(point, mcfg, kg_t1, args.device)
+        data_s, ckg_s = graph_for(seed)
+        measured = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed, benchmark_batches=args.benchmark_batches)
+        row = measured.history[-1]
+        cf_total = int(np.ceil(len(data_s.train) / fit_cfg.batch_size))
+        kg_total = int(np.ceil(ckg_s.n_edges / fit_cfg.batch_size_kg))
+        estimate = (
+            row["sec_cf"] / row["cf_batches"] * cf_total
+            + row["sec_kg"] / row["kg_batches"] * kg_total
+            + row["sec_attention"]
+        )
+        report = {
+            "benchmark_only": True,
+            "test_read": False,
+            "validation_scored": False,
+            "point": point,
+            "seed": seed,
+            "device": measured.device,
+            "peak_memory_allocated_GiB": measured.peak_memory / 2**30,
+            "cf_batches_total": cf_total,
+            "kg_batches_total": kg_total,
+            "measured": row,
+            "estimated_epoch_seconds_excluding_validation": estimate,
+            "note": "Initial-batch estimate, excluding validation; no accuracy scores or official checkpoints.",
+        }
+        (out_dir / f"{tag}_benchmark.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(json.dumps(report, indent=2), flush=True)
+        return
+    best_epochs: dict[int, list[int]] = {}  # the validation best epoch of every seed, per grid point (refit epochs)
     devices: dict[int, dict[int, str]] = {}
     val_means, val_stds = [], []
     new_runs = 0
     for g, point in enumerate(mcfg["grid"]):
-        fitted[g], devices[g] = {}, {}
+        fitted[g], devices[g], best_epochs[g] = {}, {}, []
         scores = []
         for seed in seeds:
             resumed = False
@@ -374,7 +560,7 @@ def main(argv: list[str] | None = None) -> None:
                     },
                 )
             elif kgat:
-                model_cfg, fit_cfg = split_params({**point, **mcfg.get("fixed", {})}, args.device)
+                model_cfg, fit_cfg = kgat_params(point, mcfg, kg_t1, args.device)
                 data_s, ckg_s = graph_for(seed)
                 ck_path = kgat_checkpoint_path(out_dir, tag, g, seed)
                 fingerprint = kgat_fingerprint(base, mcfg, g, seed, ckg_s)
@@ -395,9 +581,24 @@ def main(argv: list[str] | None = None) -> None:
                             "Partial grid saved. Re-run with --resume; selection/test wait until the grid is complete."
                         )
                         return
-                    fit = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed)
+                    progress_path = ck_path.with_suffix(".epoch.pt")
+                    epoch_args = (
+                        {
+                            "checkpoint_path": progress_path,
+                            "checkpoint_key": fingerprint,
+                            "max_new_epochs": args.epochs_per_fit,
+                        }
+                        if args.epochs_per_fit is not None
+                        else {}
+                    )
+                    fit = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed, **epoch_args)
+                    if not fit.complete:
+                        print(f"[pause] grid={g} seed={seed} saved epoch {fit.history[-1]['epoch']}; rerun --resume.")
+                        return
                     new_runs += 1
                     save_checkpoint(ck_path, fingerprint, fit)
+                    if epoch_args:
+                        progress_path.unlink(missing_ok=True)
                     registry.save_history(
                         out_dir / f"{tag}_{g}_seed{seed}_history.csv",
                         fit.history,
@@ -431,8 +632,10 @@ def main(argv: list[str] | None = None) -> None:
                 raise ValueError(mcfg["name"])
             fitted[g][seed] = model
             devices[g][seed] = dev
+            best_epochs[g].append(epoch)
             scores.append(val["recall@20"])
             reg_point = registry_config(point, graph_for(seed)[1], seed, perm) if tkgat else point
+            reg_point = with_schedule(reg_point, mcfg)
             if not (resumed and logged_row(args.registry, base, reg_point, seed, "val") is not None):
                 registry.append(
                     args.registry,
@@ -475,20 +678,94 @@ def main(argv: list[str] | None = None) -> None:
         )
         return
 
-    ckg_t2 = test_graph_for(seeds[0]) if kgat else None  # for the summary: the KG counts do not depend on the seed
-    best_model_cfg = split_params({**mcfg["grid"][best], **mcfg.get("fixed", {})}, args.device)[0] if kgat else None
+    ckg_t2 = test_graph_for(seeds[0]) if kgat and not args.refit else None  # the KG counts do not depend on the seed
+    refit_e = None
+    if args.refit and mcfg["name"] != "mostpop":
+        refit_e = refit_epochs(best_epochs[best])  # validation best epochs only: no test number is involved
+        print(f"[refit] {refit_e} epochs = median best epoch of seeds {best_epochs[best]}")
+    refit_tag = {"refit": True, **({"epochs": refit_e} if refit_e else {})}
+    best_model_cfg = kgat_params(mcfg["grid"][best], mcfg, kg_t1, args.device)[0] if kgat else None
+    if tkgat and time_on == "both" and args.refit:
+        # Persist the comparison before any refit/test; the fit budget can stop this call at this boundary.
+        window_path.write_text(
+            json.dumps({"selected": mcfg["grid"][best], "time_windows": time_window_info(True)}, indent=2)
+        )
+        print(f"[time windows] Selection/refit bounds and drift saved to {window_path}", flush=True)
     summary = []
     for seed, model in fitted[best].items():
         dev = devices[best][seed]
         point = mcfg["grid"][best]
-        reg_point = registry_config(point, graph_for(seed)[1], seed, perm) if tkgat else point
+        if args.refit:
+            data_s, ckg_s = refit_graph_for(seed) if kgat else (data_rf, None)
+            reg_point = {**(registry_config(point, ckg_s, seed, perm) if tkgat else point), **refit_tag}
+        else:
+            reg_point = registry_config(point, graph_for(seed)[1], seed, perm) if tkgat else point
+        reg_point = with_schedule(reg_point, mcfg)
         done = logged_row(args.registry, base, reg_point, seed, "test") if args.resume else None
         if done is not None:  # scored before: test is not touched again
             test = {k: float(done[k]) for k in METRICS}
             summary.append(test)
             print(f"[test] seed={seed} (already in the registry) " + " ".join(f"{k}={test[k]:.4f}" for k in METRICS))
             continue
-        if kgat:
+        if args.refit:
+            # item 4: a new model trained from scratch on train + validation for the median best epoch, scored on test
+            if mcfg["name"] == "mostpop":
+                score = MostPop(data_rf, **point).score
+            elif mcfg["name"] == "bprmf":
+                cfg = BPRConfig(**point, **mcfg.get("fixed", {}), device=args.device)
+                score = fit_bpr(data_rf, cfg, seed, fixed_epochs=refit_e).model.score
+            else:
+                model_cfg, fit_cfg = kgat_params(point, mcfg, kg_t1, args.device)
+                rf_path = out_dir / "states" / f"{tag}_refit_seed{seed}.pt"
+                rf_fingerprint = json.dumps(
+                    {
+                        "selection": kgat_fingerprint(base, mcfg, best, seed, ckg_s),
+                        "refit_epochs": refit_e,
+                    },
+                    sort_keys=True,
+                )
+                if args.resume and rf_path.exists():
+                    saved = load_checkpoint(rf_path, rf_fingerprint)
+                    net = KGAT(ckg_s, model_cfg, device=args.device, refit=True)
+                    net.load_state_dict(saved["state"])
+                    net.update_attention()
+                    score = net.scorer()
+                else:
+                    if args.max_new_runs is not None and new_runs >= args.max_new_runs:
+                        print("[resume] Fit budget reached; rerun to continue refit. Completed test rows are kept.")
+                        return
+                    progress_path = rf_path.with_suffix(".epoch.pt")
+                    epoch_args = (
+                        {
+                            "checkpoint_path": progress_path,
+                            "checkpoint_key": rf_fingerprint,
+                            "max_new_epochs": args.epochs_per_fit,
+                        }
+                        if args.epochs_per_fit is not None
+                        else {}
+                    )
+                    fit_rf = fit_kgat(data_s, ckg_s, model_cfg, fit_cfg, seed, fixed_epochs=refit_e, **epoch_args)
+                    if not fit_rf.complete:
+                        print(f"[pause:refit] seed={seed} saved epoch {fit_rf.history[-1]['epoch']}; rerun --resume.")
+                        return
+                    new_runs += 1
+                    save_checkpoint(rf_path, rf_fingerprint, fit_rf)
+                    if epoch_args:
+                        progress_path.unlink(missing_ok=True)
+                    registry.save_history(
+                        out_dir / f"{tag}_refit_seed{seed}_history.csv",
+                        fit_rf.history,
+                        {
+                            **base,
+                            "seed": seed,
+                            "refit": True,
+                            "epochs": refit_e,
+                            "config": {"model": dataclasses.asdict(model_cfg), "fit": dataclasses.asdict(fit_cfg)},
+                        },
+                    )
+                    score = fit_rf.model.scorer()
+                    del fit_rf
+        elif kgat:
             # frozen weights of the best epoch on the test graph; set_graph resets A, so recompute it
             net = KGAT(graph_for(seed)[1], best_model_cfg, device=args.device)
             net.load_state_dict(model)
@@ -498,7 +775,7 @@ def main(argv: list[str] | None = None) -> None:
             score = net.scorer()
         else:
             score = model.score
-        res = evaluate(score, data.test, data.mask_test)
+        res = evaluate(score, data.test, data.mask_test)  # the test ground truth is the same in every path
         test = {k: res[k] for k in METRICS}
         registry.append(
             args.registry,
@@ -512,18 +789,31 @@ def main(argv: list[str] | None = None) -> None:
                 "device": dev,
             },
         )
-        np.savez(out_dir / f"{tag}_seed{seed}.npz", users=res["users"], **{k: v for k, v in res["per_user"].items()})
+        np.savez(
+            out_dir / f"{tag}{'_refit' if args.refit else ''}_seed{seed}.npz",
+            users=res["users"],
+            **{k: v for k, v in res["per_user"].items()},
+        )
         summary.append(test)
         print(f"[test] seed={seed} " + " ".join(f"{k}={test[k]:.4f}" for k in METRICS))
     agg = {k: (float(np.mean([s[k] for s in summary])), seed_std([s[k] for s in summary])) for k in METRICS}
-    (out_dir / f"{tag}_summary.json").write_text(
+    summary_name = f"{tag}_refit_summary.json" if args.refit else f"{tag}_summary.json"
+    kg_summary = None
+    if kgat:
+        kg_summary = (
+            {"t1": ckg_t1.summary(), "refit": refit_graph_for(seeds[0])[1].summary()}
+            if args.refit
+            else {"t1": ckg_t1.summary(), "t2": ckg_t2.summary()}
+        )
+    (out_dir / summary_name).write_text(
         json.dumps(
             {
                 "selected": mcfg["grid"][best],
                 "val_means_recall@20": val_means,
                 "test_mean_std": agg,
-                **({"kg": {"t1": ckg_t1.summary(), "t2": ckg_t2.summary()}} if kgat else {}),
-                **(tkgat_info() if tkgat else {}),
+                **({"refit": {"epochs": refit_e, "best_epochs": best_epochs[best]}} if args.refit else {}),
+                **({"kg": kg_summary} if kgat else {}),
+                **(tkgat_info(include_refit=args.refit) if tkgat else {}),
             },
             indent=2,
         )

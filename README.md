@@ -45,5 +45,8 @@ Recall@20 averaged over seeds; only the selected configuration is scored on test
 See `docs/decisions/0002-data-split.md`.
 
 ## Planning
+
+- Raw LFM-1b rebuild (complete history, KGAT format, interaction/fact timestamp sidecars):
+  [quick start](docs/study/14-dung-lastfm-tu-lfm1b.md), [reference](docs/lastfm-raw-rebuild.md).
 - `docs/plan.md` — the 13-week plan exported from the team doc (Vietnamese).
 - `docs/study/` — study guides for the 7 theory topics (Vietnamese).

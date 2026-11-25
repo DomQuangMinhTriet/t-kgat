@@ -1,0 +1,11 @@
+# Control of the combined T-KGAT: the point that `tkgat_both` selected, re-run with BOTH date sets shuffled: train_ts over
+# all train edges and the fact dates over all KG triples, the same seed for both (decision 0016, item 7). If this run is as
+# good as `tkgat_both`, the gain does not come from time. Report real against permuted.
+name: tkgat
+time_on: both
+control: permute_both_ts
+seeds: [2019, 2020, 2021, 2022, 2023]
+kg: {variant: default}
+from_tkgat: tkgat_both
+fixed: {dim: 64, kge_dim: 64, layers: [64, 32, 16], batch_size: 1024, batch_size_kg: 2048,
+        max_epochs: 300, eval_every: 5, patience: 10, select_metric: recall@20}

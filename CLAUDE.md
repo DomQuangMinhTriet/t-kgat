@@ -81,6 +81,29 @@ the Last-FM user-item edges (the counterpart of section 3b of `notebooks/01_eda.
 2026-09-18 (rating as relation or weight, timestamp as relation, LLM cleaning of film metadata).
 
 ## Commands (Windows PowerShell, repo root)
+
+For the new raw Last-FM preparation, interactions remain from the supplied Drive
+archive. On 2026-11-22 the user explicitly allowed a complete Freebase dump outside
+Drive for facts (decision 0018). Workflow: 01b raw cut -> 01c Freebase extraction ->
+02b split/two-hop export. Do not read published KGAT triples or pairs. Keep the
+supplied partial Drive track-to-MID mapping and document its paper lineage; do not
+claim all-track title matching. The default mirror's metadata date is 2015-04-16,
+not the old subset's 2015-08-09. See docs/study/14-dung-lastfm-tu-lfm1b.md.
+
+Current raw Last-FM experiment (decision 0019, explicitly approved by Phon in this session):
+10-core on train and seeded train-only user selection targeting about 3 million interactions.
+Keep the original global cutoffs, complete sampled-user histories, and compact unused KG ids.
+Joint attention uses separate interaction/fact training windows, with no absolute tau.
+The standalone Kaggle wrapper runs T-KGAT only with the fixed gate point, 150 epochs and
+refit on train+validation by default; recompute both windows for the new refit model.
+The original 0016 three-month/5-core/absolute-tau proposal and its gate reports are historical
+context, not the active raw-data profile. Do not replace the user's formula with the PR's tau grid.
+
+On Phôn's machine, use the existing Conda environment `python` (Python at
+`$env:USERPROFILE\anaconda3\envs\python\python.exe`). Do not create, recreate or
+activate a project `.venv` unless Phôn explicitly asks. The generic venv setup
+below is for other machines; in Phôn's terminal use `conda activate python` instead.
+
 ```powershell
 python -m venv .venv; .venv\Scripts\Activate.ps1
 pip install torch --index-url https://download.pytorch.org/whl/cu128   # GPU build first (RTX 3050, 4 GB)
