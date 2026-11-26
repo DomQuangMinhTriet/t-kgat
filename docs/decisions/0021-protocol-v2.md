@@ -82,12 +82,16 @@ request to move the report. The details are the sections below.
    already uses the (lr, l2) above, which are fixed and not tuned per model).
 4. **Refit (remark 6).** After selection: train again on train + validation for the number of epochs found in selection, with the
    graph made of train + validation interactions and the KG at t2; score test **once**, for every model. This replaces item 7
-   of 0002 ("no retraining on train + validation"). *The rule that turns the per-seed `best_epoch` values into one epoch count
-   (mean or median) is fixed here before any run; proposal: per-seed `best_epoch` of the selected configuration, each seed
-   refit with its own count. To be confirmed against the trainer code in the port.*
+   of 0002 ("no retraining on train + validation"). **Epoch count: the median over the seeds of the per-seed `best_epoch` of the selected configuration**, one number for all seeds
+   (decided by Triet on 2026-11-26; it is what the current code does, and it matches advisor remark 6, which asks for "about how many
+   epochs is optimal", one number). `best_epoch` is read at a step of `eval_every` = 5 epochs, so a single seed's value is noisy; the median
+   of 3 seeds is the middle value. Phon to confirm in the pull request.
 5. **Seeds.** 3 seeds from the start (2019, 2020, 2021). More seeds only if GPU hours are left after every item of section 7.
-6. **Statistics.** Unchanged from 0013: paired Wilcoxon with Holm correction, plus bootstrap confidence intervals
-   (`stats.py`). With 3 seeds these intervals are wide, and the report says so.
+6. **Statistics.** The paired Wilcoxon test with Holm correction is **per user** (`tkgat.eval.stats`, `analysis/rq3.py`), on the scores
+   averaged over seeds, so it does not depend on the number of seeds. It measures the variation across users, not across seeds. Variation across
+   seeds is reported as mean and standard deviation and as bootstrap confidence intervals (`stats.py`). Limitation to state in the report: with 3
+   seeds a **seed-level** two-sided Wilcoxon test cannot reach p < 0.05 (the smallest exact p-value for n = 3 pairs is 0.25), so no
+   significance claim is made at seed level, and the intervals over 3 seeds are wide.
 7. **Reproducibility.** Append-only registry; every row records the commit, the data hashes, the device, `gamma`, the
    normalisation constants and the permutation seed. No `--resume` after any change of data, KG or code that changes a number;
    epoch resume (from `b1ea496`) is only for continuing an interrupted session of the same run.
@@ -108,7 +112,10 @@ request to move the report. The details are the sections below.
    Before the code is ported, the benchmark and the first seed run on the code of `b1ea496` (Phon agreed, 2026-11-26), on the quota that
    would otherwise be lost at the reset; those runs are never official results. **Every run before the cut decision of item 5 uses
    `--val-only`** (`scripts/run.py` and `scripts/kaggle_tkgat_joint.py` of `b1ea496` both have it: test files are not opened, no test row is
-   written, refit is refused); the batch timing uses `--benchmark-batches` with `--val-only`, which never selects or scores a model. The first seed of KGAT and KGAT-noKG is also the check that the run is correct and the clock; it is **not** used to draw a conclusion about
+   written, refit is refused); the batch timing uses `--benchmark-batches` with `--val-only`, which never selects or scores a model.
+   Entry points (Phon, 2026-11-26): BPR-MF, KGAT and KGAT-noKG run through `scripts/run.py` with `configs/model/v02/{bprmf,kgat,kgat_nokg}.yaml`
+   (old configs, used only for the benchmark; they are changed to this protocol before the official runs); `--benchmark-batches 5` is supported for
+   KGAT and T-KGAT only, so BPR-MF is timed with a short `--val-only` run; `--refit` is not enabled. The 14-day data config does not exist yet. The first seed of KGAT and KGAT-noKG is also the check that the run is correct and the clock; it is **not** used to draw a conclusion about
    the KG (agreed with Phon, 2026-11-26).
 3. **Quota on 2026-11-26.** Triet 29 h 41 m of 30 h, reset at about 2026-11-28 07:00 (UTC+7, that is Saturday 00:00 UTC); Phon one
    account with 30 h and one with 10 h (40 h). All accounts reset on the same day (Phon, 2026-11-26). The quota is not carried over, so hours that are not
@@ -150,7 +157,7 @@ request to move the report. The details are the sections below.
 | 2 | SHA-256 of the mapping, dump and data files; upstream path of the mapping (section 3 item 8) | Phon | 27/11 |
 | 3 | Real build: window numbers, KG coverage (two rates) | Phon | 27/11 |
 | 4 | Time to scan the raw `.inter` for the 14-day window (Phon: "probably in time" for 27/11, not measured) | Phon | 26/11 evening |
-| 6 | Refit epoch rule (section 5 item 4) | Triet | 29/11 |
+| 6 | Refit epoch rule: decided, median of per-seed `best_epoch` (section 5 item 4); Phon to confirm | Phon | 27/11 |
 | 7 | What is cut and in which order (section 7 item 5) | both | 28/11, after the benchmark |
 | 8 | Specification of `control` and `ablate` | Phon | 28/11 |
 
