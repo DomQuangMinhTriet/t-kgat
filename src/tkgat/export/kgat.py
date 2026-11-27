@@ -71,6 +71,8 @@ def export_kgat(
     freebase: dict[int, str],
     timestamps: bool,
     info: dict | None = None,
+    item_namespace: str = "movielens",
+    relation_namespace: str = "wikidata",
 ) -> dict:
     """Write the KGAT folder ``out`` and return its ``dataset_meta.json`` content.
 
@@ -120,7 +122,7 @@ def export_kgat(
         ],
     )
     org = [
-        f"movielens.item.{k}" if kind == "item" else str(k)
+        f"{item_namespace}.item.{k}" if kind == "item" else str(k)
         for kind, k in zip(entities["kind"], entities["key"], strict=True)
     ]
     _write_lines(out / "entity_list.txt", ["org_id remap_id", *[f"{o} {i}" for i, o in enumerate(org)]])
@@ -134,7 +136,7 @@ def export_kgat(
         [
             "org_id remap_id",
             *[
-                f"{n if str(n).startswith('movielens.') else f'wikidata.{n}'} {int(r)}"
+                f"{n if str(n).startswith('movielens.') else f'{relation_namespace}.{n}'} {int(r)}"
                 for r, n in zip(relations["relation"], relations["name"], strict=True)
             ],
         ],
