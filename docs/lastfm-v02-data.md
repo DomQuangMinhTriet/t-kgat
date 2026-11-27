@@ -66,17 +66,49 @@ pair cache is used. Its manifest records all exclusions and the output SHA-256.
 Extract the nine relations (including `music.recording.releases`) and date evidence:
 
 ```powershell
-python scripts/01c_extract_freebase.py --pairs data/raw/lastfm-v02-14d/pairs.tsv
+python scripts/01c_extract_freebase.py --pairs data/raw/lastfm-v02-14d/pairs.tsv --resume-dir data/raw/lastfm-v02-freebase/resume
 ```
 
 01c makes **three full passes** through the dump: two hops and date/name evidence.
-The default streams the dump on each pass. To avoid repeated downloads, supply
+With `--resume-dir`, pass 1 saves compressed bytes while reading, and later passes
+read those bytes locally. Without this option, it streams the dump again on each
+pass. Alternatively, supply
 an existing local dump with `--dump path/to/freebase-rdf-latest.gz
 --snapshot-date 2015-04-16`. Run 01b first. 01c derives the train-only 10-core
 from its cut on disk and **only surviving train item MIDs seed extraction**.
 02b verifies this seed set again when constructing both cutoff snapshots.
 `--reuse-existing` verifies source identity, output hash and the mapping hash
 and pair-cut hash before avoiding a dump scan.
+
+### Stop and continue 01c
+
+Use the command above with `--resume-dir` **from the start of a new run**. Ctrl+C
+stops the process while keeping the gzip byte cache and committed SQLite progress.
+To continue, activate the same Python environment and **rerun exactly that command**.
+No separate `--resume` flag is needed. A completed extraction can be verified with
+`--reuse-existing` as before.
+
+- `resume/dump.gz` stores the compressed source bytes as they arrive; the full
+  official cache is 31,305,093,084 bytes. Reserve that space plus the extraction DB
+  and final outputs. No full uncompressed dump is saved.
+- `resume/download.json` records source URL, expected size and HTTP validator.
+  Missing bytes are fetched by Range/If-Range; an ignored range or changed source
+  is refused. Bytes already on disk are not downloaded again.
+- `resume/facts.sqlite` commits facts, counters, physical line cursor and pass
+  state together every 100,000 RDF rows (`--checkpoint-every` can change this).
+  An interrupted uncommitted batch is rolled back and processed again.
+- Restarting mid-pass replays/decompresses the cached gzip prefix locally to
+  rebuild the decoder, skipping lines already committed. This takes some time;
+  it does not seek instantly into compressed data. Completed passes are skipped.
+- The frontier of an active pass is frozen in the checkpoint, so resuming cannot
+  accidentally extend the two-hop neighborhood. Mapping, pair cut, seed set and
+  extraction rules must match the saved checkpoint.
+- The OS writer lock is released when the process exits. Only one process can
+  write a resume directory at a time. Keep the whole directory until done.
+
+The existing running legacy process cannot acquire this feature after startup;
+it has no durable cursor/cache to import. Enabling this mode requires a new run.
+Do not assume the progress of a run started without `--resume-dir` can be recovered.
 
 Build the processed split and KGAT exports:
 

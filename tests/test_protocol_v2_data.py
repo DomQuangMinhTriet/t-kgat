@@ -3,6 +3,7 @@
 import gzip
 import json
 import runpy
+import sqlite3
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -15,6 +16,7 @@ from tkgat.data import protocol_v2 as protocol
 from tkgat.data.lastfm_check import check_clean_dataset
 from tkgat.data.lastfm_raw import cut_pairs, load_raw_pairs, source_sha256, validate_pair_cache
 from tkgat.kg.freebase_dump import extract_dump, validate_extract
+from tkgat.kg.freebase_resume import ExtractionCheckpoint, cached_http_chunks, extraction_workspace
 from tkgat.kg.lastfm import DATE_COLUMNS
 from tkgat.kg.lastfm_freebase import PAPER_RELATIONS, read_freebase_source
 from tkgat.kg.lastfm_twohop import build_twohop, reachable
@@ -396,3 +398,250 @@ def test_documented_date_rule_matches_two_dated_one_dated_and_undated_edges(inpu
     expected = int(pd.Timestamp("1970-02-03", tz="UTC").timestamp())
     assert facts.loc[facts["head"] == "m.neighbor", "ts"].item() == expected
     assert facts.loc[facts["head"] == "m.track1", "ts"].isna().all()
+
+
+@pytest.mark.parametrize("interrupted_pass", [1, 2, 3])
+def test_resume_inside_each_pass_keeps_frozen_frontier_and_exact_results(inputs, tmp_path, monkeypatch,
+                                                                       interrupted_pass):
+    from tkgat.kg import freebase_dump
+
+    original = freebase_dump.rdf_rows
+    work, output = tmp_path / "resume", tmp_path / "resumed.tsv"
+    calls = 0
+
+    def interrupt_rows(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        for index, row in enumerate(original(*args, **kwargs), 1):
+            yield row
+            if calls == interrupted_pass and index == 3:
+                raise KeyboardInterrupt
+
+    monkeypatch.setattr(freebase_dump, "rdf_rows", interrupt_rows)
+    options = {"train_pairs": inputs["pairs"], "snapshot_date": protocol.SNAPSHOT,
+               "resume_dir": work, "checkpoint_every": 1}
+    with pytest.raises(KeyboardInterrupt):
+        extract_dump(inputs["dump"], inputs["links"], output, **options)
+    assert not output.exists()
+    with sqlite3.connect(work / "facts.sqlite") as db:
+        state = json.loads(db.execute("SELECT value FROM checkpoint").fetchone()[0])
+        assert state["step"] == interrupted_pass and state["line"] == 3
+        assert len(state["reports"]) == interrupted_pass - 1
+    monkeypatch.setattr(freebase_dump, "rdf_rows", original)
+    result = extract_dump(inputs["dump"], inputs["links"], output, **options)
+    baseline = validate_extract(inputs["freebase"])
+    assert result["sha256"] == baseline["sha256"]
+    for actual, expected in zip(result["passes"], baseline["passes"], strict=True):
+        assert {k: v for k, v in actual.items() if k != "elapsed_seconds"} == {
+            k: v for k, v in expected.items() if k != "elapsed_seconds"
+        }
+
+
+def test_resume_rolls_back_facts_when_checkpoint_commit_is_interrupted(inputs, tmp_path, monkeypatch):
+    original = ExtractionCheckpoint.save
+    work, output = tmp_path / "resume", tmp_path / "resumed.tsv"
+
+    def interrupt_save(checkpoint):
+        if checkpoint.state["step"] == 1 and checkpoint.state["line"] == 2:
+            raise KeyboardInterrupt
+        original(checkpoint)
+
+    monkeypatch.setattr(ExtractionCheckpoint, "save", interrupt_save)
+    options = {"train_pairs": inputs["pairs"], "resume_dir": work, "checkpoint_every": 2}
+    with pytest.raises(KeyboardInterrupt):
+        extract_dump(inputs["dump"], inputs["links"], output, **options)
+    with sqlite3.connect(work / "facts.sqlite") as db:
+        assert db.execute("SELECT count(*) FROM edges").fetchone()[0] == 0
+        assert json.loads(db.execute("SELECT value FROM checkpoint").fetchone()[0])["line"] == 0
+    monkeypatch.setattr(ExtractionCheckpoint, "save", original)
+    result = extract_dump(inputs["dump"], inputs["links"], output, **options)
+    assert result["sha256"] == sha256_file(inputs["freebase"])
+
+
+def test_http_cache_continues_missing_bytes_and_reuses_them_for_later_passes(inputs, tmp_path, monkeypatch):
+    from tkgat.kg import freebase_dump
+
+    data = inputs["dump"].read_bytes()
+    calls = []
+    work, output = tmp_path / "resume", tmp_path / "resumed.tsv"
+
+    def chunks(url, *, offset=0, total=None, validator=None, on_response=None):
+        calls.append(offset)
+        on_response(len(data), ["ETag", '"same-dump"'])
+        if len(calls) == 1:
+            yield data[:50]
+            raise KeyboardInterrupt
+        assert offset == 50 and validator == ["ETag", '"same-dump"']
+        yield data[offset:]
+
+    monkeypatch.setattr(freebase_dump, "http_chunks", chunks)
+    options = {"train_pairs": inputs["pairs"], "resume_dir": work, "checkpoint_every": 1}
+    with pytest.raises(KeyboardInterrupt):
+        extract_dump("https://example.test/freebase.gz", inputs["links"], output, **options)
+    assert (work / "dump.gz").read_bytes() == data[:50]
+    result = extract_dump("https://example.test/freebase.gz", inputs["links"], output, **options)
+    assert calls == [0, 50]  # no redownload of cached bytes or of passes 2/3
+    assert (work / "dump.gz").read_bytes() == data
+    assert result["sha256"] == sha256_file(inputs["freebase"])
+    assert result["source_fingerprint"]["sha256"] == sha256_file(inputs["dump"])
+    assert result["source_dump_saved_locally"]
+
+
+def test_resume_rejects_changed_mapping_before_using_committed_facts(inputs, tmp_path, monkeypatch):
+    from tkgat.kg import freebase_dump
+
+    original = freebase_dump.rdf_rows
+    work, output = tmp_path / "resume", tmp_path / "resumed.tsv"
+
+    def interrupted(*args, **kwargs):
+        for row in original(*args, **kwargs):
+            yield row
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(freebase_dump, "rdf_rows", interrupted)
+    options = {"train_pairs": inputs["pairs"], "resume_dir": work, "checkpoint_every": 1}
+    with pytest.raises(KeyboardInterrupt):
+        extract_dump(inputs["dump"], inputs["links"], output, **options)
+    with inputs["links"].open("a") as handle:
+        handle.write("1002\tm.additional\n")
+    monkeypatch.setattr(freebase_dump, "rdf_rows", original)
+    with pytest.raises(ValueError, match="inputs/rules changed"):
+        extract_dump(inputs["dump"], inputs["links"], output, **options)
+    assert not output.exists()
+
+
+def test_resume_workspace_has_one_writer_and_completed_cache_needs_no_http(tmp_path, monkeypatch):
+    from tkgat.kg import freebase_dump
+
+    work = tmp_path / "resume"
+    with extraction_workspace(tmp_path, work):
+        with pytest.raises(ValueError, match="Another extraction"):
+            with extraction_workspace(tmp_path, work):
+                pytest.fail("Concurrent extraction acquired the same workspace")
+    data = b"already downloaded"
+    (work / "dump.gz").write_bytes(data)
+    (work / "download.json").write_text(json.dumps({
+        "version": 1, "source": "https://example.test/dump.gz", "total": len(data),
+        "validator": ["ETag", '"same-dump"'], "complete": False,
+    }))
+
+    def no_http(*args, **kwargs):
+        pytest.fail("Complete cache must not request an invalid range at EOF")
+
+    monkeypatch.setattr(freebase_dump, "http_chunks", no_http)
+    assert b"".join(cached_http_chunks("https://example.test/dump.gz", work)) == data
+    assert json.loads((work / "download.json").read_text())["complete"]
+
+
+@pytest.mark.parametrize("status,etag", [(200, '"same"'), (206, '"changed"')])
+def test_http_cache_refuses_ignored_range_or_changed_etag(tmp_path, monkeypatch, status, etag):
+    import requests
+
+    (tmp_path / "dump.gz").write_bytes(b"ab")
+    (tmp_path / "download.json").write_text(json.dumps({
+        "version": 1, "source": "https://example.test/dump.gz", "total": 4,
+        "validator": ["ETag", '"same"'], "complete": False,
+    }))
+
+    class Response:
+        status_code = status
+        headers = {"Content-Encoding": "identity", "Content-Length": "2", "Content-Range": "bytes 2-3/4",
+                   "ETag": etag}
+
+        def raise_for_status(self):
+            pass
+
+        def close(self):
+            pass
+
+        def iter_content(self, *args):
+            pytest.fail("Unsafe response bytes must not be appended")
+
+    class Session:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, url, *, headers, **kwargs):
+            assert headers["Range"] == "bytes=2-" and headers["If-Range"] == '"same"'
+            return Response()
+
+    monkeypatch.setattr(requests, "Session", Session)
+    with pytest.raises(RuntimeError, match="ignored resume|changed during streaming"):
+        b"".join(cached_http_chunks("https://example.test/dump.gz", tmp_path))
+    assert (tmp_path / "dump.gz").read_bytes() == b"ab"
+
+
+def test_resume_cursor_counts_physical_lines_including_comments(inputs, tmp_path, monkeypatch):
+    from tkgat.kg import freebase_dump
+
+    with gzip.open(inputs["dump"], "rt", encoding="utf-8") as handle:
+        text = handle.read()
+    source = tmp_path / "comments.nt"
+    source.write_text("# comment\n\n" + text + text.splitlines(keepends=True)[0], encoding="utf-8")
+    baseline = extract_dump(source, inputs["links"], tmp_path / "baseline.tsv")
+    original = freebase_dump.rdf_rows
+
+    def interrupted(*args, **kwargs):
+        for index, row in enumerate(original(*args, **kwargs), 1):
+            yield row
+            if index == 3:
+                raise KeyboardInterrupt
+
+    monkeypatch.setattr(freebase_dump, "rdf_rows", interrupted)
+    output, work = tmp_path / "resumed.tsv", tmp_path / "resume"
+    options = {"resume_dir": work, "checkpoint_every": 2}
+    with pytest.raises(KeyboardInterrupt):
+        extract_dump(source, inputs["links"], output, **options)
+    with sqlite3.connect(work / "facts.sqlite") as db:
+        state = json.loads(db.execute("SELECT value FROM checkpoint").fetchone()[0])
+        assert state["line"] == 4 and state["report"]["rdf_rows"] == 2
+    monkeypatch.setattr(freebase_dump, "rdf_rows", original)
+    result = extract_dump(source, inputs["links"], output, **options)
+    assert result["sha256"] == baseline["sha256"]
+    assert [report["rdf_rows"] for report in result["passes"]] == [11, 11, 11]
+
+
+def test_resume_recovers_publication_interrupted_before_manifest(inputs, tmp_path, monkeypatch):
+    from tkgat.kg import freebase_dump
+
+    output, work = tmp_path / "resumed.tsv", tmp_path / "resume"
+    original = freebase_dump.write_json
+
+    def interrupted(path, value):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(freebase_dump, "write_json", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        extract_dump(inputs["dump"], inputs["links"], output, resume_dir=work)
+    assert output.exists() and not Path(str(output) + ".meta.json").exists()
+    monkeypatch.setattr(freebase_dump, "write_json", original)
+    result = extract_dump(inputs["dump"], inputs["links"], output, resume_dir=work)
+    assert result["sha256"] == validate_extract(output)["sha256"]
+
+
+def test_cli_ctrl_c_preserves_checkpoint_and_the_same_command_continues(inputs, tmp_path, monkeypatch, capsys):
+    from tkgat.kg import freebase_dump
+
+    original = freebase_dump.rdf_rows
+
+    def interrupted(*args, **kwargs):
+        for row in original(*args, **kwargs):
+            yield row
+            raise KeyboardInterrupt
+
+    output, work = tmp_path / "resumed.tsv", tmp_path / "resume"
+    main = runpy.run_path(str(ROOT / "scripts/01c_extract_freebase.py"))["main"]
+    args = ["--dump", str(inputs["dump"]), "--snapshot-date", protocol.SNAPSHOT,
+            "--item-links", str(inputs["links"]), "--pairs", str(inputs["pairs"]),
+            "--out", str(output), "--resume-dir", str(work), "--checkpoint-every", "1"]
+    monkeypatch.setattr(freebase_dump, "rdf_rows", interrupted)
+    with pytest.raises(SystemExit) as stopped:
+        main(args)
+    assert stopped.value.code == 130 and (work / "facts.sqlite").exists()
+    assert "Rerun the same command to continue" in capsys.readouterr().err
+    monkeypatch.setattr(freebase_dump, "rdf_rows", original)
+    main(args)
+    assert validate_extract(output)["sha256"] == sha256_file(inputs["freebase"])

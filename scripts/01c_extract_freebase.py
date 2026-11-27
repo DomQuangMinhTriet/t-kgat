@@ -21,10 +21,15 @@ def main(argv=None):
     parser.add_argument("--snapshot-date", choices=[SNAPSHOT], help="required for a local copy of the 2015-04-16 dump")
     parser.add_argument("--scratch-dir", help="temporary disk space for deriving train items")
     parser.add_argument("--memory-limit", default="1GB", help="DuckDB buffer budget for deriving train items")
+    parser.add_argument("--resume-dir",
+                        help="persist gzip byte cache and extraction checkpoints; rerun with the same path")
+    parser.add_argument("--checkpoint-every", type=int, default=100_000, help="commit progress every N RDF rows")
     reuse = parser.add_mutually_exclusive_group()
     reuse.add_argument("--overwrite", action="store_true")
     reuse.add_argument("--reuse-existing", action="store_true", help="verify and reuse the completed two-hop cache")
     args = parser.parse_args(argv)
+    if args.checkpoint_every < 1:
+        parser.error("--checkpoint-every must be positive")
     links = read_item_links(args.item_links)
     if len(links) != MAPPING_TRACKS:
         parser.error(f"0021 requires the new {MAPPING_TRACKS:,}-track mapping; got {len(links):,}")
@@ -46,9 +51,16 @@ def main(argv=None):
         print(json.dumps(result, indent=2))
         return
     del links
-    result = extract_dump(args.dump, args.item_links, args.out, train_pairs=args.pairs,
-                          snapshot_date=args.snapshot_date, overwrite=args.overwrite,
-                          scratch_dir=args.scratch_dir, memory_limit=args.memory_limit)
+    try:
+        result = extract_dump(args.dump, args.item_links, args.out, train_pairs=args.pairs,
+                              snapshot_date=args.snapshot_date, overwrite=args.overwrite,
+                              scratch_dir=args.scratch_dir, memory_limit=args.memory_limit,
+                              resume_dir=args.resume_dir, checkpoint_every=args.checkpoint_every)
+    except KeyboardInterrupt:
+        if args.resume_dir:
+            parser.exit(130, f"\nStopped. Cached bytes and committed checkpoints remain in {args.resume_dir}. "
+                        "Rerun the same command to continue.\n")
+        parser.exit(130, "\nStopped. This run had no --resume-dir; its partial extraction cannot be resumed.\n")
     print(json.dumps(result, indent=2))
 
 
